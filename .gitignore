@@ -1,1 +1,9 @@
 .DS_Store
+.env
+.env.*
+!.env.example
+.runtime/
+services/garage/garage.toml
+build/
+.docker/
+*.log

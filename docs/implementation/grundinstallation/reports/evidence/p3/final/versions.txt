@@ -1,0 +1,16 @@
+collected_at_utc=2026-11-02T17:50:50Z
+host_os=macOS 27.0.1
+host_arch=arm64
+docker=29.9.2
+compose=5.6.1
+opencode=1.18.22
+opencode_model=deepseek/deepseek-flash
+opencode_session=ses_e62c7f90affefg564mOu0Yk6yr
+gateway_port=18081
+garage_s3_port=13900
+keycloak_port=18080
+superset_port=18088
+clickhouse_http_port=18123
+clickhouse_native_port=19000
+compose_project=dateninfrastruktur-dev-stack
+runtime_dir=.runtime/dateninfrastruktur-dev-stack

@@ -1,0 +1,10 @@
+NAME                                        IMAGE                               COMMAND                  SERVICE      CREATED              STATUS                        PORTS
+dateninfrastruktur-dev-stack-clickhouse-1   clickhouse/clickhouse-server:26.8   "/entrypoint.sh"         clickhouse   About a minute ago   Up About a minute (healthy)   127.0.0.1:18123->8123/tcp, 127.0.0.1:19000->9000/tcp
+dateninfrastruktur-dev-stack-downloads-1    apache/apisix:3.19.0-debian         "/docker-entrypoint.…"   downloads    46 seconds ago       Up 44 seconds (healthy)       
+dateninfrastruktur-dev-stack-garage-1       dxflrs/garage:v2.4.1                "/garage server --si…"   garage       2 minutes ago        Up 2 minutes (healthy)        127.0.0.1:13900->3900/tcp
+dateninfrastruktur-dev-stack-jenkins-1      dateninfrastruktur-jenkins:local    "/usr/local/bin/date…"   jenkins      46 seconds ago       Up 44 seconds (healthy)       127.0.0.1:18081->18081/tcp
+dateninfrastruktur-dev-stack-keycloak-1     quay.io/keycloak/keycloak:26.8.1    "/opt/keycloak/bin/k…"   keycloak     About a minute ago   Up About a minute (healthy)   127.0.0.1:18080->8080/tcp
+dateninfrastruktur-dev-stack-postgres-1     postgres:16.10-alpine               "docker-entrypoint.s…"   postgres     2 minutes ago        Up 2 minutes (healthy)        5432/tcp
+dateninfrastruktur-dev-stack-s3-browser-1   rclone/rclone:1.75.2                "rclone serve http g…"   s3-browser   52 seconds ago       Up 51 seconds (healthy)       8080/tcp
+dateninfrastruktur-dev-stack-sodata-1       dateninfrastruktur-sodata:local     "java -jar /opt/date…"   sodata       28 seconds ago       Up 26 seconds (healthy)       8080/tcp, 8443/tcp
+dateninfrastruktur-dev-stack-superset-1     dateninfrastruktur-superset:local   "/usr/local/bin/init…"   superset     About a minute ago   Up About a minute (healthy)   127.0.0.1:18088->8088/tcp

@@ -1,0 +1,9 @@
+<clickhouse>
+    <profiles>
+        <foundation_reader_profile>
+            <max_memory_usage>1000000000</max_memory_usage>
+            <max_execution_time>30</max_execution_time>
+            <readonly>2</readonly>
+        </foundation_reader_profile>
+    </profiles>
+</clickhouse>

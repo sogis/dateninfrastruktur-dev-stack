@@ -1,0 +1,9 @@
+{
+    "_class": "hudson.model.FreeStyleProject",
+    "name": "gretl-datenportal-seed",
+    "lastBuild": {
+        "_class": "hudson.model.FreeStyleBuild",
+        "number": 3,
+        "result": "SUCCESS"
+    }
+}

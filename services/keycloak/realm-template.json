@@ -1,0 +1,65 @@
+{
+  "realm": "dateninfrastruktur",
+  "enabled": true,
+  "displayName": "Dateninfrastruktur Kanton Solothurn",
+  "displayNameHtml": "Dateninfrastruktur Kanton Solothurn",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "users": [
+    {
+      "id": "0b7c9d5e-1f2a-4d3b-8c4e-5f6a7b8c9d01",
+      "username": "anna",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Anna",
+      "lastName": "Beispiel",
+      "email": "anna@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__DEMO_PASSWORD__",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "1c8d0e6f-2a3b-4c5d-9e6f-7a8b9c0d1e02",
+      "username": "ben",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ben",
+      "lastName": "Muster",
+      "email": "ben@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__DEMO_PASSWORD__",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "2d9e1f70-3b4c-5d6e-af70-8b9c0d1e2f03",
+      "username": "claudia",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Claudia",
+      "lastName": "Test",
+      "email": "claudia@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__DEMO_PASSWORD__",
+          "temporary": false
+        }
+      ]
+    }
+  ],
+  "clients": []
+}

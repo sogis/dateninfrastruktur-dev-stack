@@ -1,0 +1,8 @@
+gretl-datenportal-agem
+gretl-datenportal-agi
+gretl-datenportal-bfs
+gretl-datenportal-ksta
+gretl-datenportal-mfk
+gretl-datenportal-seed
+gretl-datenportal-staatskanzlei
+gretl-datenportal-statistikdienst

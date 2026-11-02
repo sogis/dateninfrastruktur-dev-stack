@@ -1,0 +1,14 @@
+collected_at_utc=2026-11-02T17:51:03Z
+workspace=/Users/stefan/sources/dateninfrastruktur
+docker=29.9.2
+compose=5.6.1
+os=macOS 27.0.1
+arch=arm64
+cpus=10
+memory_bytes=25769803776
+java=openjdk version "25.0.2" 2026-01-20 LTS
+mvn=Apache Maven 3.9.16 (2bdd9fddda4b155ebf8000e807eb73fd829a51d5)
+node=v22.23.1
+python=Python 3.9.6
+opencode=1.18.22
+review_model=infomaniak/Qwen/Qwen3.8-27B-FP8

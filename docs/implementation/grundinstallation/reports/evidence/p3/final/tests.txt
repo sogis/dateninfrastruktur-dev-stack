@@ -1,0 +1,36 @@
+# Finale Testnachweise P3
+
+Arbeitsverzeichnis: `/Users/stefan/sources/dateninfrastruktur/dateninfrastruktur-dev-stack`.
+Datum: 2. November 2026. Alle Kommandos wurden tatsächlich ausgeführt.
+
+| Kommando | Exitcode | Ergebnis |
+|---|---|---|
+| `./scripts/test-isolation-config.sh` | 0 | Projektgrenze, Loopback-Ports, PostgreSQL ohne Hostport, lokale Images und projektspezifische Volumes geprüft |
+| `./scripts/smoke-test.sh` | 0 | S3 public, Browser-Rechte, Gateway, Jenkins-Login, Plugin aktiv, Seedjob SUCCESS, Startformular inkl. Assets, Manifest, DuckDB, Portal-Readiness, Admin-Sperren |
+| `./scripts/test-postgres.sh` | 0 | getrennte Rollen ohne Superuser; Fremddatenbank und fremde Testtabelle verweigert |
+| `./scripts/test-keycloak.sh` | 0 | Realm, drei stabile IDs, Discovery und JWKS |
+| `./scripts/test-clickhouse.sh` | 0 | drei Initialzeilen, beide Leser erlaubt; `restricted_metrics`, INSERT, DDL, GRANT, anonym und falsches Passwort verweigert |
+| `./scripts/test-jdbc.sh` | 0 | JDBC über `127.0.0.1:18123`; erlaubte Abfrage und verweigerte `restricted_metrics` über den echten Treiber |
+| `./scripts/test-superset.sh` | 0 | Metadaten in PostgreSQL, Treiberabfrage über gespeicherte Verbindung, Login |
+| `./scripts/test-private-storage.sh` | 0 | berechtigter Abruf; anonymer S3, öffentlicher Leseschlüssel und Gateway verweigert; kein privater Inhalt in öffentlichen Artefakten |
+| `./scripts/test-isolation-run.sh` | 0 | paralleler Reviewstack auf eigenen Ports/Volumes; Arbeitsinstanz unverändert; Reviewressourcen bereinigt |
+| `./scripts/test-restart.sh` | 0 | Stoppen/Neustart ohne Volume-Löschung; Secrets, Release-ID, Keycloak-IDs, Superset-Verbindung, Jenkins-Jobs und ClickHouse-Testzeile erhalten |
+| `./scripts/smoke-test.sh` nach Wiederanlauf und Portalstart | 0 | Endzustand erneut geprüft |
+
+## Relevante Ausgaben
+
+- Frischstart: `./scripts/up.sh --skip-build` nach Entfernen der eigenen
+  Projektvolumes; Exitcode 0; `releaseId=5eda4b72-2c77-4491-b41e-e26261dbbd37`;
+  Sodata erst nach bestätigter Publikation gestartet.
+- Seedjob: `lastBuild.result=SUCCESS`.
+- Plugin: gebautes HPI und installiertes JPI haben identische SHA256
+  `fa5114e673a3000755b05dc4e84451a6b34b83f435e2ba4734d2521d0b481d5a`.
+- JDBC-Treiber: `aad21a6b9d357d35d846d0c05b97cba6ed93cf9c6530c928ff38e423a26b6157`.
+- Privater Speicher: Gateway-Antwort auf den privaten Pfad ist nicht 200 und
+  enthält den Testinhalt nicht; anonyme und öffentliche Schlüssel werden
+  verweigert.
+- Wiederanlauf: keine neuen Jenkins-Jobs, kein zusätzlicher Seedlauf; die
+  Testzeile blieb erhalten, die drei Initialzeilen blieben einfach vorhanden.
+
+Die unabhängige Abnahme durch Qwen ist in diesem Beleg nicht enthalten und
+wird nicht behauptet.
