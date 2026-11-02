@@ -1,0 +1,191 @@
+{
+  "schema_version": 2,
+  "example_only": true,
+  "candidate_id": null,
+  "created_at_utc": null,
+  "phase": null,
+  "requirements": {
+    "path": "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/AUFTRAG_GRUNDINSTALLATION.md",
+    "sha256": null
+  },
+  "workspace": {
+    "root": null,
+    "os": null,
+    "architecture": null,
+    "docker_version": null,
+    "compose_version": null
+  },
+  "agents": {
+    "implementation": {
+      "requested": "DeepSeek Flash via DeepSeek API",
+      "actual_provider_model": null,
+      "opencode_version": null,
+      "session_id": null
+    },
+    "review": {
+      "requested": "Qwen 3.8 27b via Infomaniak API",
+      "resolved_provider_model": null,
+      "handoff_status": "NOT_RUN"
+    }
+  },
+  "repositories": [
+    {
+      "target_name": "dateninfrastruktur-dev-stack",
+      "target_path": "dateninfrastruktur-dev-stack",
+      "source_url": "https://github.com/sogis/datenportal-dev-stack",
+      "source_commit": "915db871f777c98324c795649eabe0135d4f7165",
+      "target_commit": null,
+      "target_tree": null,
+      "working_tree_clean": null,
+      "product_files_manifest_path": null,
+      "product_files_manifest_sha256": null
+    },
+    {
+      "target_name": "dateninfrastruktur-sodata",
+      "target_path": "dateninfrastruktur-sodata",
+      "source_url": "https://github.com/sogis/datenportal-sodata",
+      "source_commit": "9db0920e58613ece3bccf5e024199c016705d5de",
+      "target_commit": null,
+      "target_tree": null,
+      "working_tree_clean": null,
+      "product_files_manifest_path": null,
+      "product_files_manifest_sha256": null
+    },
+    {
+      "target_name": "dateninfrastruktur-jenkins-dev",
+      "target_path": "dateninfrastruktur-jenkins-dev",
+      "source_url": "https://github.com/sogis/datenportal-jenkins-dev",
+      "source_commit": "af1fb9d201835da879a86d01a1d547276822fcd8",
+      "target_commit": null,
+      "target_tree": null,
+      "working_tree_clean": null,
+      "product_files_manifest_path": null,
+      "product_files_manifest_sha256": null
+    },
+    {
+      "target_name": "dateninfrastruktur-jenkins-gretl-plugin",
+      "target_path": "dateninfrastruktur-jenkins-gretl-plugin",
+      "source_url": "https://github.com/sogis/datenportal-jenkins-gretl-plugin",
+      "source_commit": "07e465e5432c405bdc5cbdebc2911c1eb61e1ded",
+      "target_commit": null,
+      "target_tree": null,
+      "working_tree_clean": null,
+      "product_files_manifest_path": null,
+      "product_files_manifest_sha256": null
+    },
+    {
+      "target_name": "dateninfrastruktur-themenrepo",
+      "target_path": "dateninfrastruktur-themenrepo",
+      "source_url": "https://github.com/sogis/datenportal-themenrepo",
+      "source_commit": "fc87ff0b259818d112400778219ee35b88ce6c32",
+      "target_commit": null,
+      "target_tree": null,
+      "working_tree_clean": null,
+      "product_files_manifest_path": null,
+      "product_files_manifest_sha256": null
+    }
+  ],
+  "images": [],
+  "artifacts": {
+    "jenkins_plugin_short_name": "jenkins-gretl-datenportal-plugin",
+    "built_plugin_sha256": null,
+    "installed_plugin_sha256": null,
+    "resolved_dependencies_manifest": null,
+    "bundled_jars_sha256_manifest": null,
+    "versions_manifest": null,
+    "jdbc_driver_coordinates": null,
+    "jdbc_driver_sha256": null
+  },
+  "execution": {
+    "compose_project": null,
+    "compose_files": [],
+    "runtime_directory": null,
+    "env_file_path_only": null,
+    "host_ports": {},
+    "commands": {
+      "preflight": null,
+      "initialize": null,
+      "build_and_start": null,
+      "smoke": null,
+      "jdbc": null,
+      "permissions_negative": null,
+      "storage_negative": null,
+      "restart": null,
+      "stop_preserving_volumes": null
+    }
+  },
+  "evidence": {
+    "implementation_directory": "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/reports",
+    "review_directory": null,
+    "implementation_acceptance_results": []
+  },
+  "known_limitations": [],
+  "blockers": [],
+  "notes": [
+    "EXAMPLE: replace nulls with observed values, remove example_only or set false only after the candidate exists.",
+    "Record images with service, reference, registry_digest_or_local_image_id, platform and relevant source revision.",
+    "Never include API keys, passwords, tokens, secret hashes or interpolated connection strings.",
+    "Capture relevant uncommitted and untracked product files when HEAD does not fully identify the candidate.",
+    "Freeze the candidate manifest when review starts. Handoff review fields are not updated afterwards.",
+    "Keep review evidence separate from the product snapshot. Record actual review results and model in the reviewer report, referencing this manifest by SHA256.",
+    "All relative file paths resolve against the local workspace root, not the manifest directory.",
+    "All placeholder paths and unobserved hashes must be resolved for a real candidate. Instructions are hashed even when they live outside repository Git boundaries.",
+    "Create the candidate manifest after freezing product revisions. Review and candidate files can be archived afterwards in a separate evidence-only commit without changing this manifest.",
+    "A reviewer using another workspace path records that mapping in the review report and must not edit the frozen manifest."
+  ],
+  "path_base": "workspace_root",
+  "instruction_files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-dev-stack/AGENTS.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-sodata/AGENTS.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-jenkins-dev/AGENTS.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-jenkins-gretl-plugin/AGENTS.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-themenrepo/AGENTS.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/START_IMPLEMENTIERUNG.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/START_REVIEW.md",
+      "sha256": null
+    },
+    {
+      "path": "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/templates/AGENTS.workspace.md",
+      "sha256": null
+    }
+  ],
+  "layout": {
+    "documentation_directory": "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation",
+    "phase_reports_directory": "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/reports",
+    "candidate_manifest_path": null,
+    "review_output_directory": null
+  },
+  "product_snapshot": {
+    "includes": "Source, configuration, tests, required untracked product files, requirements, prompts, AGENTS files, templates and phase reports.",
+    "evidence_subtrees_excluded": [
+      "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/candidates/<candidate-id>",
+      "dateninfrastruktur-dev-stack/docs/implementation/grundinstallation/review/<candidate-id>"
+    ],
+    "resolved_excluded_paths": [],
+    "runtime_and_build_exclusions": [],
+    "note": "Resolve concrete generated evidence subtrees for this and earlier candidates. Do not exclude the whole docs tree, folder READMEs or every untracked file."
+  }
+}
