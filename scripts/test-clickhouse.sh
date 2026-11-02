@@ -14,6 +14,7 @@ ADMIN_USER="${CLICKHOUSE_ADMIN_USER:-ch_admin}"
 : "${CLICKHOUSE_ADMIN_PASSWORD:?./scripts/init.sh ausführen}"
 : "${CLICKHOUSE_TEST_READER_PASSWORD:?./scripts/init.sh ausführen}"
 : "${CLICKHOUSE_SUPERSET_READER_PASSWORD:?./scripts/init.sh ausführen}"
+CLICKHOUSE_HTTP_PORT="${CLICKHOUSE_HTTP_PORT:-18123}"
 
 ch() {
   local user="$1"
@@ -63,7 +64,7 @@ done
 
 echo "Prüfe anonymen und falschen ClickHouse-Zugang ..."
 status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-  'http://localhost:18123/?query=SELECT%201')"
+  "http://localhost:${CLICKHOUSE_HTTP_PORT}/?query=SELECT%201")"
 [[ "${status}" == "401" || "${status}" == "403" ]] || { echo "Anonymer HTTP-Zugang lieferte ${status}." >&2; exit 1; }
 expect_denied "falsches Passwort" \
   ch ch_test_reader "definitely-wrong-password" --query 'SELECT 1'
