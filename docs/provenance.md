@@ -1,9 +1,11 @@
 # Herkunft und Übernahme
 
-Stand: 2. November 2026. Alle Zielrepos wurden aus den im Auftrag genannten
+Stand: 3. November 2026. Alle Zielrepos wurden aus den im Auftrag genannten
 Git-Commits übernommen. Die Quellarbeitsbäume wurden nicht verändert; die
 Übernahme erfolgte mit `git archive <commit>` in temporäre Verzeichnisse und
-anschliessender gezielter Kopie.
+anschliessender gezielter Kopie. Mit Auftragsrevision 1.3 wurden die aktiven
+Umgebungs-, Konfigurations- und Sodata-Artefaktnamen auf den
+`dateninfrastruktur`-Namespace umgestellt.
 
 ## Quellen und Zielstände
 
@@ -77,8 +79,10 @@ INTERLIS-/XTF-Dateien.
 - `jenkins-home/` wird nicht übernommen und ist im Ziel vollständig ignoriert.
 - Das Offline-Bundle akzeptiert eine `.git`-Datei einer Git-Arbeitskopie
   (Worktree) als gültige Git-Arbeitskopie.
-- Image-/Label-Namen auf `dateninfrastruktur-jenkins` umgestellt; die
-  technische Plugin-ID und die JCasC-Verträge bleiben unverändert.
+- Image-/Label-Namen und Plugin-Pfade auf `dateninfrastruktur` umgestellt;
+  die JCasC-Verträge und der Pipeline-Schritt bleiben unverändert.
+- Build und Image-Kontext lesen `DATENINFRASTRUKTUR_*` sowie
+  `dateninfrastruktur.repository.*` und `dateninfrastruktur.offline.seed.*`.
 
 ### `dateninfrastruktur-jenkins-gretl-plugin`
 
@@ -93,6 +97,10 @@ INTERLIS-/XTF-Dateien.
 ### `dateninfrastruktur-themenrepo`
 
 - Keine fachlichen IDs, Modellnamen oder Scanner-YAML-Dateinamen geändert.
+- Aktive Build-Properties auf `dateninfrastruktur.plugin.*`,
+  `dateninfrastruktur.repository.*` und `dateninfrastruktur.offline.seed.*`
+  umgestellt; die INTERLIS-Modell-URL `datenportal.so.ch` bleibt fachlich
+  unverändert.
 - Aktive Schreib-, Reload- und Git-Ziele bleiben lokal beziehungsweise
   deaktiviert; die Publikation läuft über den neuen Jenkins-Stack in den
   lokalen Garage-Bucket.
