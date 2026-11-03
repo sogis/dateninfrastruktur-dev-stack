@@ -147,8 +147,8 @@ sync_local_jenkins_plugin() {
     -c '
       set -eu
       plugin_dir=/var/jenkins_home/plugins
-      image_plugin=/usr/share/jenkins/ref/plugins/jenkins-gretl-datenportal-plugin.jpi
-      installed_plugin="$plugin_dir/jenkins-gretl-datenportal-plugin.jpi"
+      image_plugin=/usr/share/jenkins/ref/plugins/jenkins-gretl-dateninfrastruktur-plugin.jpi
+      installed_plugin="$plugin_dir/jenkins-gretl-dateninfrastruktur-plugin.jpi"
 
       if [ ! -f "$image_plugin" ]; then
         echo "Plugin aus dem Jenkins-Image nicht gefunden: $image_plugin" >&2
@@ -157,6 +157,10 @@ sync_local_jenkins_plugin() {
       mkdir -p "$plugin_dir"
       cp "$image_plugin" "$installed_plugin"
       chown jenkins:jenkins "$plugin_dir" "$installed_plugin"
+      rm -f "$plugin_dir/jenkins-gretl-dateninfrastruktur-plugin.hpi"
+      rm -rf "$plugin_dir/jenkins-gretl-dateninfrastruktur-plugin"
+      # Remove the superseded Datenportal plugin ID from reused volumes.
+      rm -f "$plugin_dir/jenkins-gretl-datenportal-plugin.jpi"
       rm -f "$plugin_dir/jenkins-gretl-datenportal-plugin.hpi"
       rm -rf "$plugin_dir/jenkins-gretl-datenportal-plugin"
     '

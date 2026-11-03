@@ -146,7 +146,7 @@ import json
 import sys
 
 data = json.loads(sys.argv[1])
-matches = [p for p in data["plugins"] if p["shortName"] == "jenkins-gretl-datenportal-plugin"]
+matches = [p for p in data["plugins"] if p["shortName"] == "jenkins-gretl-dateninfrastruktur-plugin"]
 assert matches, "lokal gebautes GRETL-Plugin ist nicht installiert"
 assert matches[0]["active"] is True, "GRETL-Plugin ist nicht aktiv"
 PYTHON

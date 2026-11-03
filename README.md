@@ -270,7 +270,7 @@ Bereinigung fremder Container oder Volumes.
   `http://localhost:<GATEWAY_PORT>/...`.
 - Jenkins läuft im lokalen `dev`-Modus mit eigenem JCasC. Git-Writeback ist
   aus; E-Mail-Benachrichtigungen sind deaktiviert. Die technische Plugin-ID
-  `jenkins-gretl-datenportal-plugin`, der JCasC-Schlüssel
+  ist `jenkins-gretl-dateninfrastruktur-plugin`; der JCasC-Schlüssel
   `gretlDatenportalJobs`, der Schritt `prepareDatenportalWorkspace` und der
   Seedjob `gretl-datenportal-seed` bleiben als Kompatibilitätsverträge erhalten.
 - Sodata behält den Gradle-Artefaktnamen `datenportal-sodata` und das
@@ -292,7 +292,7 @@ Bereinigung fremder Container oder Volumes.
 ## Troubleshooting
 
 - **Jenkins-Plugin wird nicht geladen:** `./scripts/logs.sh jenkins` prüfen;
-  das Plugin muss als `/var/jenkins_home/plugins/jenkins-gretl-datenportal-plugin.jpi`
+  das Plugin muss als `/var/jenkins_home/plugins/jenkins-gretl-dateninfrastruktur-plugin.jpi`
   mit dem im Image gebauten HPI übereinstimmen. `./scripts/up.sh --skip-build`
   synchronisiert das Image-Plugin erneut.
 - **Seedjob schlägt fehl:** Jenkins-Build-Log und

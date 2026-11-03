@@ -34,7 +34,7 @@ PostgreSQL hat keinen Hostport. Alle veröffentlichten Ports sind an
 - lokale Jenkins-, Sodata- und Superset-Images aus diesen Quellen,
 - Jenkins 2.555.2 mit Java 21, Java-17-GRETL-Laufzeit und 77 übernommenen
   Standardplugins,
-- aktives Plugin `jenkins-gretl-datenportal-plugin` mit identischem HPI/JPI-
+- aktives Plugin `jenkins-gretl-dateninfrastruktur-plugin` mit identischem HPI/JPI-
   SHA256,
 - Seedjob und sieben generierte Organisationsjobs,
 - gültige lokale Erstpublikation mit echter DuckDB,

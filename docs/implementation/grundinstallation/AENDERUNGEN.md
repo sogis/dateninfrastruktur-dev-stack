@@ -21,3 +21,19 @@ Primärquellen für die neuen Toolhinweise:
 
 - [OpenCode V2 – Instructions](https://opencode.ai/v2/docs/instructions/)
 - [OpenCode V2 – Permissions](https://opencode.ai/v2/docs/permissions/)
+
+## Auftragsrevision 1.2 – 3. November 2026
+
+Diese Revision ändert ausschliesslich die technische Identität des
+projektspezifischen Jenkins-Plugins auf Wunsch des Auftraggebers:
+
+- Maven-Artefakt und Jenkins-Plugin-ID: `jenkins-gretl-dateninfrastruktur-plugin`
+- HPI/JPI-Dateiname und Jenkins-Assetpfade entsprechend angepasst
+- alte Koordinate `jenkins-gretl-datenportal-plugin` wird nicht weiterverwendet
+  und ihr fehlerhaft veröffentlichter Snapshot wird entfernt
+- JCasC-Symbol `gretlDatenportalJobs`, Pipeline-Schritt
+  `prepareDatenportalWorkspace`, Java-Paket und fachliche Verträge bleiben
+  unverändert
+
+Der technische Funktionsumfang, die Phasen und die Abnahmekriterien G01–G24
+bleiben inhaltlich unverändert.

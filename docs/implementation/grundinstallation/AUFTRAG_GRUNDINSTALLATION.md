@@ -1,6 +1,6 @@
 # Verbindlicher Arbeitsauftrag: lokale Grundinstallation Dateninfrastruktur
 
-Stand: 2. November 2026. Dokumentrevision 1.1: Ablage, AGENTS.md und Reviewnachweise ergänzt; technischer Funktionsumfang unverändert. Auftraggeber: AGI Kanton Solothurn. Umsetzungswerkzeug: OpenCode. Implementierung: DeepSeek Flash über die DeepSeek-API. Unabhängiges Review: Qwen 3.8 27b über Infomaniak, mit vor Ort aufgelöster exakter Modellkennung.
+Stand: 3. November 2026. Dokumentrevision 1.2: Das projektspezifische Jenkins-Plugin wurde auf Wunsch des Auftraggebers von `jenkins-gretl-datenportal-plugin` in `jenkins-gretl-dateninfrastruktur-plugin` umbenannt. Maven-Artefakt, Jenkins-Plugin-ID, HPI/JPI und Assetpfade wurden gemeinsam angepasst; die alte Maven-Snapshot-Koordinate wird entfernt. Der technische Funktionsumfang bleibt unverändert. Revision 1.1 (2. November 2026) ergänzte Ablage, AGENTS.md und Reviewnachweise. Auftraggeber: AGI Kanton Solothurn. Umsetzungswerkzeug: OpenCode. Implementierung: DeepSeek Flash über die DeepSeek-API. Unabhängiges Review: Qwen 3.8 27b über Infomaniak, mit vor Ort aufgelöster exakter Modellkennung.
 
 ## 0. Arbeitsbereich, Ablage und Agentenhinweise
 
@@ -117,7 +117,7 @@ Behalte technische Schnittstellennamen zunächst bei, wenn ihre Änderung keinen
 
 | Beizubehaltender Vertrag | Abhängigkeiten |
 |---|---|
-| `jenkins-gretl-datenportal-plugin` | Maven-Artefakt, Jenkins-Plugin-ID, HPI/JPI-Datei, Assetpfade |
+| `jenkins-gretl-dateninfrastruktur-plugin` | Maven-Artefakt, Jenkins-Plugin-ID, HPI/JPI-Datei, Assetpfade |
 | `ch.so.agi.jenkins.gretldatenportal` | Java-/Jelly-Zuordnung und Jenkins-Deskriptoren |
 | `gretlDatenportalJobs` | JCasC-Symbol des Plugins |
 | `prepareDatenportalWorkspace` | Pipeline-Schritt im Themenrepo |

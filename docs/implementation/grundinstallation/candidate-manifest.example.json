@@ -87,7 +87,7 @@
   ],
   "images": [],
   "artifacts": {
-    "jenkins_plugin_short_name": "jenkins-gretl-datenportal-plugin",
+    "jenkins_plugin_short_name": "jenkins-gretl-dateninfrastruktur-plugin",
     "built_plugin_sha256": null,
     "installed_plugin_sha256": null,
     "resolved_dependencies_manifest": null,

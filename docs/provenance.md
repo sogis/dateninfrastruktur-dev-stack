@@ -84,9 +84,11 @@ INTERLIS-/XTF-Dateien.
 
 - Repository-URL und SCM-Angaben in `pom.xml` auf das neue GitHub-Repo
   umgestellt.
-- Technische Plugin-ID `jenkins-gretl-datenportal-plugin`, Java-Paket
-  `ch.so.agi.jenkins.gretldatenportal`, HPI-Name und Assetpfade bleiben
-  unverändert.
+- Technische Plugin-ID und Maven-Artefakt auf
+  `jenkins-gretl-dateninfrastruktur-plugin` umgestellt; HPI-/JPI-Dateiname und
+  Jelly-Assetpfade wurden mitgeändert. Java-Paket
+  `ch.so.agi.jenkins.gretldatenportal`, JCasC-Symbol und Pipeline-Schritt
+  bleiben unverändert.
 
 ### `dateninfrastruktur-themenrepo`
 

@@ -6,9 +6,16 @@ bleiben erhalten, weil eine Umbenennung keinen funktionalen Nutzen hätte und
 bestehende Bilder, Plugins, Jelly-/JS-Pfade, Gradle-Verträge oder fachliche
 Referenzen brechen würde.
 
+## Neue technische Identität
+
 | Name | Fundort | Zweck | Begründung |
 |---|---|---|---|
-| `jenkins-gretl-datenportal-plugin` | Plugin-`pom.xml`, HPI/JPI, Jenkins-Plugin-ID, Image-Pluginpfad | Technische Plugin-Identität | Jenkins erkennt das Plugin und seine Erweiterungen über diese ID; HPI/JPI- und Assetpfade hängen daran. |
+| `jenkins-gretl-dateninfrastruktur-plugin` | Plugin-`pom.xml`, HPI/JPI, Jenkins-Plugin-ID, Image-Pluginpfad | Aktive technische Plugin-Identität | Am 3. November 2026 bewusst vom alten Datenportal-Namen getrennt; Maven-Artefakt, Jenkins-ID, HPI/JPI und Assetpfade wurden gemeinsam umgestellt. |
+
+## Beibehaltene technische Namen
+
+| Name | Fundort | Zweck | Begründung |
+|---|---|---|---|
 | `ch.so.agi.jenkins.gretldatenportal` | Java-Paket, Jelly-Ressourcen, Jenkins-Deskriptoren | Java-/Jelly-Zuordnung | Package- und Ressourcenpfade sind Teil des Jenkins-Klassenpfads und der UI-Ressourcen. |
 | `gretlDatenportalJobs` | JCasC in `services/jenkins/jenkins-stack.yaml`, `casc/*.yaml` | JCasC-Symbol des Plugins | Das Symbol ist der stabile Konfigurationsschlüssel des Plugins. |
 | `prepareDatenportalWorkspace` | `shared/Jenkinsfile`, Plugin-Schritt | Pipeline-Schritt | Der Themenrepo-Vertrag ruft den Schritt unter diesem Namen auf. |
@@ -28,6 +35,9 @@ Referenzen brechen würde.
 
 Folgende frühere aktive Ziele wurden bewusst entfernt oder ersetzt:
 
+- `jenkins-gretl-datenportal-plugin` als Maven-Artefakt, Jenkins-Plugin-ID,
+  HPI/JPI-Dateiname und Assetpfad; die alte Maven-Snapshot-Koordinate wird
+  entfernt und darf nicht weiterverwendet werden.
 - alte Anwendungsimages `sogis/datenportal-jenkins`, `sogis/datenportal-sodata`,
   `sogis/datenportal-datenblatt-editor`, `sogis/datenportal-dokumentation`,
 - der Registry-/HPI-Fallback auf `jars.interlis.guru`,
