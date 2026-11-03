@@ -1,6 +1,6 @@
 # Technischer Stand der Grundinstallation
 
-Stand: 2. November 2026. Kandidat `c002` (Korrektur nach Review c001). Dieser Bericht ist eine
+Stand: 3. November 2026. Kandidat `c004` (Plugin-Umbenennung und Publikationskorrektur). Dieser Bericht ist eine
 Selbstdokumentation des Implementierungsagenten, **keine unabhängige Abnahme**.
 
 ## Laufender Zustand
@@ -56,7 +56,7 @@ Versionen, Digests und Prüfkommandos stehen in
 | G01 | LOKAL_GEPRUEFT | fünf Ziele und Quellcommits dokumentiert; Quellarbeitsbäume unverändert |
 | G02 | LOKAL_GEPRUEFT | kein `jenkins-home`, keine Quellsecrets, Lizenzen plus `LICENSE.upstream` |
 | G03 | LOKAL_GEPRUEFT | aktive Builds/Mounts/Images im neuen Namespace; Legacy-Liste dokumentiert |
-| G04 | LOKAL_GEPRUEFT | Jenkins- und Sodata-Images aus Zielquellen gebaut; Sodata-Wrapper-JAR in c002 nachgezogen; IDs/Architektur belegt |
+| G04 | LOKAL_GEPRUEFT | Jenkins- und Sodata-Images aus Zielquellen gebaut; Plugin als `jenkins-gretl-dateninfrastruktur-plugin`; IDs/Architektur belegt |
 | G05 | LOKAL_GEPRUEFT | 77 Plugins, Plugin aktiv, HPI/JPI-Hash gleich, JCasC ohne unbekannte Symbole |
 | G06 | LOKAL_GEPRUEFT | lokaler Modus ohne AD, Seed SUCCESS, Jobs und Formularressourcen vorhanden |
 | G07 | LOKAL_GEPRUEFT | GRETL-/Modellbundle, Erstpublikation, DuckDB, Sodata-Readiness |
@@ -70,13 +70,13 @@ Versionen, Digests und Prüfkommandos stehen in
 | G15 | LOKAL_GEPRUEFT | Superset-Metadaten, Treiberabfrage, Login |
 | G16 | LOKAL_GEPRUEFT | privates Objekt berechtigt lesbar; anonym, Public-Key, Gateway verweigert |
 | G17 | LOKAL_GEPRUEFT | Loopback-Ports, PostgreSQL intern, eigene Volumes/Hostpfade |
-| G18 | LOKAL_GEPRUEFT | Frischstart aus neuen eigenen Volumes; c002 enthält den für saubere Checkouts fehlenden Wrapper-JAR |
+| G18 | LOKAL_GEPRUEFT | Frischstart aus neuen eigenen Volumes; Wrapper-JAR und neues Plugin-Artefakt enthalten |
 | G19 | LOKAL_GEPRUEFT | Wiederanlauf erhält Secrets, IDs, Verbindung, Testzeile; keine Seedduplikate |
 | G20 | LOKAL_GEPRUEFT | paralleler Reviewstack auf eigenen Ports/Volumes; Arbeitsinstanz unverändert |
 | G21 | LOKAL_GEPRUEFT | `--registry-only`, fehlende Plugin-/Sodataquelle mit Exitcode und Meldung |
 | G22 | LOKAL_GEPRUEFT | Root-README mit Start/Stop/URLs/JDBC/Grenzen/Diagnose/Bereinigung |
-| G23 | LOKAL_GEPRUEFT | Ablage, Anweisungs-Hashes und Kandidatenmanifest nach Abschnitt 0/8.1 |
-| G24 | OFFEN | unabhängiges Qwen-Review noch nicht durchgeführt |
+| G23 | LOKAL_GEPRUEFT | Ablage, Anweisungs-Hashes und Kandidatenmanifest c004 nach Abschnitt 0/8.1 |
+| G24 | NOT RUN | vom Nutzer für diese Publikationskorrektur ausdrücklich nicht angefordert |
 
 ## Grenzen
 
@@ -89,8 +89,10 @@ Versionen, Digests und Prüfkommandos stehen in
 - Die GRETL-Abhängigkeiten sind `5.0.0-SNAPSHOT`; das aufgelöste Manifest und
   die JAR-Hashes liegen als Beleg vor, ein bitidentischer Neubau ist ohne
   Lock-Initiative nicht garantiert.
-- Der unabhängige Qwen-Review zu c001 blieb wegen fehlender Kontextmetadaten
-  und API-Abbrüchen `BLOCKED`; der vom Nutzer autorisierte Kimi-Ausweichreview
-  fand zwei Korrekturen, die in c002 umgesetzt sind. Die erneute unabhängige
-  Prüfung von c002 ist ausstehend. Bis dahin lautet der Status:
-  **implementiert und lokal geprüft, unabhängige Abnahme ausstehend**.
+- Der Kandidat c004 benennt das Jenkins-Plugin in
+  `jenkins-gretl-dateninfrastruktur-plugin` um. Die neue Maven-Koordinate und
+  das Jenkins-Image `0.1.6` enthalten dasselbe HPI; der fehlerhafte alte
+  Snapshot `jenkins-gretl-datenportal-plugin` wurde entfernt.
+- Eine unabhängige Agentenvalidierung von c004 war auf ausdrücklichen
+  Nutzerwunsch nicht Teil dieses Auftrags. G24 bleibt daher `NOT RUN`; der
+  Status lautet **lokal geprüft, keine unabhängige Abnahme angefordert**.
