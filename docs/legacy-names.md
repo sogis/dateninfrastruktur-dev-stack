@@ -25,6 +25,7 @@ fachliche Identitäten oder Containerpfade brechen würde.
 | `gretl-datenportal-seed` | JCasC, Bootstrap, Jenkins-Jobs | Seedjob und Bootstrap-Erwartung | Bootstrap und Dokumentation adressieren den Job unter diesem Namen. |
 | `datenportal-topic-repository` | JCasC, `shared/Jenkinsfile` | Gemeinsamer Pipeline-Lock | Der Lock-Name verhindert parallele Publikationen; er ist kein Umgebungsziel. |
 | `gretl-datenportal-job.yaml`, `gretl-datenportal-defaults.yaml`, `gretl-datenportal-teams.yaml` | Themenrepo, Plugin-Scanner | Scannervertrag | Das Plugin findet Organisationen, Defaults und Teams über diese Dateinamen. |
+| `gretl-datenportal.css`, `gretl-datenportal.js` | Plugin-Webapp, Jelly-Ressourcen, Plugin-Tests | Statische Assetnamen | Die Dateinamen sind an Jelly-Referenzen und das veröffentlichte HPI gebunden; eine Umbenennung bringt keinen funktionalen Nutzen. |
 | `/opt/datenportal` | Jenkins-Image, Sodata-Image, Compose-Mounts | Containerinterne Arbeits- und Bundlepfade | Image-Aufbau, Offline-Bundle, DuckDB-Extension-Pfad und JCasC-Mount hängen daran. |
 | `/var/jenkins_home/gretl-datenportal/topic-repo` | Jenkins-Plugin, Bootstrap | Containerinterner Themenrepo-Pfad | Der Plugin-Checkout und der Bootstrap-Publication-Lauf verwenden diesen Pfad. |
 | `datenportal.explore.*` | Sodata-Frontend (`autoSaveId`) | Browserlokale Layout- und Editorzustände | Die Schlüssel liegen nur im Browser; eine Umbenennung würde gespeicherte Benutzerlayouts ohne Servergewinn zurücksetzen. |
