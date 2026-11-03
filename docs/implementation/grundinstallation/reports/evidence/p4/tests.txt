@@ -1,0 +1,74 @@
+Ausgeführte Prüfungen nach dem Namespace-Cleanup
+Datum: 2026-11-03
+Arbeitsverzeichnis: /Users/stefan/sources/dateninfrastruktur
+
+Sodata-Anwendung
+  Kommando: ./gradlew --no-daemon test
+  Arbeitsverzeichnis: dateninfrastruktur-sodata
+  Exitcode: 0
+  Ergebnis: BUILD SUCCESSFUL; Anwendungskontext startet als dateninfrastruktur-sodata.
+
+Sodata-Container lokal (JVM)
+  Kommando: python3 tools/test-container.py --image dateninfrastruktur-sodata:local --runtime jvm
+  Arbeitsverzeichnis: dateninfrastruktur-sodata
+  Exitcode: 0
+  Ergebnis: PASS; arbitrary UID, Health, Katalog und Explore.
+
+Sodata-Container lokal (native)
+  Kommando: python3 tools/test-container.py --image dateninfrastruktur-sodata:native-test --runtime native
+  Arbeitsverzeichnis: dateninfrastruktur-sodata
+  Exitcode: 0
+  Ergebnis: PASS; arbitrary UID, Health, Katalog und Explore.
+
+Jenkins-Dev-Unit-Tests
+  Kommando: python3 -m unittest discover -s tests
+  Arbeitsverzeichnis: dateninfrastruktur-jenkins-dev
+  Exitcode: 0
+  Ergebnis: 16 Tests OK.
+
+Jenkins-Image lokal
+  Kommando: ./scripts/build-jenkins-local.sh
+  Arbeitsverzeichnis: dateninfrastruktur-dev-stack
+  Exitcode: 0
+  Ergebnis: Image gebaut; Offline-Bundle und DuckDB-Extension-Positiv-/Negativtest bestanden.
+
+Stack-Start
+  Kommando: ./scripts/up.sh --skip-build
+  Arbeitsverzeichnis: dateninfrastruktur-dev-stack
+  Exitcode: 0
+  Ergebnis: alle Dienste healthy.
+
+Smoke-Test
+  Kommando: ./scripts/smoke-test.sh
+  Arbeitsverzeichnis: dateninfrastruktur-dev-stack
+  Exitcode: 0
+  Ergebnis: Gateway, S3, Jenkins, Seed, Formular und Portal geprüft.
+
+Foundation-Prüfung
+  Kommando: ./scripts/verify-foundation.sh
+  Arbeitsverzeichnis: dateninfrastruktur-dev-stack
+  Exitcode: 0
+  Ergebnis: alle Foundation-Prüfungen erfolgreich; privater Speicher gesperrt.
+
+Wiederanlauf
+  Kommando: ./scripts/test-restart.sh
+  Arbeitsverzeichnis: dateninfrastruktur-dev-stack
+  Exitcode: 0
+  Ergebnis: Secrets, Release-ID, Jenkins-Jobnamen, Keycloak-IDs,
+  Superset-Verbindung und ClickHouse-Testzeile erhalten. Ein Seedlauf beim
+  Jenkins-Start ist zulässig und erzeugt keine doppelten Jobs.
+
+Veröffentlichte Sodata-Images
+  Kommando: python3 tools/test-container.py --image docker.io/sogis/dateninfrastruktur-sodata:0.1.3 --runtime native
+  Exitcode: 0
+  Ergebnis: PASS.
+
+  Kommando: python3 tools/test-container.py --image docker.io/sogis/dateninfrastruktur-sodata-jvm:0.1.3 --runtime jvm
+  Exitcode: 0
+  Ergebnis: PASS.
+
+Veröffentlichtes Jenkins-Image
+  Kommando: docker run ... /usr/share/jenkins/ref/plugins/jenkins-gretl-dateninfrastruktur-plugin.jpi | shasum -a 256
+  Exitcode: 0
+  Ergebnis: c1c025f143bc7ff7dff9e6a757fc70f15581bd0b78269295648e34ee98737a42;
+  Short-Name jenkins-gretl-dateninfrastruktur-plugin.

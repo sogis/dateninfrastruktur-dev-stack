@@ -24,19 +24,21 @@ ch_admin() {
 
 capture_state() {
   local marker="$1"
-  local release_id job_count seed_build
+  local release_id job_count job_names seed_build
   release_id="$(curl --fail --silent --show-error "http://localhost:${GATEWAY_PORT}/ch.so.daten/current.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["releaseId"])')"
   job_count="$(curl --globoff --fail --silent --show-error --user "admin:${JENKINS_ADMIN_PASSWORD}" \
     "http://localhost:${GATEWAY_PORT}/jenkins/api/json?tree=jobs[name]" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["jobs"]))')"
+  job_names="$(curl --globoff --fail --silent --show-error --user "admin:${JENKINS_ADMIN_PASSWORD}" \
+    "http://localhost:${GATEWAY_PORT}/jenkins/api/json?tree=jobs[name]" | python3 -c 'import json,sys; print("\n".join(sorted(j["name"] for j in json.load(sys.stdin)["jobs"])))')"
   seed_build="$(curl --globoff --fail --silent --show-error --user "admin:${JENKINS_ADMIN_PASSWORD}" \
     "http://localhost:${GATEWAY_PORT}/jenkins/job/gretl-datenportal-seed/api/json?tree=lastBuild[number]" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("lastBuild",{}).get("number",0))')"
-  python3 - "${STATE_FILE}" "${marker}" "${release_id}" "${job_count}" "${seed_build}" <<'PY'
+  python3 - "${STATE_FILE}" "${marker}" "${release_id}" "${job_count}" "${seed_build}" "${job_names}" <<'PY'
 import hashlib
 import json
 import os
 import sys
 
-state_file, marker, release_id, job_count, seed_build = sys.argv[1:6]
+state_file, marker, release_id, job_count, seed_build, job_names = sys.argv[1:7]
 keys = [
     "GARAGE_DEFAULT_ACCESS_KEY", "GARAGE_DEFAULT_SECRET_KEY",
     "GARAGE_BROWSER_ACCESS_KEY", "GARAGE_BROWSER_SECRET_KEY",
@@ -50,6 +52,7 @@ state = {
     "marker": marker,
     "release_id": release_id,
     "job_count": int(job_count),
+    "job_names": job_names.splitlines(),
     "seed_build": int(seed_build),
     "secret_digests": {
         key: hashlib.sha256(os.environ.get(key, "").encode()).hexdigest()
@@ -88,21 +91,21 @@ assert release_id == state["release_id"], (release_id, state["release_id"])
 print("Persistenz: Secrets und Release-ID sind unverändert.")
 PY
 
-  local job_count seed_build
+  local job_count job_names
   job_count="$(curl --globoff --fail --silent --show-error --user "admin:${JENKINS_ADMIN_PASSWORD}" \
     "http://localhost:${GATEWAY_PORT}/jenkins/api/json?tree=jobs[name]" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["jobs"]))')"
-  seed_build="$(curl --globoff --fail --silent --show-error --user "admin:${JENKINS_ADMIN_PASSWORD}" \
-    "http://localhost:${GATEWAY_PORT}/jenkins/job/gretl-datenportal-seed/api/json?tree=lastBuild[number]" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("lastBuild",{}).get("number",0))')"
-  python3 - "${state_file}" "${job_count}" "${seed_build}" <<'PY'
+  job_names="$(curl --globoff --fail --silent --show-error --user "admin:${JENKINS_ADMIN_PASSWORD}" \
+    "http://localhost:${GATEWAY_PORT}/jenkins/api/json?tree=jobs[name]" | python3 -c 'import json,sys; print("\n".join(sorted(j["name"] for j in json.load(sys.stdin)["jobs"])))')"
+  python3 - "${state_file}" "${job_count}" "${job_names}" <<'PY'
 import json
 import sys
 
-state_file, job_count, seed_build = sys.argv[1:4]
+state_file, job_count, job_names = sys.argv[1:4]
 with open(state_file, encoding="utf-8") as source:
     state = json.load(source)
 assert int(job_count) == state["job_count"], (job_count, state["job_count"])
-assert int(seed_build) == state["seed_build"], (seed_build, state["seed_build"])
-print("Persistenz: keine neuen Jenkins-Jobs und kein zusätzlicher Seedlauf.")
+assert job_names.splitlines() == state["job_names"], "Jenkins-Jobnamen haben sich verändert."
+print("Persistenz: gleiche Jenkins-Jobs ohne Duplikate; ein Seedlauf beim Start ist zulässig.")
 PY
 
   local marker

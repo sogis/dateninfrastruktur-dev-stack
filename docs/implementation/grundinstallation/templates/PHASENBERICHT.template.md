@@ -1,6 +1,6 @@
-# Phasenbericht P<0–3> – <Titel>
+# Phasenbericht P<0–4> – <Titel>
 
-> Vorlage, kein ausgeführter Nachweis. Unter `../reports/P0.md` bis `P3.md` verwenden. Platzhalter erst durch tatsächlich beobachtete Werte ersetzen.
+> Vorlage, kein ausgeführter Nachweis. Unter `../reports/P0.md` bis `P4.md` verwenden. Platzhalter erst durch tatsächlich beobachtete Werte ersetzen.
 
 ## Einordnung
 

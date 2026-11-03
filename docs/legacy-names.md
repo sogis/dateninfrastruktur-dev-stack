@@ -27,6 +27,7 @@ fachliche Identitäten oder Containerpfade brechen würde.
 | `gretl-datenportal-job.yaml`, `gretl-datenportal-defaults.yaml`, `gretl-datenportal-teams.yaml` | Themenrepo, Plugin-Scanner | Scannervertrag | Das Plugin findet Organisationen, Defaults und Teams über diese Dateinamen. |
 | `/opt/datenportal` | Jenkins-Image, Sodata-Image, Compose-Mounts | Containerinterne Arbeits- und Bundlepfade | Image-Aufbau, Offline-Bundle, DuckDB-Extension-Pfad und JCasC-Mount hängen daran. |
 | `/var/jenkins_home/gretl-datenportal/topic-repo` | Jenkins-Plugin, Bootstrap | Containerinterner Themenrepo-Pfad | Der Plugin-Checkout und der Bootstrap-Publication-Lauf verwenden diesen Pfad. |
+| `datenportal.explore.*` | Sodata-Frontend (`autoSaveId`) | Browserlokale Layout- und Editorzustände | Die Schlüssel liegen nur im Browser; eine Umbenennung würde gespeicherte Benutzerlayouts ohne Servergewinn zurücksetzen. |
 | `SO_AGI_DataCatalog_*` | INTERLIS-Modelle, Publikations-SQL, Manifest | Fachliche Modellnamen | Fachliche Verträge und Referenzen des Themenrepos. |
 | `ch.so.*`-Datensatz-IDs | Themenrepo, XTF, Katalog | Fachliche Metadaten-IDs | Fachliche Identitäten dürfen nicht umbenannt werden. |
 | `datenportal-dev-stack` in Quellenangaben | `docs/provenance.md`, Manifest | Herkunftsnachweis | Die Quell-URLs bleiben als Provenienz erhalten; sie sind keine aktiven Laufzeitziele. |

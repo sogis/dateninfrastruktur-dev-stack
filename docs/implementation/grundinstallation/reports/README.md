@@ -1,6 +1,6 @@
 # Implementierungsberichte
 
-Hier entstehen `P0.md`, `P1.md`, `P2.md` und `P3.md` auf Grundlage der [Phasenberichtvorlage](../templates/PHASENBERICHT.template.md). Sie beschreiben ausgeführte Arbeit, keine zukünftigen Testerfolge.
+Hier entstehen `P0.md`, `P1.md`, `P2.md`, `P3.md` und `P4.md` auf Grundlage der [Phasenberichtvorlage](../templates/PHASENBERICHT.template.md). Sie beschreiben ausgeführte Arbeit, keine zukünftigen Testerfolge.
 
 Kleine bereinigte Belege: `evidence/<phase>/<run-id>/`. Secrets und rohe Logs bleiben ausserhalb von `docs/` in ignorierten oder temporären Laufzeitpfaden.
 
