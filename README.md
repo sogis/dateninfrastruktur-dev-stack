@@ -273,9 +273,9 @@ Bereinigung fremder Container oder Volumes.
   ist `jenkins-gretl-dateninfrastruktur-plugin`; der JCasC-Schlüssel
   `gretlDatenportalJobs`, der Schritt `prepareDatenportalWorkspace` und der
   Seedjob `gretl-datenportal-seed` bleiben als Kompatibilitätsverträge erhalten.
-- Sodata behält den Gradle-Artefaktnamen `datenportal-sodata` und das
+- Sodata verwendet den Gradle-/App-Namen `dateninfrastruktur-sodata` und das
   Dockerfile-Target `jvm-runtime`. Explore ist über
-  `DATENPORTAL_EXPLORE_ENABLED=false` deaktiviert.
+  `DATENINFRASTRUKTUR_EXPLORE_ENABLED=false` deaktiviert.
 - Keycloak ist vorbereitet, aber noch nicht als OIDC-Login in Portal, Jenkins
   oder Superset integriert. Ein Keycloak-Benutzer erzeugt keine Superset- oder
   ClickHouse-Rechte.

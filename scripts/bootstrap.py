@@ -74,9 +74,9 @@ class Bootstrap:
             (parsed.scheme, parsed.netloc, "/jenkins/", "", ""))
         self.public_base = urllib.parse.urlunsplit(
             (parsed.scheme, parsed.netloc, "/ch.so.daten/", "", ""))
-        user = os.environ.get("DATENPORTAL_BOOTSTRAP_USER", "admin")
+        user = os.environ.get("DATENINFRASTRUKTUR_BOOTSTRAP_USER", "admin")
         password = (
-            os.environ.get("DATENPORTAL_BOOTSTRAP_PASSWORD")
+            os.environ.get("DATENINFRASTRUKTUR_BOOTSTRAP_PASSWORD")
             or os.environ.get("JENKINS_ADMIN_PASSWORD")
             or "admin"
         )
@@ -396,7 +396,7 @@ class Bootstrap:
             self.command("up", "-d", "--no-deps", "--wait", "--wait-timeout", "120", "sodata")
         portal = self.container_env("sodata")
         token = self.env.get("ORG_GRADLE_PROJECT_portalReloadToken", "")
-        if not token or portal.get("DATENPORTAL_ADMIN_RELOAD_TOKEN") != token:
+        if not token or portal.get("DATENINFRASTRUKTUR_ADMIN_RELOAD_TOKEN") != token:
             raise BootstrapError(
                 "Gemeinsamer Reload-Token fehlt oder passt nicht; up.sh ausführen.")
         script = (

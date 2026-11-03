@@ -63,12 +63,12 @@ INTERLIS-/XTF-Dateien.
 
 ### `dateninfrastruktur-sodata`
 
-- Repository- und Anzeigenamen angepasst; der technische Gradle-Artefaktname
-  `datenportal-sodata` und die Dockerfile-COPY-Pfade bleiben erhalten.
+- Repository- und Anzeigenamen angepasst; Gradle-Projektname, Dockerfile-COPY-
+  Pfade und Laufzeit-App-Name auf `dateninfrastruktur-sodata` umgestellt.
 - Laufzeit-Image auf `jvm-runtime` festgelegt.
 - Laufzeit-Images `ubi9/openjdk-25-runtime` und `ubi9/ubi-minimal` auf
   Digests gepinnt, damit kein `latest`-Tag im Startpfad verbleibt.
-- Explore wird im Stack über `DATENPORTAL_EXPLORE_ENABLED=false` deaktiviert.
+- Explore wird im Stack über `DATENINFRASTRUKTUR_EXPLORE_ENABLED=false` deaktiviert.
 
 ### `dateninfrastruktur-jenkins-dev`
 

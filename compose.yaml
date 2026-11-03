@@ -106,7 +106,7 @@ services:
       ORG_GRADLE_PROJECT_publicationManifestUrl: http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten/current.json
       ORG_GRADLE_PROJECT_catalogDownloadBase: http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten
       ORG_GRADLE_PROJECT_portalReloadUrl: http://sodata:8080/admin/catalog/reload
-      ORG_GRADLE_PROJECT_portalReloadToken: ${DATENPORTAL_PORTAL_RELOAD_TOKEN:?Run ./scripts/init.sh first}
+      ORG_GRADLE_PROJECT_portalReloadToken: ${DATENINFRASTRUKTUR_PORTAL_RELOAD_TOKEN:?Run ./scripts/init.sh first}
       ORG_GRADLE_PROJECT_s3Endpoint: http://garage:3900
       ORG_GRADLE_PROJECT_s3Region: garage
       ORG_GRADLE_PROJECT_s3BucketName: ch.so.daten
@@ -163,12 +163,12 @@ services:
     expose:
       - "8080"
     environment:
-      DATENPORTAL_ADMIN_RELOAD_TOKEN: ${DATENPORTAL_PORTAL_RELOAD_TOKEN:?Run ./scripts/init.sh first}
-      DATENPORTAL_CATALOG_SOURCE_TYPE: manifest
-      DATENPORTAL_CATALOG_HTTP_URL: http://jenkins:${GATEWAY_PORT:-18081}/ch.so.daten/current.json
-      DATENPORTAL_CATALOG_DOWNLOAD_URL: http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten
-      DATENPORTAL_CATALOG_DUCKDB_SOURCE_TYPE: manifest
-      DATENPORTAL_EXPLORE_ENABLED: "false"
+      DATENINFRASTRUKTUR_ADMIN_RELOAD_TOKEN: ${DATENINFRASTRUKTUR_PORTAL_RELOAD_TOKEN:?Run ./scripts/init.sh first}
+      DATENINFRASTRUKTUR_CATALOG_SOURCE_TYPE: manifest
+      DATENINFRASTRUKTUR_CATALOG_HTTP_URL: http://jenkins:${GATEWAY_PORT:-18081}/ch.so.daten/current.json
+      DATENINFRASTRUKTUR_CATALOG_DOWNLOAD_URL: http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten
+      DATENINFRASTRUKTUR_CATALOG_DUCKDB_SOURCE_TYPE: manifest
+      DATENINFRASTRUKTUR_EXPLORE_ENABLED: "false"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health >/dev/null"]
       interval: 10s

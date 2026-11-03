@@ -1,6 +1,6 @@
 # Verbindlicher Arbeitsauftrag: lokale Grundinstallation Dateninfrastruktur
 
-Stand: 3. November 2026. Dokumentrevision 1.2: Das projektspezifische Jenkins-Plugin wurde auf Wunsch des Auftraggebers von `jenkins-gretl-datenportal-plugin` in `jenkins-gretl-dateninfrastruktur-plugin` umbenannt. Maven-Artefakt, Jenkins-Plugin-ID, HPI/JPI und Assetpfade wurden gemeinsam angepasst; die alte Maven-Snapshot-Koordinate wird entfernt. Der technische Funktionsumfang bleibt unverändert. Revision 1.1 (2. November 2026) ergänzte Ablage, AGENTS.md und Reviewnachweise. Auftraggeber: AGI Kanton Solothurn. Umsetzungswerkzeug: OpenCode. Implementierung: DeepSeek Flash über die DeepSeek-API. Unabhängiges Review: Qwen 3.8 27b über Infomaniak, mit vor Ort aufgelöster exakter Modellkennung.
+Stand: 3. November 2026. Dokumentrevision 1.3: Auf Wunsch des Auftraggebers wurden die aktiven `DATENPORTAL_*`-Umgebungsvariablen, die Sodata-/Gradle-Konfigurationsschlüssel `datenportal.*` und der Sodata-Artefaktname `datenportal-sodata` in den `dateninfrastruktur`-Namespace umbenannt. Revision 1.2 benannte das Jenkins-Plugin in `jenkins-gretl-dateninfrastruktur-plugin` um und entfernte die alte Maven-Snapshot-Koordinate. Der technische Funktionsumfang bleibt unverändert; Revision 1.1 ergänzte Ablage, AGENTS.md und Reviewnachweise. Auftraggeber: AGI Kanton Solothurn. Umsetzungswerkzeug: OpenCode. Implementierung: DeepSeek Flash über die DeepSeek-API. Unabhängiges Review: Qwen 3.8 27b über Infomaniak, mit vor Ort aufgelöster exakter Modellkennung.
 
 ## 0. Arbeitsbereich, Ablage und Agentenhinweise
 
@@ -113,23 +113,32 @@ Der Datenblatteditor und die separate Dokumentationswebsite gehören nicht zum P
 
 Neue Namen benötigen die Repos, ihre lokalen Buildkontexte und Sibling-Pfade, selbst gebaute Images, aktive SCM-Zieladressen, Compose-Projektgrenzen, Volumes und die sichtbare Produktbezeichnung, soweit konfigurierbar. Die normalen Start- und Buildpfade dürfen nicht auf alte Datenportal-Anwendungsimages oder ein dort gebautes HPI zurückfallen.
 
-Behalte technische Schnittstellennamen zunächst bei, wenn ihre Änderung keinen funktionalen Nutzen bringt. Erstelle dafür `docs/legacy-names.md` mit Name, Fundort, Zweck und Begründung. Die folgenden Namen sind erwartete Kandidaten:
+Die folgenden aktiven Namen sind neu gesetzt:
+
+| Aktiver Vertrag | Abhängigkeiten |
+|---|---|
+| `jenkins-gretl-dateninfrastruktur-plugin` | Maven-Artefakt, Jenkins-Plugin-ID, HPI/JPI-Datei, Assetpfade |
+| `DATENINFRASTRUKTUR_*` | Umgebungsvariablen in Compose, Sodata, Jenkins-Dev und Themenrepo |
+| `dateninfrastruktur.*` | Sodata-Konfiguration und Gradle-Buildproperties |
+| `dateninfrastruktur-sodata` | Gradle-Projekt-/Artefaktname, Dockerfile-COPY, App-Name |
+
+Folgende technische Namen bleiben als Kompatibilitätsverträge erhalten, weil
+ihre Änderung Jenkins-, Jelly-, Container- oder fachliche Verträge brechen würde:
 
 | Beizubehaltender Vertrag | Abhängigkeiten |
 |---|---|
-| `jenkins-gretl-dateninfrastruktur-plugin` | Maven-Artefakt, Jenkins-Plugin-ID, HPI/JPI-Datei, Assetpfade |
-| `ch.so.agi.jenkins.gretldatenportal` | Java-/Jelly-Zuordnung und Jenkins-Deskriptoren |
+| `ch.so.agi.datenportal`, `ch.so.agi.jenkins.gretldatenportal` | Java-/Jelly-Zuordnung |
 | `gretlDatenportalJobs` | JCasC-Symbol des Plugins |
 | `prepareDatenportalWorkspace` | Pipeline-Schritt im Themenrepo |
 | `gretl-datenportal-seed` | Seedjob und Bootstrap-Erwartung |
 | `datenportal-topic-repository` | Gemeinsamer Pipeline-Lock |
 | `gretl-datenportal-job.yaml`, `gretl-datenportal-defaults.yaml`, `gretl-datenportal-teams.yaml` | Scannervertrag |
 | `/opt/datenportal`, `/var/jenkins_home/gretl-datenportal/topic-repo` | Containerinterne Arbeits- und Bundlepfade |
-| `DATENPORTAL_*`, `datenportal.*` | Bestehende Konfigurationsschnittstellen |
-| Sodata-Artefaktname `datenportal-sodata` | Gradle-Name und Dockerfile-COPY-Pfade |
 | INTERLIS-Modellnamen und fachliche Metadaten-IDs | Fachliche Verträge und Referenzen |
 
-Eine globale Textersetzung `datenportal` → `dateninfrastruktur` ist ausdrücklich ungeeignet. Der Review unterscheidet erlaubte Kompatibilitätsnamen und Quellenbelege von unerlaubten aktiven Verbindungen zum alten Stack.
+Eine globale Textersetzung `datenportal` → `dateninfrastruktur` bleibt
+ausdrücklich ungeeignet. Der Review unterscheidet erlaubte Kompatibilitätsnamen
+und Quellenbelege von unerlaubten aktiven Verbindungen zum alten Stack.
 
 ## 3. Jenkins, GRETL und Portal übernehmen
 
@@ -165,7 +174,7 @@ Das bestehende `build-offline-bundle.sh` prüft auf ein `.git`-Verzeichnis im Th
 
 Das Themenrepo ist für den Bootstrap erforderlich. `bootstrap-publication.sh` übernimmt den vom Seed erstellten Themenrepo-Stand und führt den vorhandenen Task `initializePublication` mit lokaler S3-Veröffentlichung, ohne Git-Writeback und ohne externen Portalreload aus. Nutze diesen Weg.
 
-Die erforderlichen Katalogmodelle liegen nicht vollständig als `shared/models` im Themenrepo. Der Runtime-Build lädt sie über `stagePublicationModels` anhand von `shared/gradle/publication-models.json`, prüft ihre SHA256 und legt sie unter `offline-bundle/models` ab. `DATENPORTAL_MODELS_DIR` verweist im Image darauf. Diesen Buildpfad erhalten.
+Die erforderlichen Katalogmodelle liegen nicht vollständig als `shared/models` im Themenrepo. Der Runtime-Build lädt sie über `stagePublicationModels` anhand von `shared/gradle/publication-models.json`, prüft ihre SHA256 und legt sie unter `offline-bundle/models` ab. `DATENINFRASTRUKTUR_MODELS_DIR` verweist im Image darauf. Diesen Buildpfad erhalten.
 
 Ein gültiger leerer Fachkatalog ist für diese Etappe ausreichend. Er darf die vorhandenen öffentlichen Metadaten des Themenrepos verwenden. Das Manifest darf entsprechend dem bestehenden Vertrag `catalog: null` enthalten; referenzierte Artefakte müssen existieren. Erzeuge eine echte lesbare `catalog.duckdb` über den vorhandenen Ablauf, keine Datei, die lediglich einen erwarteten Header vortäuscht.
 
@@ -175,7 +184,7 @@ Die GRETL-Abhängigkeiten verwenden am Quellstand `5.0.0-SNAPSHOT`. Deshalb reic
 
 Baue Sodata aus dem neuen lokalen Repo. Nutze zunächst das vorhandene Dockerfile-Target `jvm-runtime`. Der geprüfte Dockerfile-Vertrag verwendet Java 25 und Node 22. Der Gradle-Artefaktname und die dazu passenden COPY-Pfade dürfen vorläufig erhalten bleiben. Kein neuer alternativer Anwendungsbuild und kein zusätzliches Nativeimage-Projekt.
 
-Setze `DATENPORTAL_EXPLORE_ENABLED=false`, damit SQL-/R-Labfunktionen nicht Teil dieser Etappe werden. Erhalte den vorhandenen Katalog-, Manifest- und Readinessablauf. Implementiere hier keine neue Datenbankanbindung in Sodata; eine Portal-Datenbank kommt mit dem späteren Freigabeprozess hinzu.
+Setze `DATENINFRASTRUKTUR_EXPLORE_ENABLED=false`, damit SQL-/R-Labfunktionen nicht Teil dieser Etappe werden. Erhalte den vorhandenen Katalog-, Manifest- und Readinessablauf. Implementiere hier keine neue Datenbankanbindung in Sodata; eine Portal-Datenbank kommt mit dem späteren Freigabeprozess hinzu.
 
 Beachte die vorhandene Netzwerktopologie: Der APISIX-Service `downloads` verwendet `network_mode: service:jenkins`. Der Gateway-Port wird am Jenkins-Container veröffentlicht. Sodata bezieht das Manifest intern über `http://jenkins:${GARAGE_PUBLIC_PORT}/ch.so.daten/current.json`. Passe neue Portwerte durchgängig an; `localhost` in einem Container ist kein Ersatz für den anderen Dienst. Eine Netzwerkneugestaltung ist für die Kopie nicht erforderlich.
 

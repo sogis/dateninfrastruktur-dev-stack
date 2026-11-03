@@ -37,3 +37,18 @@ projektspezifischen Jenkins-Plugins auf Wunsch des Auftraggebers:
 
 Der technische Funktionsumfang, die Phasen und die Abnahmekriterien G01–G24
 bleiben inhaltlich unverändert.
+
+## Auftragsrevision 1.3 – 3. November 2026
+
+Auf Wunsch des Auftraggebers wurde der aktive Namensraum weiter bereinigt:
+
+- `DATENPORTAL_*` → `DATENINFRASTRUKTUR_*` in Dev-Stack, Sodata, Jenkins-Dev und
+  Themenrepo
+- Sodata-/Gradle-Konfiguration `datenportal.*` → `dateninfrastruktur.*`
+- Gradle-/App-Artefakt `datenportal-sodata` → `dateninfrastruktur-sodata`
+- Build-Properties `datenportal.plugin.*`, `datenportal.repository.*` und
+  `datenportal.offline.seed.*` → `dateninfrastruktur.*`
+
+Java-Pakete, JCasC-Symbol, Pipeline-Schritt, Seedjob, Pipeline-Lock,
+Scannerdateien, Containerpfade und fachliche IDs bleiben unverändert. Der
+Funktionsumfang und die Abnahmekriterien G01–G24 bleiben inhaltlich gleich.

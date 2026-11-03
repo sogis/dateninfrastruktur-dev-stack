@@ -82,12 +82,40 @@ ensure_key() {
 mkdir -p "${RUNTIME_DIR}"
 chmod 700 "${RUNTIME_DIR}"
 
+migrate_datenportal_env_keys() {
+  local old_keys
+  old_keys="$(grep -oE '^DATENPORTAL_[A-Z0-9_]+' "${ENV_FILE}" | sort -u || true)"
+  [[ -n "${old_keys}" ]] || return 0
+
+  local old_key new_key tmp
+  while IFS= read -r old_key; do
+    new_key="DATENINFRASTRUKTUR_${old_key#DATENPORTAL_}"
+    tmp="$(mktemp "${RUNTIME_DIR}/env-migrate.XXXXXX")"
+    if grep -q "^${new_key}=" "${ENV_FILE}"; then
+      # The new key already exists. Keep it and drop the obsolete duplicate.
+      sed "/^${old_key}=/d" "${ENV_FILE}" > "${tmp}"
+    else
+      sed "s|^${old_key}=|${new_key}=|" "${ENV_FILE}" > "${tmp}"
+    fi
+    chmod 600 "${tmp}"
+    mv "${tmp}" "${ENV_FILE}"
+  done <<< "${old_keys}"
+  echo "Lokale DATENPORTAL_*-Variablen auf DATENINFRASTRUKTUR_* migriert."
+}
+
+migrate_datenportal_env_keys
+set -a
+# shellcheck disable=SC1090
+source "${ENV_FILE}"
+set +a
+chmod 600 "${ENV_FILE}"
+
 ensure_key GARAGE_DEFAULT_ACCESS_KEY
 ensure_secret GARAGE_DEFAULT_SECRET_KEY 32
 ensure_key GARAGE_BROWSER_ACCESS_KEY
 ensure_secret GARAGE_BROWSER_SECRET_KEY 32
 ensure_secret PRIVATE_TEST_OBJECT_ID 16
-ensure_secret DATENPORTAL_PORTAL_RELOAD_TOKEN 32
+ensure_secret DATENINFRASTRUKTUR_PORTAL_RELOAD_TOKEN 32
 ensure_secret POSTGRES_ADMIN_PASSWORD 24
 ensure_secret KEYCLOAK_DB_PASSWORD 24
 ensure_secret KEYCLOAK_ADMIN_PASSWORD 24
