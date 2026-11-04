@@ -55,3 +55,12 @@ Hashes/Gitstatus des Kandidaten und Originals bleiben zwingend.
 
 Lokale Commits zuerst, danach ignorierter konkreter Handoff mit allen HEADs.
 Nur vollständiges unabhängiges ABGENOMMEN an genau diesem Satz erlaubt MA-A.
+
+## Runnerkorrektur vor Erstabnahme
+
+Erster tatsächlicher Reviewstart blieb mit `Agent not found` geschlossen, ohne
+Report oder Abnahme. OpenCode2.2.5 löst eine frisch angelegte Projektkonfiguration
+verzögert auf. Runner prüft jetzt mit `debug agents --standalone` die wirkliche
+Entdeckung des primary-Reviewagenten vor der neuen Review-Sitzung (maximal drei
+Auflösungsversuche). Kein Ersatzagent/Modellfallback. Sämtliche MA-0-Pflichtchecks
+bleiben frisch auszuführen; kein übertragener unabhängiger Beleg.

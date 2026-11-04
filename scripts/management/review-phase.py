@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Create an immutable isolated candidate, invoke OpenCode2, validate its gate."""
-import argparse, datetime, hashlib, json, os, pathlib, re, shutil, subprocess, sys
+import argparse, datetime, hashlib, json, os, pathlib, re, shutil, subprocess, sys, time
 from review_gate import PHASE_CHECKS, sha, validate
 STACK=pathlib.Path(__file__).resolve().parents[2]
 PLAN=pathlib.Path('docs/implementation/management-and-access')
@@ -63,6 +63,13 @@ def execute(phase):
     (run/'before.json').write_text(json.dumps(before,indent=2))
     env=os.environ.copy()
     # No keys copied or exported. OpenCode uses its existing credential store.
+    # V2.2.5 may load newly created project agents lazily on the first request.
+    # Resolve and VERIFY the local agent before creating the actual review session.
+    for attempt in range(3):
+        agents=json.loads(call([executable,'debug','agents','--standalone'],cwd=workspace))
+        if any(x.get('id')=='management-review' and x.get('mode')=='primary' for x in agents):break
+        time.sleep(.25)
+    else:raise RuntimeError('NICHT_PRUEFBAR: project review agent not discovered')
     prompt=f'''You are the independent reviewer for {phase}. Read {hp} first, then the COMPLETE EXECUTION_PLAN, SPECs, TEST_PLAN, OPENCODE_REVIEW_PROMPT and workspace/repo AGENTS in the isolated workspace. Verify all hashes and exact HEADs yourself. Read source and diffs. The request lists base SHAs. Execute mandatory tests M00-M02 for MA-0 (or your phase's mandatory set) yourself; write stdout/stderr evidence under {out}. Invent and EXECUTE at least one relevant counterexample outside product trees. Never change product code/tests/specs/AGENTS/configuration, and never touch the original workspace or user services. Test scripts start their own unique PG container with random loopback port and remove only that container. Report any failure; do not repair it. Write review.md AND review.json under {out}, using the versioned templates/review-result.example.json structure without example_only. Full binding: handoff hash {sha(hp)}, specification hash {h['specification']['aggregate_sha256']}, request hash {h['request']['sha256']}; repositories must be a list of name/head_sha exactly from handoff. Model {MODEL}, CLI version exactly {version}. Determine your own session ID from session context if available; otherwise use SESSION_FROM_RUNNER and the orchestrator will substitute only this transport metadata after completion. checks must use execution EXECUTED; include command,cwd,expected_exit,observed_exit,observation and actual evidence_path. Own counterexample must include command/hypothesis/expected/observed/executed/evidence_path. Include code_review.goal_reached and integrity.product_unchanged. No acceptance without real tests and unchanged product. NICHT_PRUEFBAR if requirements cannot be tested, NACHARBEIT for implementation defects. End after writing both files.'''
     with (run/'events.jsonl').open('w') as events,(run/'stderr.log').open('w') as stderr:
         result=subprocess.run([executable,'run','--standalone','--agent','management-review','--model',MODEL,'--format','json',prompt],cwd=workspace,env=env,stdout=events,stderr=stderr)
