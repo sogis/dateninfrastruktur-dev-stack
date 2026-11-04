@@ -1,16 +1,20 @@
 """One explicit Compose context. No secondary container lifecycle."""
 import hashlib,json,os,pathlib,re,secrets,shlex,subprocess
 ROOT=pathlib.Path(__file__).resolve().parents[1]
+def encode_env(value):
+    # Docker dotenv double quotes plus escaped dollars; JSON covers quotes,
+    # backslashes and line breaks. No shell evaluation is involved.
+    return json.dumps(str(value),ensure_ascii=False).replace('$','$$')
 def read_env(path):
-    values={}
-    for line in pathlib.Path(path).read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith('#'):continue
-        key,sep,value=line.partition('=')
-        if not sep or not re.fullmatch('[A-Z][A-Z0-9_]*',key):raise RuntimeError('Invalid private configuration format')
-        parts=shlex.split(value,comments=False)
-        if len(parts)>1:raise RuntimeError('Ambiguous private configuration value')
-        values[key]=parts[0] if parts else ''
-    return values
+    path=pathlib.Path(path).resolve();source=path.read_text()
+    keys=list(dict.fromkeys(re.findall(r'^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=',source,re.M)))
+    if not keys:raise RuntimeError('Empty private configuration')
+    model={'services':{'env-reader':{'image':'scratch','environment':{k:'${'+k+'}' for k in keys}}}}
+    env={k:os.environ[k] for k in ['PATH','HOME','DOCKER_CONFIG'] if k in os.environ}
+    result=subprocess.run(['docker','compose','--env-file',str(path),'--file','-','config','--format','json'],input=json.dumps(model),env=env,cwd=ROOT,capture_output=True,text=True)
+    if result.returncode:raise RuntimeError('Invalid private dotenv configuration; details withheld')
+    # Compose's config serializer escapes dollars again for a reusable model.
+    return {k:v.replace('$$','$') for k,v in json.loads(result.stdout)['services']['env-reader']['environment'].items()}
 def write_private(path,text):
     path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.parent.chmod(0o700)
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
@@ -18,7 +22,9 @@ def write_private(path,text):
     path.chmod(0o600)
 class ComposeContext:
     def __init__(self,env_file):
-        self.env_file=pathlib.Path(env_file).resolve();self.values=read_env(self.env_file);self.project=self.values['COMPOSE_PROJECT_NAME'];self.runtime=pathlib.Path(self.values['RUNTIME_DIR']).resolve()
+        self.env_file=pathlib.Path(env_file).resolve()
+        if not self.env_file.is_relative_to((ROOT/'.runtime').resolve()):raise RuntimeError('Compose environment must be inside this checkout runtime')
+        self.values=read_env(self.env_file);self.project=self.values['COMPOSE_PROJECT_NAME'];self.runtime=pathlib.Path(self.values['RUNTIME_DIR']).resolve()
         if not re.fullmatch('[a-z][a-z0-9-]{3,62}',self.project) or not self.runtime.is_relative_to((ROOT/'.runtime').resolve()) or self.env_file.parent!=self.runtime:raise RuntimeError('Compose project/runtime binding mismatch')
         self.base=['docker','compose','--project-name',self.project,'--env-file',str(self.env_file),'--file',str(ROOT/'compose.yaml')]
     def redact(self,value):
@@ -51,15 +57,17 @@ def init_context(project,ports=None,test_fixture=False):
     for key,tag in [('ADMIN_IMAGE','admin'),('TOOL_IMAGE','tools'),('TEST_TOOL_IMAGE','test-tools'),('POSTGRES_IMAGE','postgres'),('SODATA_IMAGE','sodata'),('SUPERSET_IMAGE','superset')]:values[key]='dateninfrastruktur-'+tag+':'+project
     # Reuse a real unchanged Jenkins image, never overwrite the user's :local tag.
     values['JENKINS_IMAGE']=subprocess.check_output(['docker','image','inspect','--format','{{.Id}}','dateninfrastruktur-jenkins:local'],text=True).strip()
-    write_private(env_file,''.join(k+'='+shlex.quote(v)+'\n' for k,v in values.items()))
+    write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     context=ComposeContext(env_file);render(context);return context
 def render(context):
     v=context.values;r=context.runtime
     garage=(ROOT/'services/garage/garage.toml.template').read_text()
     for key in ['RPC_SECRET','ADMIN_TOKEN','METRICS_TOKEN']:garage=garage.replace('__'+key+'__',secrets.token_hex(32))
     if not (r/'garage.toml').exists():write_private(r/'garage.toml',garage)
-    conf='\n'.join(['[managed]','type = s3','provider = Other','env_auth = false','access_key_id = '+v['GARAGE_ORIGIN_ACCESS_KEY'],'secret_access_key = '+v['GARAGE_ORIGIN_SECRET_KEY'],'endpoint = http://garage:3900','region = garage','force_path_style = true','no_check_bucket = true',''])
-    write_private(r/'origin.conf',conf)
+    def storage_conf(key,secret):
+        return '\n'.join(['[managed]','type = s3','provider = Other','env_auth = false','access_key_id = '+key,'secret_access_key = '+secret,'endpoint = http://garage:3900','region = garage','force_path_style = true','no_check_bucket = true',''])
+    write_private(r/'origin.conf',storage_conf(v['GARAGE_ORIGIN_ACCESS_KEY'],v['GARAGE_ORIGIN_SECRET_KEY']))
+    write_private(r/'operator.conf',storage_conf(v.get('GARAGE_MANAGED_ACCESS_KEY') or v['GARAGE_DEFAULT_ACCESS_KEY'],v.get('GARAGE_MANAGED_SECRET_KEY') or v['GARAGE_DEFAULT_SECRET_KEY']))
     realm=json.loads((ROOT/'services/keycloak/realm-template.json').read_text())
     if v['DI_TEST_FIXTURE']!='true':realm['users']=[]
     for user in realm['users']:user['credentials'][0]['value']=v['KEYCLOAK_DEMO_PASSWORD']
@@ -78,6 +86,11 @@ def render(context):
         return value
     write_private(r/'apisix.yaml',json.dumps(substitute(template),indent=2)+'\n#END\n');(r/'apisix.yaml').chmod(0o644)
 
+def update_context(context,updates):
+    values={**context.values,**updates}
+    write_private(context.env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
+    return ComposeContext(context.env_file)
+
 def setup_context(context):
     context.command(['up','-d','--wait','--wait-timeout','240','postgres','garage','clickhouse'])
     for service in ['postgres-init','management-setup','garage-setup','clickhouse-init']:
@@ -87,7 +100,7 @@ if __name__=='__main__':
     import argparse
     p=argparse.ArgumentParser();p.add_argument('action',choices=['init','build','setup','up','status']);p.add_argument('--project',default='dateninfrastruktur-dev-stack');p.add_argument('--env');p.add_argument('--test-fixture',action='store_true');a=p.parse_args()
     c=init_context(a.project,test_fixture=a.test_fixture) if a.action=='init' else ComposeContext(a.env or ROOT/'.runtime'/a.project/'runtime.env')
-    if a.action=='build':c.command(['build','admin','sodata','management-setup','superset']+(['test-fixture'] if c.values['DI_TEST_FIXTURE']=='true' else []))
+    if a.action=='build':c.command(['build','admin','sodata','management-tool-build','superset']+(['test-tool-build'] if c.values['DI_TEST_FIXTURE']=='true' else []))
     elif a.action=='setup':setup_context(c)
     elif a.action=='up':c.command(['up','-d','--wait','--wait-timeout','300'])
     elif a.action=='status':print('http://localhost:'+c.values['GATEWAY_PORT'])

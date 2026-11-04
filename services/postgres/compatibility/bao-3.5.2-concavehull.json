@@ -1,0 +1,9 @@
+{
+  "source_image": "ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8",
+  "postgis_version": "3.5.2",
+  "signature": "public._st_concavehull(geometry)",
+  "source_definition_sha256": "a690fb0813bf5e5714349d47cfdf67367d9d3b61e59817a693847abeb1efb1a1",
+  "owner": "postgres",
+  "security_definer": false,
+  "extension": "postgis"
+}

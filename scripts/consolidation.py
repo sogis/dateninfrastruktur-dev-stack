@@ -93,9 +93,20 @@ def build_plan(inventory):
     sources=inventory['source_refs'];management=[r for r in sources if r['source_kind']=='management' and r.get('database',{}).get('databases',{}).get('dateninfrastruktur_management')]
     return {'schema_version':1,'mode':'migrate','status':'INVENTORIED','scope':inventory['scope'],'source_refs':sources,'database_mapping':{'keycloak':'Foundation PostgreSQL → canonical postgres/keycloak','superset':'Foundation PostgreSQL → canonical postgres/superset','dateninfrastruktur_management':[r['id'] for r in management]},'source_choice':'UNIQUE_MANAGEMENT_SOURCE' if len(management)==1 else 'BLOCKED_SOURCE_SELECTION','identity_mapping_status':'PENDING_OFFLINE_MA_KEYCLOAK_EXPORT_AND_UUID_VERIFICATION','target_project':inventory['scope']['foundation_project'],'retire_allowlist':[r['id'] for r in sources if r['source_kind']=='management'],'volume_policy':'retain all source volumes; new named logical-restore PG target; retain Foundation Garage/Jenkins/ClickHouse/Superset volumes','cutover_authorized_now':False,'secret_refs':{'management':inventory['state_refs'],'foundation':inventory.get('foundation_env_ref')}}
 def main():
-    p=argparse.ArgumentParser();p.add_argument('action',choices=['inventory','plan']);p.add_argument('--output',required=True);p.add_argument('--inventory');p.add_argument('--project',default='dateninfrastruktur-dev-stack');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('action',choices=['inventory','plan','prepare','backup','restore','verify','rollback']);p.add_argument('--output');p.add_argument('--inventory');p.add_argument('--project',default='dateninfrastruktur-dev-stack');p.add_argument('--plan');p.add_argument('--target-project',default='dateninfrastruktur');p.add_argument('--apply',action='store_true');a=p.parse_args()
+    if a.action in ['backup','restore','verify','rollback']:
+        if not a.plan:raise RuntimeError('Explicit private migration plan required')
+        if a.action!='verify' and not a.apply:raise RuntimeError('Explicit --apply required for migration operation')
+        from migration_coordinator import Migration
+        operation=Migration(a.plan);getattr(operation,a.action)();return
+    if not a.output:raise RuntimeError('Explicit private output required')
     output=pathlib.Path(a.output).resolve()
     if not output.is_relative_to((STACK/'.runtime').resolve()) or output.suffix!='.json':raise RuntimeError('Output must be a private .runtime JSON file')
+    if a.action=='prepare':
+        if not a.inventory:raise RuntimeError('Explicit private inventory required')
+        from migration_prepare import prepare
+        value=prepare(json.loads(pathlib.Path(a.inventory).read_text()),output,a.target_project)
+        print('Private migration plan prepared; original services/volumes unchanged; target not activated');return
     if a.action=='inventory':
         value=discover_sources(project=a.project)
         for ref in value['source_refs']:

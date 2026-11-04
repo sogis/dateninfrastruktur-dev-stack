@@ -35,7 +35,7 @@
       }
     },
     "garage": {
-      "image": "dxflrs/garage:v2.4.1",
+      "image": "${GARAGE_IMAGE:-dxflrs/garage:v2.4.1}",
       "command": [
         "/garage",
         "server",
@@ -74,7 +74,7 @@
       }
     },
     "clickhouse": {
-      "image": "clickhouse/clickhouse-server:26.8",
+      "image": "${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:26.8}",
       "restart": "unless-stopped",
       "environment": {
         "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}"
@@ -157,7 +157,7 @@
       }
     },
     "keycloak": {
-      "image": "quay.io/keycloak/keycloak:26.8.1",
+      "image": "${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.1}",
       "restart": "unless-stopped",
       "command": [
         "start-dev",
@@ -192,7 +192,7 @@
       "healthcheck": {
         "test": [
           "CMD-SHELL",
-          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"
+          "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9000; printf \"HEAD /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; read -r status <&3; [[ \"$$status\" == *\" 200 \"* ]]'"
         ],
         "interval": "10s",
         "timeout": "5s",
@@ -437,14 +437,6 @@
     },
     "management-setup": {
       "image": "${TOOL_IMAGE}",
-      "build": {
-        "context": "../dateninfrastruktur-admin",
-        "target": "tooling",
-        "additional_contexts": {
-          "postgres_tools": "service:postgres",
-          "stack_source": "."
-        }
-      },
       "profiles": [
         "setup"
       ],
@@ -536,6 +528,9 @@
       ],
       "labels": {
         "di.instance": "${INSTANCE_ID}"
+      },
+      "environment": {
+        "DI_MIGRATION_IMPORT_KEYS": "${DI_MIGRATION_IMPORT_KEYS:-false}"
       }
     },
     "clickhouse-init": {
@@ -602,14 +597,6 @@
     },
     "test-fixture": {
       "image": "${TEST_TOOL_IMAGE}",
-      "build": {
-        "context": "../dateninfrastruktur-admin",
-        "target": "test-tools",
-        "additional_contexts": {
-          "postgres_tools": "service:postgres",
-          "stack_source": "."
-        }
-      },
       "profiles": [
         "test"
       ],
@@ -647,6 +634,291 @@
       "labels": {
         "di.instance": "${INSTANCE_ID}"
       }
+    },
+    "migration-storage": {
+      "image": "${TOOL_IMAGE}",
+      "profiles": [
+        "migration"
+      ],
+      "restart": "no",
+      "entrypoint": [
+        "python3",
+        "/opt/stack-tools/migration/storage.py"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "networks": [
+        "default",
+        "migration-source"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      },
+      "environment": {
+        "DI_COMPOSE_TEST_FIXTURE": "${DI_TEST_FIXTURE}"
+      }
+    },
+    "keycloak-export": {
+      "image": "${MIGRATION_KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.1}",
+      "profiles": [
+        "migration"
+      ],
+      "restart": "no",
+      "user": "0:0",
+      "entrypoint": [
+        "/opt/keycloak/bin/kc.sh"
+      ],
+      "command": [
+        "export",
+        "--dir",
+        "/runtime/migration/keycloak-export",
+        "--users",
+        "realm_file"
+      ],
+      "environment": {
+        "KC_DB": "dev-file",
+        "KC_HTTP_PORT": "18082",
+        "KC_HEALTH_ENABLED": "false",
+        "KC_METRICS_ENABLED": "false"
+      },
+      "volumes": [
+        "${RUNTIME_DIR}/migration/keycloak-copy:/opt/keycloak/data",
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "identity-migrate": {
+      "image": "${TOOL_IMAGE}",
+      "profiles": [
+        "migration"
+      ],
+      "restart": "no",
+      "entrypoint": [
+        "python3",
+        "/opt/admin/scripts/principal_identity_migration.py"
+      ],
+      "environment": {
+        "DI_DATABASE_TARGET": "postgresql",
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "PGDATABASE": "dateninfrastruktur_management",
+        "PGUSER": "di_migrator",
+        "PGPASSWORD": "${DI_MIGRATOR_PASSWORD}"
+      },
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "fixture-keycloak-h2": {
+      "image": "quay.io/keycloak/keycloak:26.8.1",
+      "profiles": [
+        "migration-fixture"
+      ],
+      "restart": "no",
+      "command": [
+        "start-dev",
+        "--import-realm"
+      ],
+      "environment": {
+        "KC_DB": "dev-file",
+        "KC_BOOTSTRAP_ADMIN_USERNAME": "admin",
+        "KC_BOOTSTRAP_ADMIN_PASSWORD": "${KEYCLOAK_ADMIN_PASSWORD}",
+        "KC_HOSTNAME": "http://localhost:${KEYCLOAK_PORT}",
+        "KC_HTTP_ENABLED": "true",
+        "KC_HEALTH_ENABLED": "true"
+      },
+      "ports": [
+        "127.0.0.1:${KEYCLOAK_PORT}:8080"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}/realm-initial.json:/opt/keycloak/data/import/realm.json:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9000; printf \"HEAD /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; read -r status <&3; [[ \"$$status\" == *\" 200 \"* ]]'"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 60,
+        "start_period": "30s"
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "fixture-postgres-old": {
+      "image": "ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8",
+      "restart": "no",
+      "command": [
+        "postgres",
+        "-c",
+        "log_statement=none",
+        "-c",
+        "log_min_error_statement=panic"
+      ],
+      "environment": {
+        "POSTGRES_PASSWORD": "${POSTGRES_ADMIN_PASSWORD:?explicit credential}"
+      },
+      "volumes": [
+        "fixture-postgres-data:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d postgres"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 40
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      },
+      "profiles": [
+        "migration-fixture"
+      ],
+      "networks": {
+        "default": {
+          "aliases": [
+            "postgres"
+          ]
+        }
+      }
+    },
+    "management-upgrade": {
+      "image": "${TOOL_IMAGE}",
+      "profiles": [
+        "migration"
+      ],
+      "restart": "no",
+      "environment": {
+        "DI_DATABASE_TARGET": "postgresql",
+        "DI_TOOL_RUNTIME": "/runtime/tools",
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "PGDATABASE": "dateninfrastruktur_management",
+        "PGUSER": "postgres",
+        "PGPASSWORD": "${POSTGRES_ADMIN_PASSWORD}",
+        "DI_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
+        "DI_AUTHZ_PASSWORD": "${DI_AUTHZ_PASSWORD}",
+        "DI_PUBLIC_PASSWORD": "${DI_PUBLIC_PASSWORD}",
+        "DI_AUDIT_READER_PASSWORD": "${DI_AUDIT_READER_PASSWORD}",
+        "DI_MIGRATOR_PASSWORD": "${DI_MIGRATOR_PASSWORD}"
+      },
+      "entrypoint": [
+        "python3",
+        "/opt/admin/scripts/upgrade_contract.py"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "legacy-tool-build": {
+      "image": "${LEGACY_TOOL_IMAGE:-dateninfrastruktur-maf-source-tools:legacy-f1}",
+      "build": {
+        "context": "${MIGRATION_LEGACY_ADMIN_SOURCE:-../dateninfrastruktur-admin}",
+        "target": "tooling",
+        "additional_contexts": {
+          "postgres_tools": "service:postgres",
+          "stack_source": "${MIGRATION_LEGACY_STACK_SOURCE:-.}"
+        }
+      },
+      "profiles": [
+        "build-tools"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "command": [
+        "setup"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "legacy-management-setup": {
+      "image": "${LEGACY_TOOL_IMAGE:-dateninfrastruktur-maf-source-tools:legacy-f1}",
+      "profiles": [
+        "migration-fixture"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "DI_DATABASE_TARGET": "postgresql",
+        "DI_TOOL_RUNTIME": "/runtime/tools",
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "PGDATABASE": "dateninfrastruktur_management",
+        "PGUSER": "postgres",
+        "PGPASSWORD": "${POSTGRES_ADMIN_PASSWORD}",
+        "DI_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
+        "DI_AUTHZ_PASSWORD": "${DI_AUTHZ_PASSWORD}",
+        "DI_PUBLIC_PASSWORD": "${DI_PUBLIC_PASSWORD}",
+        "DI_AUDIT_READER_PASSWORD": "${DI_AUDIT_READER_PASSWORD}",
+        "DI_MIGRATOR_PASSWORD": "${DI_MIGRATOR_PASSWORD}"
+      },
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "command": [
+        "setup"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "management-tool-build": {
+      "image": "${TOOL_IMAGE}",
+      "build": {
+        "context": "../dateninfrastruktur-admin",
+        "target": "tooling",
+        "additional_contexts": {
+          "postgres_tools": "service:postgres",
+          "stack_source": "."
+        }
+      },
+      "profiles": [
+        "build-tools"
+      ],
+      "restart": "no",
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "test-tool-build": {
+      "image": "${TEST_TOOL_IMAGE}",
+      "build": {
+        "context": "../dateninfrastruktur-admin",
+        "target": "test-tools",
+        "additional_contexts": {
+          "postgres_tools": "service:postgres",
+          "stack_source": "."
+        }
+      },
+      "profiles": [
+        "build-tools"
+      ],
+      "restart": "no",
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
     }
   },
   "volumes": {
@@ -654,22 +926,37 @@
       "name": "${POSTGRES_VOLUME}"
     },
     "garage-meta": {
-      "name": "${GARAGE_META_VOLUME}"
+      "name": "${GARAGE_META_VOLUME}",
+      "external": "${GARAGE_VOLUMES_EXTERNAL:-false}"
     },
     "garage-data": {
-      "name": "${GARAGE_DATA_VOLUME}"
+      "name": "${GARAGE_DATA_VOLUME}",
+      "external": "${GARAGE_VOLUMES_EXTERNAL:-false}"
     },
     "jenkins-home": {
-      "name": "${JENKINS_VOLUME}"
+      "name": "${JENKINS_VOLUME}",
+      "external": "${JENKINS_VOLUME_EXTERNAL:-false}"
     },
     "clickhouse-data": {
-      "name": "${CLICKHOUSE_DATA_VOLUME}"
+      "name": "${CLICKHOUSE_DATA_VOLUME}",
+      "external": "${CLICKHOUSE_VOLUMES_EXTERNAL:-false}"
     },
     "clickhouse-logs": {
-      "name": "${CLICKHOUSE_LOG_VOLUME}"
+      "name": "${CLICKHOUSE_LOG_VOLUME}",
+      "external": "${CLICKHOUSE_VOLUMES_EXTERNAL:-false}"
     },
     "superset-home": {
-      "name": "${SUPERSET_VOLUME}"
+      "name": "${SUPERSET_VOLUME}",
+      "external": "${SUPERSET_VOLUME_EXTERNAL:-false}"
+    },
+    "fixture-postgres-data": {
+      "name": "${COMPOSE_PROJECT_NAME}-fixture-pg"
+    }
+  },
+  "networks": {
+    "migration-source": {
+      "external": true,
+      "name": "${MIGRATION_SOURCE_NETWORK:-di-migration-source-not-configured}"
     }
   }
 }

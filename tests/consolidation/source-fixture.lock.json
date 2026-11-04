@@ -1,0 +1,5 @@
+{
+  "description": "Accepted MA-F1 source schema, for the explicit old-to-new migration fixture only",
+  "admin_commit": "3f6f0f0d526de81e84a9d496582cd9265ed180ce",
+  "stack_commit": "ceb0bfa657a2fffef57535911026381542cc3102"
+}

@@ -11,8 +11,8 @@ def reserve_ports():
         return dict(zip(['GATEWAY_PORT','KEYCLOAK_PORT','SUPERSET_PORT','CLICKHOUSE_HTTP_PORT','CLICKHOUSE_NATIVE_PORT'],[s.getsockname()[1] for s in sockets]))
     finally:
         for s in sockets:s.close()
-def sql(c,query,db='dateninfrastruktur_management'):
-    return c.command(['exec','-T','postgres','psql','-X','-q','-At','-U','postgres','-d',db,'-v','ON_ERROR_STOP=1'],query).stdout.strip()
+def sql(c,query,db='dateninfrastruktur_management',service='postgres'):
+    return c.command(['exec','-T',service,'psql','-X','-q','-At','-U','postgres','-d',db,'-v','ON_ERROR_STOP=1'],query).stdout.strip()
 def http(url,token=None,method='GET',headers=None,data=None):
     h=dict(headers or {})
     if token:h['Authorization']='Bearer '+token
@@ -23,7 +23,8 @@ def http(url,token=None,method='GET',headers=None,data=None):
 def token(c,user):
     body=urllib.parse.urlencode(dict(grant_type='password',client_id='management-test',username=user,password=c.values['KEYCLOAK_DEMO_PASSWORD'])).encode()
     code,_,data=http('http://localhost:'+c.values['KEYCLOAK_PORT']+'/realms/dateninfrastruktur/protocol/openid-connect/token',method='POST',data=body)
-    assert code==200,'real Keycloak token issuance failed'
+    detail=json.loads(data) if code!=200 else {}
+    assert code==200,'real Keycloak token issuance failed: '+user+' HTTP '+str(code)+' '+str(detail.get('error'))+' '+str(detail.get('error_description'))
     return json.loads(data)['access_token']
 def check_topology(c,empty=False):
     cfg=json.loads(c.command(['config','--format','json']).stdout)
@@ -44,7 +45,7 @@ def check_topology(c,empty=False):
         program="import os,subprocess\ne=os.environ.copy();e.update(PGUSER="+repr(user)+",PGPASSWORD=os.environ["+repr(pw)+"])\np=subprocess.run(['psql','-X','-At','-c','SELECT current_user'],env=e,capture_output=True,text=True);assert p.returncode==0 and p.stdout.strip()=="+repr(user)
         c.command(['--profile','setup','run','--rm','--no-deps','--entrypoint','python3','management-setup','-c',program])
     boundary_program="""import os,subprocess
-roles=[('keycloak','keycloak','KEYCLOAK_DB_PASSWORD'),('superset','superset','SUPERSET_DB_PASSWORD'),('di_writer','dateninfrastruktur_management','DI_WRITER_PASSWORD'),('di_authz','dateninfrastruktur_management','DI_AUTHZ_PASSWORD'),('di_public','dateninfrastruktur_management','DI_PUBLIC_PASSWORD')]
+roles=[('keycloak','keycloak','KEYCLOAK_DB_PASSWORD'),('superset','superset','SUPERSET_DB_PASSWORD'),('di_writer','dateninfrastruktur_management','DI_WRITER_PASSWORD'),('di_authz','dateninfrastruktur_management','DI_AUTHZ_PASSWORD'),('di_public','dateninfrastruktur_management','DI_PUBLIC_PASSWORD'),('di_migrator','dateninfrastruktur_management','DI_MIGRATOR_PASSWORD'),('di_audit_reader','dateninfrastruktur_management','DI_AUDIT_READER_PASSWORD')]
 for user,database,key in roles:
  e=os.environ.copy();e.update(PGUSER=user,PGPASSWORD=os.environ[key],PGDATABASE=database)
  p=subprocess.run(['psql','-X','-At','-c','SELECT current_user'],env=e,capture_output=True,text=True)
@@ -53,7 +54,7 @@ for user,database,key in roles:
  e['PGDATABASE']=foreign
  p=subprocess.run(['psql','-X','-At','-c','SELECT current_user'],env=e,capture_output=True,text=True)
  assert p.returncode!=0,'foreign application database must deny login'
-print('five application roles: own database positive, foreign existing database denied')
+print('seven application roles: own database positive, foreign existing database denied')
 """
     c.command(['--profile','setup','run','--rm','--no-deps','--entrypoint','python3','postgres-init','-c',boundary_program])
     assert sql(c,"SELECT count(*) FROM pg_roles WHERE rolname IN ('di_writer','di_authz','di_public','keycloak','superset') AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls);")=='0'
@@ -62,23 +63,26 @@ print('five application roles: own database positive, foreign existing database 
         assert sql(c,'SELECT (SELECT count(*) FROM di_management.dataset)+(SELECT count(*) FROM di_management.accessgrant);')=='0'
         status,_,body=http('http://localhost:'+c.values['GATEWAY_PORT']+'/');assert status==200 and b'MA-E Pilot' not in body
     print('PASS F04/F05/F06: exactly ten canonical services, one native PG16.10, three DBs, role boundaries, empty fresh catalog',flush=True)
-def seed(c):
-    c.command(['--profile','test','run','--rm','--no-deps','test-fixture'])
+def seed(c,database_service='postgres'):
+    c.command(['--profile','test','run','--pull','never','--rm','--no-deps','test-fixture'])
     fixture=json.loads((c.runtime/'fixture.json').read_text());payload=c.runtime/'payload';payload.mkdir(exist_ok=True)
     conf=(c.runtime/'origin.conf').read_text().replace(c.values['GARAGE_ORIGIN_ACCESS_KEY'],c.values['GARAGE_DEFAULT_ACCESS_KEY']).replace(c.values['GARAGE_ORIGIN_SECRET_KEY'],c.values['GARAGE_DEFAULT_SECRET_KEY'])
     write_private(c.runtime/'operator.conf',conf)
     for f in fixture['files']:
         path=payload/(f['kind']+'-'+f['filename'])
-        if path.suffix=='.csv':path.write_bytes(b'jahr,wert\n2025,42\n2026,43\n')
+        if path.suffix=='.csv':path.write_text('kind,version,wert\n'+f['kind']+','+f['filename']+',42\n',encoding='utf-8')
         else:
             with zipfile.ZipFile(path,'w') as z:
-                z.writestr('[Content_Types].xml','<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>')
-                z.writestr('xl/workbook.xml','<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets/></workbook>')
+                z.writestr('[Content_Types].xml','<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>')
+                z.writestr('_rels/.rels','<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+                z.writestr('xl/workbook.xml','<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Pilot" sheetId="1" r:id="rId1"/></sheets></workbook>')
+                z.writestr('xl/_rels/workbook.xml.rels','<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>')
+                z.writestr('xl/worksheets/sheet1.xml','<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>'+f['kind']+' '+f['filename']+'</t></is></c><c r="B1"><v>42</v></c></row></sheetData></worksheet>')
         f['sha256']=hashlib.sha256(path.read_bytes()).hexdigest();f['size']=path.stat().st_size
-        c.command(['--profile','tools','run','--rm','--no-deps','storage-tool','copyto','/runtime/payload/'+path.name,'managed:di-managed-private/'+f['key'],'--immutable','--retries','1'])
-        revision=sql(c,"SELECT row_version FROM di_management.dataset WHERE t_ili_tid='"+f['dataset']+"';")
-        c.command(['--profile','tools','run','--rm','--no-deps','management-operator','activate',f['dataset'],revision,f['id']])
-        assert sql(c,"SELECT sha256||'|'||bytesize||'|'||availability FROM di_management.distribution WHERE t_ili_tid='"+f['id']+"';")==f['sha256']+'|'+str(f['size'])+'|available'
+        c.command(['--profile','tools','run','--pull','never','--rm','--no-deps','storage-tool','copyto','/runtime/payload/'+path.name,'managed:di-managed-private/'+f['key'],'--immutable','--retries','1'])
+        revision=sql(c,"SELECT row_version FROM di_management.dataset WHERE t_ili_tid='"+f['dataset']+"';",service=database_service)
+        c.command(['--profile','tools','run','--pull','never','--rm','--no-deps','management-operator','activate',f['dataset'],revision,f['id']])
+        assert sql(c,"SELECT sha256||'|'||bytesize||'|'||availability FROM di_management.distribution WHERE t_ili_tid='"+f['id']+"';",service=database_service)==f['sha256']+'|'+str(f['size'])+'|available'
     write_private(c.runtime/'fixture.json',json.dumps(fixture,indent=2))
 def journey(c):
     fixture=json.loads((c.runtime/'fixture.json').read_text());gateway='http://localhost:'+c.values['GATEWAY_PORT'];anna=token(c,'anna');ben=token(c,'ben')
@@ -133,18 +137,23 @@ with app.app_context():
 def cleanup(c):
     c.verify_project()
     ids=subprocess.check_output(['docker','volume','ls','-q','--filter','label=com.docker.compose.project='+c.project],text=True).split()
-    expected={c.values[k] for k in ['POSTGRES_VOLUME','GARAGE_META_VOLUME','GARAGE_DATA_VOLUME','JENKINS_VOLUME','CLICKHOUSE_DATA_VOLUME','CLICKHOUSE_LOG_VOLUME','SUPERSET_VOLUME']}
+    expected={c.project+'-fixture-pg'}|{c.values[k] for k in ['POSTGRES_VOLUME','GARAGE_META_VOLUME','GARAGE_DATA_VOLUME','JENKINS_VOLUME','CLICKHOUSE_DATA_VOLUME','CLICKHOUSE_LOG_VOLUME','SUPERSET_VOLUME']}
     for name in ids:
         v=json.loads(subprocess.check_output(['docker','volume','inspect',name],text=True))[0]
         assert name in expected and v['Labels']['com.docker.compose.project']==c.project
-    c.command(['down','--volumes'])
+    expected_objects={name:json.loads(subprocess.check_output(['docker','volume','inspect',name],text=True))[0] for name in ids}
+    c.command(['--profile','*','down'])
+    for name in ids:
+        current=json.loads(subprocess.check_output(['docker','volume','inspect',name],text=True))[0]
+        assert current==expected_objects[name] and current['Labels']['com.docker.compose.project']==c.project
+        subprocess.run(['docker','volume','rm',name],check=True,capture_output=True)
 if __name__=='__main__':
     resume='--resume' in sys.argv
     c=ComposeContext(json.loads((ROOT/'.runtime/maf-f1-current.json').read_text())['env']) if resume else init_context('maf-f1-'+secrets.token_hex(5),reserve_ports(),test_fixture=True)
     write_private(ROOT/'.runtime/maf-f1-current.json',json.dumps({'env':str(c.env_file),'project':c.project}))
     try:
         if not resume:
-            c.command(['build','admin','sodata','management-setup','test-fixture','superset']);setup_context(c);c=ComposeContext(c.env_file)
+            c.command(['build','admin','sodata','management-tool-build','test-tool-build','superset']);setup_context(c);c=ComposeContext(c.env_file)
             c.command(['up','-d','--wait','--wait-timeout','300'])
         check_topology(c,empty=not (c.runtime/'fixture.json').exists())
         if not (c.runtime/'fixture.json').exists():seed(c)
