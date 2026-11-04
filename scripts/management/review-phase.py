@@ -25,6 +25,8 @@ def prepare(phase):
     workspace=run/'workspace';workspace.mkdir()
     (run/'output').mkdir()
     repos=[]
+    request_text=(STACK/PLAN/'review'/f'{phase}-request.md').read_text()
+    short_names={'dateninfrastruktur-dev-stack':'STACK','dateninfrastruktur-admin':'ADMIN','dateninfrastruktur-sodata':'PUBLIC'}
     for name in ['dateninfrastruktur-dev-stack','dateninfrastruktur-admin','dateninfrastruktur-sodata']:
         source=WORKSPACE/name
         if git(source,'diff','HEAD','--name-only'):raise RuntimeError('Uncommitted product changes: '+name)
@@ -32,7 +34,11 @@ def prepare(phase):
         head=git(source,'rev-parse','HEAD')
         subprocess.run(['git','clone','--quiet','--no-hardlinks','--no-checkout',str(source),str(target)],check=True)
         subprocess.run(['git','-C',str(target),'checkout','--quiet','--detach',head],check=True)
-        repos.append({'name':name,'path':str(target),'base_sha':None,'head_sha':head,'clean_product_tree':True})
+        match=re.search(r'^- '+short_names[name]+r' base:?\s+'+chr(96)+r'([0-9a-f]{40})'+chr(96),request_text,re.M)
+        base=match.group(1) if match else None
+        if base:
+            subprocess.run(['git','-C',str(target),'merge-base','--is-ancestor',base,head],check=True)
+        repos.append({'name':name,'path':str(target),'base_sha':base,'head_sha':head,'clean_product_tree':True})
     shutil.copyfile(WORKSPACE/'AGENTS.md',workspace/'AGENTS.md')
     agent=workspace/'.opencode/agents';agent.mkdir(parents=True)
     shutil.copyfile(STACK/'scripts/management/reviewer-agent.md',agent/'management-review.md')
