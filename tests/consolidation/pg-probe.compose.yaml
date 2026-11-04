@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: ${F0_POSTGRES_IMAGE:?explicit test image required}
+    build:
+      context: ../..
+      dockerfile: services/postgres/Dockerfile
+    environment:
+      POSTGRES_PASSWORD: ${PROBE_PASSWORD:?isolated credential required}
+    volumes:
+      - probe-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d postgres']
+      interval: 1s
+      timeout: 3s
+      retries: 60
+volumes:
+  probe-pgdata:

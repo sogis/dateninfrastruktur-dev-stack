@@ -28,3 +28,20 @@ Phasenberichte unter `docs/implementation/grundinstallation/reports/`, Kandidate
 ## Aktuelle Management-/Access-Etappe
 
 Aktive Phasen und Berichte liegen unter `docs/implementation/management-and-access/`. Historische Nachweise nicht ändern. Reviewer benötigen isolierte Geschwistercheckouts, Ports, Volumes und schreibbare Hostpfade sowie den unveränderlichen Workspace-AGENTS-Inhalt/Hash. Vorhandene Reviewerwerkzeuge wiederverwenden; Benutzer-Secrets nicht kopieren.
+
+## Aktiver Folgeauftrag MA-F0–MA-F4
+
+Vor Arbeit den vollständigen Auftrag unter
+`../dateninfrastruktur-dev-stack/docs/implementation/compose-consolidation/CODEX_STARTPROMPT.md`
+und alle dort referenzierten Spezifikationen lesen. Workspace-AGENTS ist bindend.
+Die früheren Betriebs-/Grundinstallationsgrenzen oben sind historische Regeln,
+keine Verbote dieser ausdrücklich beauftragten Konsolidierung. Fachliche MA-A–E-
+Verträge bleiben erhalten. MA-F erlaubt genau einen Compose-Verbund, einen PG16/
+PostGIS-Server und eine Instanz pro Dauer-Service. Kein HA, keine parallele
+Managementorchestrierung. APISIX wird aus Jenkins' Netzwerkraum gelöst.
+
+Bestehende identifizierte eigene Daten/Volumes/Identitäten/Secrets kontrolliert
+übernehmen, nicht durch leere Seeds ersetzen. Retire erst nach geprüftem Backup
+auch der Container-Schreibschichten. Keine fremden Ressourcen ändern. Phasen
+strikt nacheinander, unabhängige OpenCode2-/DeepSeek-Flash1017-Abnahme je Phase.
+Berichte unter compose-consolidation/, Rohbelege unter STACK/.runtime/compose-review/.

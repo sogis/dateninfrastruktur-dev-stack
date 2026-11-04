@@ -2,6 +2,7 @@
 """Fail-closed validation of independently produced review artifacts."""
 import hashlib, json, pathlib, re, subprocess, sys
 PHASE_CHECKS={'MA-0':['M00','M01','M02'],'MA-A':['M03','M04','M05','M06'],'MA-B':['M%02d'%i for i in range(7,14)],'MA-C':['M%02d'%i for i in range(14,21)],'MA-D':['M%02d'%i for i in range(21,26)],'MA-E':['M%02d'%i for i in range(26,34)]}
+PHASE_CHECKS.update({'MA-F0':['F01','F02','F03'],'MA-F1':['F%02d'%i for i in range(4,9)],'MA-F2':['F%02d'%i for i in range(9,14)],'MA-F3':['F14','F15','F16'],'MA-F4':['F17','F18','F19','F20']})
 def sha(path): return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 def require(ok,message):
     if not ok: raise ValueError(message)

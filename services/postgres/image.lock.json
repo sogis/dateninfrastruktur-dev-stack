@@ -1,0 +1,21 @@
+{
+  "image": "dateninfrastruktur-postgres:maf-f0-268eaea8ac25",
+  "architecture": "arm64",
+  "server_version_num": 160010,
+  "postgis": "3.5.2",
+  "databases": [
+    "keycloak",
+    "superset",
+    "dateninfrastruktur_management"
+  ],
+  "postgis_only_in_management": true,
+  "base_image": "postgres:16.10-bookworm@sha256:38471f330eb885e04de130b768d6db4e10469e2311879c7e5c699f6d2d8a1c74",
+  "postgis_package_version": "3.5.2+dfsg-1.pgdg120+1",
+  "postgis_scripts_sha256": "69193c85be98675c82f10f56d8ddd16f3166dbed64679c01a576ac38365c04b0",
+  "postgis_arm64_sha256": "ed269049725434b915fb3723e07b575767690ff1fc2c653de2e8a236517c2f8b",
+  "postgis_amd64_sha256": "24ef2e0be6118a4b5eb0f6ed023513a63037612cb1356bd2a1e7627cda003485",
+  "dockerfile_sha256": "268eaea8ac25034e9f36ff6e4fd871ad14bbd78d3c076176d305258cf09ef00a",
+  "sample_probe_image_id": "sha256:dca734c784ea6e2010304e3db8a8a016fdfe4cfce1518795f249461601a537af",
+  "sample_rootfs_layers_sha256": "76b094459981353bffc379890fa8b569e86ab61582a29c6b047e3761cf55fe5c",
+  "image_id_note": "Locally derived image; Compose adds per-project labels. Exact base manifest, Dockerfile and PostGIS package hashes are the build contract; run evidence records each actual image ID."
+}
