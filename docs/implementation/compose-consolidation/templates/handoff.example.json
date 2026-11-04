@@ -1,0 +1,38 @@
+{
+  "example_only": true,
+  "phase": "MA-F0",
+  "run_id": "REPLACE_AT_EXECUTION",
+  "repositories": [
+    {
+      "name": "dateninfrastruktur-dev-stack",
+      "base_sha": "REPLACE_FULL_SHA",
+      "head_sha": "REPLACE_FULL_SHA"
+    }
+  ],
+  "spec_files_sha256": {},
+  "request_sha256": "REPLACE_SHA256",
+  "workspace_agents_sha256": "REPLACE_SHA256",
+  "required_checks": [
+    "F01",
+    "F02",
+    "F03"
+  ],
+  "delta": {
+    "is_delta_review": false,
+    "previous_accepted_report": null,
+    "changed_contracts": [],
+    "carried_evidence": []
+  },
+  "reviewer": {
+    "required_tool": "OpenCode 2.x",
+    "required_model": "DeepSeek Flash 1017 via DeepSeek",
+    "observed_provider_model": null
+  },
+  "isolation": {
+    "workspace": "REPLACE_ABSOLUTE_ISOLATED_PATH",
+    "compose_project": "REPLACE_OWN_REVIEW_PROJECT",
+    "runtime_dir": "REPLACE_OWN_PRIVATE_PATH",
+    "user_runtime_access": false
+  },
+  "output_directory": "REPLACE_ABSOLUTE_REVIEW_OUTPUT"
+}
