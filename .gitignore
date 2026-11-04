@@ -7,3 +7,5 @@ services/garage/garage.toml
 build/
 .docker/
 *.log
+
+__pycache__/

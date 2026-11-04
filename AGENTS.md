@@ -2,7 +2,7 @@
 
 ## Vor Beginn lesen
 
-Lies ausdrücklich `../AGENTS.md` und `docs/implementation/grundinstallation/AUFTRAG_GRUNDINSTALLATION.md` sowie den zur aktuellen Rolle gehörenden Startprompt im selben Dokumentationsordner. Fehlt `../AGENTS.md`, lies ersatzweise `docs/implementation/grundinstallation/templates/AGENTS.workspace.md`. Verlasse dich nicht auf automatische Vererbung über Git-Grenzen. Weitere betroffene Schwesterrepos haben eigene AGENTS-Dateien.
+Lies ausdrücklich `../AGENTS.md` sowie den aktuellen Gesamtauftrag unter `docs/implementation/management-and-access/EXECUTION_PLAN.md`, die dort referenzierten SPEC-Dateien, TEST_PLAN und den rollenbezogenen Start-/Reviewprompt. Die nachfolgenden Grundinstallationsregeln und Nachweise sind historisch auf ihren damaligen Auftrag begrenzt; sie verbieten den ausdrücklich beauftragten Ausbau MA-0 bis MA-E nicht. Weitere betroffene Schwesterrepos haben eigene AGENTS-Dateien.
 
 Diese Regeln gelten für Implementierung **und** Review. Ein Reviewauftrag erlaubt keine Änderungen an Produktdateien, Tests, Anforderungen oder AGENTS-Dateien; Befunde melden, nicht selbst reparieren. Builds/Tests nur mit eigenen Laufzeitdaten. Quellrepos, fremde Änderungen und laufende fremde Instanzen erhalten; keine Secrets in Git oder Berichten.
 
@@ -24,3 +24,7 @@ Dieses Repo führt Compose, Start-/Testskripte, Gateway, Initialisierung und Int
 Integrationstests müssen Seedjob, Veröffentlichung, Sodata-Readiness, JDBC, Superset-Treiber, Rechte-Negativtests, privaten S3-Zugriff und Wiederanlauf tatsächlich prüfen. Konfigurationsvalidierung allein genügt nicht. Konkrete unterstützte Start-/Testkommandos im Root-README dokumentieren; nicht vorhandene Skripte nicht als bereits existent ausgeben.
 
 Phasenberichte unter `docs/implementation/grundinstallation/reports/`, Kandidaten unter `candidates/<candidate-id>/`, Reviewberichte unter `review/<candidate-id>/<run-id>/` innerhalb desselben Dokumentationsordners. Die Trennung von Produktstand und Nachweisartefakten folgt Abschnitt 8.1 des Auftrags.
+
+## Aktuelle Management-/Access-Etappe
+
+Aktive Phasen und Berichte liegen unter `docs/implementation/management-and-access/`. Historische Nachweise nicht ändern. Reviewer benötigen isolierte Geschwistercheckouts, Ports, Volumes und schreibbare Hostpfade sowie den unveränderlichen Workspace-AGENTS-Inhalt/Hash. Vorhandene Reviewerwerkzeuge wiederverwenden; Benutzer-Secrets nicht kopieren.
