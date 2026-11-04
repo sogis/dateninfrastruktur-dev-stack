@@ -63,3 +63,21 @@ Livezustand bleibt LOCAL_CUTOVER_PENDING.
 
 F0 und unveränderte F1-Browser-/Routingverträge werden nicht als Vollsuite
 wiederholt. Die unabhängige F2-Prüfung testet den endgültigen Kandidaten selbst.
+
+
+## Korrektur nach unabhängigem Review
+
+F2-MAJOR-1: Der zweite dotenv-Parser im Garagejob wurde entfernt. Compose liefert
+Credentials direkt; gültige ASCII-Secrets einschliesslich Dollar, Backslash und
+Quotes funktionieren durch tatsächlichen S3-Copy, Operator und Origin. Garage2.4.1
+akzeptiert Schlüssel-IDs mit mindestens acht ASCII-Identifikatorzeichen und Secrets
+mit mindestens 16 sichtbaren ASCII-Zeichen; Controls/Whitespace werden vor jedem
+Admin-API-Schreibzugriff abgewiesen. Allgemeine dotenv-Werte mit Zeilenumbrüchen
+bleiben korrekt transportiert. Zeichenregeln stammen aus dem gepinnten
+[Garage2.4.1-Quellcode](https://github.com/deuxfleurs-org/garage/blob/v2.4.1/src/model/key_table.rs#L145).
+
+Delta-Review führt F11/F13 neu aus. F09/F10/F12 stammen aus den erfolgreich selbst
+executierten, SHA-gebundenen Beobachtungen des vorigen unabhängigen Reviews.
+Dessen NACHARBEIT-Urteil bleibt bestehen; übernommen wird keine Phasenfreigabe.
+Das bestehende Gate bindet diese Übernahme ausdrücklich und verweigert geänderte
+Berichte/Belege, erfolglose oder nicht ausgeführte Quellen und fehlende Begründung.

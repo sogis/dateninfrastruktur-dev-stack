@@ -1,49 +1,53 @@
 # Reviewrequest MA-F2
 
-- STACK base: `09bf4ddd7b73fa383d888fead3aaf11e6294ce56`
-- ADMIN base: `3f6f0f0d526de81e84a9d496582cd9265ed180ce`
+- STACK base: `6673b67eb3c51452d5e1714178d057738d1cb9e5`
+- ADMIN base: `14374ecd58f2ad27432ec7fe0fd4535021795d80`
 - PUBLIC base: `b1f20075be43eb4d0edf771ee1440ea0e30e1801`
 - JENKINS base: `08931fa8254d096e2addcd3aee97bc1b753f087d`
 - PLUGIN base: `579f3fd54432a977122afb186469fbb40d95322f`
 - TOPICS base: `303b2f0be785dc5b06882612f9b8bfcd8c17b040`
 
-Umfang: vollständige kontrollierte Migration/Rückfallprobe F09–F13.
-F2_IMPLEMENTATION.md beschreibt Daten-/Identitäts-/Storage-/Secretverträge.
-Die Umsetzung verwendet explizite kanonische Compose-Toolservices. Keine neue
-Dauerarchitektur. Öffentliche Lifecyclewrapper und tatsächlicher Cutover gehören
-weiter zu F3; deren bisherige Pfade sind noch keine abgeschlossene Umstellung.
+Umfang: gezielte Korrektur F2-MAJOR-1 aus dem unabhängigen Review
+20261104T232247Z. Der vorherige Phasenentscheid war NACHARBEIT; alle Pflichtläufe
+F09–F13 wurden dort trotzdem tatsächlich erfolgreich ausgeführt. Der zusätzliche
+Garage-Codecgegenfall blockierte die Phase. Das alte Urteil wird nicht übernommen.
 
-Selbst ausführen aus STACK:
-`./scripts/test-consolidation.sh --phase MA-F2`
-und `python3 scripts/test_migration_safety.py`.
-Für den gezielten Rollen-/Gruppenpfad ausserdem
-`python3 scripts/test_migration_identity_permissions.py` ausführen.
-Die Hauptprobe erstellt eigene nichtleere Quellen und einen normalen Zielstack,
-verwendet niemals Nutzerdumps/Secrets und bereinigt ausschliesslich nachgewiesene
-eigene Testcontainer/-volumes. Sie verwendet die bereits akzeptierte F1-Version
-per git archive als alte Toolbasis (Lockdatei); kein Rücksetzen von Produktdateien.
-Altes Quell-PG16.9/PostGIS3.5.2 wird explizit nur als kurzlebige Quellfixture
-verwendet, Ziel ist das native PG16.10/PostGIS3.5.2-Image aus F0.
+Änderung: garage-setup erhält seine sechs Credentialwerte durch Compose-
+Environmentinterpolation statt eines zweiten dotenv-Parsers. Vor Admin-API-
+Schreibzugriff prüft es die tatsächlichen Garage2.4.1-Zeichenregeln. Neue positive
+S3-/rclone-/Originprobe verwendet importierte Secrets mit Dollar, Backslash und
+beiden Quotezeichen. Zeilenumbrüche werden exakt transportiert, von Garage aber
+als ungültige Controlcharacters vor jeder Schlüsseländerung abgewiesen.
 
-F09: drei nichtleere volle Dumps, alle Tabellen-/Auditinhalte, Owners/ACLs,
-Sequenzen, PostGIS/topology/tiger/fuzzystrmatch und Rollen-/DBparameter.
-F10: aktueller tatsächlicher H2-Export statt Importvorlage, Foundationpasswörter,
-MA-only-User/-Client mit UUID, eindeutige aktuelle Principalumstellung, getrennte
-Migrationsauditzeilen, unveränderte historische Entscheidungen; Konflikte und
-gefälschter Writerkontext verweigert.
-F11: acht unterschiedliche historische Objektbytes und Metadaten, Replay ohne
-neue Kopien, Byte-/Metadatenkonflikt und Quelländerung abgewiesen; Origin RO und
-Foundationkey privat verweigert mit jeweils funktionierendem Positivzugriff.
-F12: realer Fehler nach Backup vor Aktivierung und Rückfall auf dieselben Quellen;
-geänderte Quelle invalidiert Backup, Coordinatorreplay ohne Dubletten, neue
-Cayenne-Schreiboperation mit fortgesetzter Sequenz; anschliessend Rückfall vor
-irgendeinem Stop als ROLLBACK_UNSAFE verweigert. Runtimejobs dürfen PG nicht bauen.
-F13: bestehende verschlüsselte Supersetverbindung zu ClickHouse nutzbar, Schlüssel
-und Passwörter erhalten, private Archivdateien; keine Originalsecrets im Handoff.
+Frisch selbst ausführen:
+- `python3 scripts/test_garage_migration_delta.py` (F11/F13)
+- `DI_GATE_TEST_PHASE=MA-F2 python3 scripts/management/test_review_gate.py`
+- `python3 scripts/test_migration_safety.py`
 
-Eigene sinnvolle Gegenprobe ausserhalb der Produktbäume zusätzlich ausführen,
-z.B. gebundene Zielkonfiguration nach Planung ändern und Ablehnung vor jeglichem
-Docker-Mutationsaufruf prüfen, oder andere belegte Identitäts-/ACLverletzung.
-Keine F0/F1-/MA-A–E-Vollsuiten erneut starten; Produkt und Anforderungen nicht
-reparieren. Alle sechs HEADs/Hashes, Workspace-AGENTS und eigenes Modell prüfen.
-Nur lokale Kandidaten; LOCAL_CUTOVER_PENDING bleibt bis späterer Umstellung.
+Die Garageprobe startet nur zwei eigene kurzlebige Garagequellen/-ziele und
+Compose-Tooljobs plus einen internen read-only Origin. Keine PG-/Keycloak-/
+Anwendungszweittopologie. Echte S3bytes/Metadaten, Replay, Import, Originread,
+Operatorread und negative Schreib-/Privatrechte müssen bestehen. Ungültige
+Secretzeichen dürfen keinen vorhandenen Schlüssel rotieren.
+
+| Geändert | Neu geprüft | Unverändert übernommene Beobachtung |
+|---|---|---|
+| Garageinput/Compose-Environment | F11/F13 Grafikzeichen, echter Copy/RO/Legacydeny, ungültige Controls | keine Übernahme des alten Codecgegenfalls |
+| Reviewgate explizite Übernahme | bound prior report/runner/handoff/evidence; Manipulation, fehlende Begründung/FAIL/fehlender Verweis abgewiesen | keine alte Phasenfreigabe |
+| Kein DB-/IAM-/Coordinator-/Rollbackdiff | neuen Diff und gebundene alte Eigenläufe prüfen | F09 volle DBs/Owners/ACLs/Sequenzen; F10 UUID/Principal/Audit; F12 Quellenänderung/Rückfall/Writeguard |
+
+Der neue Handoff kopiert die alten synthetischen Reviewbelege in seinen eigenen
+prior-evidence-Bereich und bindet ihre SHA256. F09/F10/F12 dürfen nach eigener
+Nichtbetroffenheitsprüfung mit `execution: CARRIED`, `source_report_sha256`,
+`reason` sowie den unveränderten alten Kommando/CWD/Exitfeldern und der kopierten
+`evidence_path` dokumentiert werden. F11/F13 müssen `EXECUTED` am neuen Kandidaten
+sein. Eine eigene sinnvolle neue Gegenprobe passend zum Delta ausführen.
+
+Keine gesamte F2-/F1-/MA-A–E-Suite wiederholen: die Datenbank-, Identitäts- und
+Rückfallimplementation hat keinen Diff. Das Haupttestprogramm bleibt für spätere
+Integration unverändert verfügbar. Alle sechs HEADs und der ganze neue Diff sind
+selbst zu prüfen. Keine Nutzerdateien/-secrets und keine Produktreparaturen.
+
+Quelle der Garage2.4.1-Zeichenregeln:
+https://github.com/deuxfleurs-org/garage/blob/v2.4.1/src/model/key_table.rs#L145
+Livezustand weiterhin LOCAL_CUTOVER_PENDING; F3 ist noch geschlossen.

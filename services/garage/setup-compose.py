@@ -10,7 +10,14 @@ def api(name,body=None,query=''):
     try:
         with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)
     except urllib.error.HTTPError as error:raise ApiError(name,error.code) from None
-env=root/'runtime.env';values={line.split('=',1)[0]:line.split('=',1)[1].strip("'\"") for line in env.read_text().split('\n') if '=' in line and not line.startswith('#')}
+env=root/'runtime.env';values=dict(os.environ)
+# Compose decodes the private dotenv file. Never parse its quoting a second time.
+# Garage 2.4.1 imports ASCII key IDs (8+) and graphic ASCII secrets (16+).
+# Reject invalid control characters before making any admin API change.
+for prefix in ['GARAGE_DEFAULT','GARAGE_ORIGIN','GARAGE_MANAGED']:
+    if values.get(prefix+'_ACCESS_KEY'):
+        if not re.fullmatch('[A-Za-z0-9_.-]{8,}',values[prefix+'_ACCESS_KEY']) or not re.fullmatch('[!-~]{16,}',values.get(prefix+'_SECRET_KEY','')):
+            raise RuntimeError('INVALID_GARAGE_CREDENTIAL: key requires 8+ ASCII identifier characters and secret 16+ graphic ASCII characters; no keys changed')
 try:bucket=api('GetBucketInfo',query='?globalAlias=di-managed-private')
 except ApiError as error:
     if error.status!=404:raise

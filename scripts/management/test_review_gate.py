@@ -27,6 +27,26 @@ class ReviewGateContractTest(unittest.TestCase):
             check(r,True)
             for mut in [lambda x:x['binding']['repositories'][0].update(head_sha='0'*40),lambda x:x['checks'].pop(),lambda x:x['checks'].append(x['checks'][0]),lambda x:x['checks'][0].update(status='NOT_EXECUTED'),lambda x:x['reviewer'].update(actual_provider_model='opencode/deepseek-v4.1-flash-free'),lambda x:x['counterexample'].update(executed=False),lambda x:x.update(example_only=True),lambda x:x.update(verdict='NICHT_PRUEFBAR')]:
                 bad=copy.deepcopy(r);mut(bad);check(bad)
+            # Carry only a bound, successful, unchanged observation; never a verdict.
+            prior_handoff=p/'prior-handoff.json';prior_handoff.write_bytes(hp.read_bytes())
+            prior_report=p/'prior-report.json';old=copy.deepcopy(r);old.update(verdict='NACHARBEIT',findings=[{'severity':'MAJOR','id':'other-contract'}]);prior_report.write_text(json.dumps(old))
+            prior_runner=p/'prior-runner.json';prior_runner.write_text(json.dumps(runner))
+            entry={'reason':'this contract is unchanged'}
+            for name,path in [('handoff',prior_handoff),('report',prior_report),('runner',prior_runner),('evidence',evidence)]:entry[name+'_path']=str(path);entry[name+'_sha256']=sha(path)
+            identifier=PHASE_CHECKS[phase][0];delta=copy.deepcopy(h);delta['candidate_id']='delta';delta['test_selection']={'carried_checks':{identifier:entry}}
+            dh=p/'delta-handoff.json';dr=copy.deepcopy(r);dr['candidate_id']='delta';dr['checks'][0].update(execution='CARRIED',source_report_sha256=entry['report_sha256'],reason='unchanged contract')
+            def delta_check(ok):
+                dh.write_text(json.dumps(delta));dr['binding']['handoff_sha256']=sha(dh);rp.write_text(json.dumps(dr))
+                if ok:self.assertTrue(validate(dh,rp,runner))
+                else:
+                    with self.assertRaises((ValueError,KeyError)):validate(dh,rp,runner)
+            delta_check(True)
+            dr['checks'][0].pop('reason');delta_check(False);dr['checks'][0]['reason']='unchanged contract'
+            entry['report_sha256']='0'*64;delta_check(False);entry['report_sha256']=sha(prior_report)
+            old['checks'][0]['status']='FAIL';prior_report.write_text(json.dumps(old));entry['report_sha256']=sha(prior_report);dr['checks'][0]['source_report_sha256']=entry['report_sha256'];delta_check(False)
+            old['checks'][0]['status']='PASS';prior_report.write_text(json.dumps(old));entry['report_sha256']=sha(prior_report);dr['checks'][0]['source_report_sha256']=entry['report_sha256'];delta_check(True)
+            evidence.write_text('changed after binding');delta_check(False);evidence.write_text('executed probe')
+            del delta['test_selection']['carried_checks'][identifier];delta_check(False)
             rp.unlink()
             with self.assertRaises(OSError):validate(hp,rp,runner)
             (repo/'source').write_text('tampered');check(r)

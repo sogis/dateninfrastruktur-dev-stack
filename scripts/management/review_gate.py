@@ -6,6 +6,29 @@ PHASE_CHECKS.update({'MA-F0':['F01','F02','F03'],'MA-F1':['F%02d'%i for i in ran
 def sha(path): return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 def require(ok,message):
     if not ok: raise ValueError(message)
+def carried_check(entry,requirement,phase=None):
+    # A rejected phase may still contain independently executed, unaffected PASS
+    # observations. Carry those observations explicitly, never the old verdict.
+    for name in ['report','handoff','runner','evidence']:
+        require(sha(entry[name+'_path'])==entry[name+'_sha256'],'carried '+name+' changed')
+    prior=json.loads(pathlib.Path(entry['report_path']).read_text())
+    handoff=json.loads(pathlib.Path(entry['handoff_path']).read_text())
+    runner=json.loads(pathlib.Path(entry['runner_path']).read_text())
+    require(prior['phase']==handoff['phase'] and prior['candidate_id']==handoff['candidate_id'] and (phase is None or prior['phase']==phase),'carried phase/candidate binding')
+    require(prior['binding']['handoff_sha256']==entry['handoff_sha256'],'carried handoff binding')
+    require(prior['binding']['specification_sha256']==handoff['specification']['aggregate_sha256'],'carried spec binding')
+    require(prior['binding']['request_sha256']==handoff['request']['sha256'],'carried request binding')
+    require(prior['binding']['repositories']==[{k:r[k] for k in ['name','head_sha']} for r in handoff['repositories']],'carried SHA binding')
+    require(runner['exit_code']==0 and runner['product_unchanged'] is True and prior['integrity']['product_unchanged'] is True,'carried integrity')
+    require(runner['actual_provider_model']=='deepseek/deepseek-flash' and re.fullmatch(r'(?:opencode v)?2\.\d+\.\d+',runner['opencode_version']),'carried model/version')
+    require(runner['read_tool_executed'] and runner['shell_tool_executed'],'carried tests lack tools')
+    for key in ['actual_provider_model','opencode_version','session_id']:require(prior['reviewer'][key]==runner[key],'carried reviewer binding')
+    found=[c for c in prior['checks'] if c['requirement_id']==requirement]
+    require(len(found)==1,'carried check missing/duplicate');check=found[0]
+    require(check['status']=='PASS' and check['execution']=='EXECUTED' and check['expected_exit']==check['observed_exit']==0,'carried check was not executed successfully')
+    require(bool(entry.get('reason')),'carried non-impact reason missing')
+    return check
+
 def validate(handoff_path,report_path,runner):
     h=json.loads(pathlib.Path(handoff_path).read_text()); r=json.loads(pathlib.Path(report_path).read_text())
     require(not r.get('example_only',False),'example cannot open gate')
@@ -31,7 +54,14 @@ def validate(handoff_path,report_path,runner):
     checks=r['checks']; ids=[x['requirement_id'] for x in checks]
     require(sorted(ids)==sorted(PHASE_CHECKS[h['phase']]),'missing/duplicate/foreign mandatory IDs')
     for c in checks:
-        require(c['status']=='PASS' and c['execution']=='EXECUTED','required check skipped or failed')
+        require(c['status']=='PASS','required check failed')
+        if c['execution']=='CARRIED':
+            entry=h.get('test_selection',{}).get('carried_checks',{}).get(c['requirement_id'])
+            require(bool(entry),'unlisted carried check');prior=carried_check(entry,c['requirement_id'],h['phase'])
+            require(c.get('source_report_sha256')==entry['report_sha256'] and bool(c.get('reason')),'carried reference/reason missing')
+            require(c['evidence_path']==entry['evidence_path'],'carried evidence path')
+            for key in ['command','cwd','expected_exit','observed_exit']:require(c[key]==prior[key],'carried command/result changed')
+        else:require(c['execution']=='EXECUTED','required check skipped')
         require(c['observed_exit']==c['expected_exit']==0,'test exit mismatch')
         for key in ('command','cwd','observation','evidence_path'):require(bool(c.get(key)),'missing check '+key)
         require(pathlib.Path(c['evidence_path']).is_file(),'missing test evidence')
