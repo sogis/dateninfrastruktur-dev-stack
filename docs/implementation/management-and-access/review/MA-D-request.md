@@ -2,9 +2,9 @@
 
 ## Ausgangspunkt und gültiges Gate
 
-- ADMIN base: `abc26cc5d45a93e7f27b4d6f413720ff0f7fec3c`
-- STACK base: `6f19623465086909213c15895022e6e486770b1e`
-- PUBLIC base: `8349be8aba4036ca0bb56e89cb62398e34404a5e`
+- ADMIN base: `b3cd23e7ed1879a6bb6e7fff421248bcd9a4709c`
+- STACK base: `4f75105dae2dbc8e370fd4fe734121be26d2c84a`
+- PUBLIC base: `70aee2d74e31cc6a34253af8d8cc2478325ed98a`
 
 MA-C ist unabhängig ABGENOMMEN am exakten Kandidaten20261104T162930Z; gebundene
 Rohbelege und MA-C-accepted.md bleiben erhalten. Keine MA-E-Produktarbeit vor
@@ -61,8 +61,8 @@ reicht nur explizite eigene Runtime-ENVkeys in Container weiter; keine Original-
 
 ## Selbst auszuführendes Reviewkommando
 
-Aus STACK: `./scripts/management/test.sh --phase MA-D`.
-Aus ADMIN: `python3 scripts/test_catalog_all.py`.
+Für dieses Delta aus ADMIN: `python3 scripts/test_catalog_all.py --delta`.
+Der vollständige ursprüngliche MA-D-Lauf wurde vom unabhängigen Reviewer selbst erfolgreich ausgeführt; siehe MA-D-review-01.md. Der normale STACK-Dispatcher bleibt als vollständige Suite verfügbar, ist für dieses begrenzte Delta nicht erforderlich.
 Freier eigener Runtimebereich erforderlich; kein implizites Ersetzen bestehender
 eigener oder fremder Daten. Neue gelabelte PG/Keycloak/APISIX/JVM-Ressourcen,
 eigene Ports/Volumes/Schreibpfade, Schutz-/Cleanupprüfungen. Reviewer bekommt
@@ -111,3 +111,36 @@ der tatsächliche Java-Apply mit deaktiviertem Audittrigger wird vor jeder
 Fach-/Herkunfts-/Receiptmutation verweigert (test_operator_contract.py), nach
 Wiederherstellung wird ein echter ausgewählter CLI-Apply positiv geprüft.
 Keine Änderung an Fach-/JWT-/Authzlogik; der Phasenrunner enthält die Gegenprobe.
+
+## Nacharbeit nach Review 01: MA-D-REV-01 und MA-D-REV-02
+
+Das erste Review war NACHARBEIT; keine MA-E-Implementierung wurde begonnen.
+
+MA-D-REV-01: Der DB-HTTPcontroller übernimmt page/size vor der absichtlich
+unpaginierten Legacy-Normalisierung. Die Repositoryantwort trägt das tatsächlich
+verwendete, bei Überlauf auf die letzte Seite begrenzte Fenster. Ergebnisse
+enthalten Vor-/Zurück-Links; Filter, Suchtext, Sortierung und Seitengrösse bleiben
+in diesen Links und beim Aufklappen einer Serie erhalten. Legacykonstruktoren
+bleiben kompatibel. Der neue echte HTTP-/Chromium-Reproducer legt 13 veröffentlichte
+Roots an: Seite1 zeigt10, Weiter3, die Vereinigung enthält alle13 ohne Duplikate;
+page2/size1 zeigt exakt den zweiten, page999/size1 den letzten Eintrag.
+
+MA-D-REV-02: Der Import iteriert ThemeAssignment-BAGs, dedupliziert Themes sowie
+identische Creator-/Kontaktstrukturen. Mehrere verschiedene Creator/Kontakte
+werden als datensatzbezogene strukturierte Konflikte berichtet, ohne Abbruch
+des gesamten Dry-runs und ohne first-wins. Zusätzliche Vorprüfung verhindert
+mehrdeutige/mehrfach zugeordnete Distribution-IDs. Eine echte temporäre XTF mit
+mehreren ThemeAssignment-Kindern im selben Wrapper wird gelesen und angewendet;
+identische Creator/Kontakte werden übernommen, verschiedene verweigert.
+
+Delta-Auswahl: neuer BAG-Reproducer und LegacyCatalogImportIT; echte 13-Root-
+HTTP-/Browserprobe sowie JdbcCatalogRepositoryIT, PublicCatalogRoleIT,
+DatabaseCatalogModeIT und CatalogDisclosureIT; kleine VM-/URL-/MVC-Regression.
+Damit laufen M21–M25 neu mit den betroffenen Verträgen. Unverändert übertragbar
+sind die zuvor vom Reviewer selbst ausgeführten OIDC-, Transaktions-,
+Startup-, Operator-CLI- und B→C→D/C→D-Upgradenachweise: kein Schema-,
+Migrations-, ORM-, Authz-, Credential-, CSRF- oder Dependencywechsel im Delta.
+Der Reviewer muss beide Reproducer und eine eigene gezielte Gegenprobe selbst
+ausführen. Ein früherer erfolgreicher Test ist keine Abnahme des ersten Kandidaten.
+
+Lokales Ergebnis vor neuem Review: `python3 scripts/test_catalog_all.py --delta` vollständig erfolgreich; setup, Legacy-BAG, Fixture, vier Public-DB-Integrationsklassen und drei VM-/URL-/MVC-Klassen exit0, keine Skips. Rohlog ADMIN/.runtime/catalog-d-delta.log.
