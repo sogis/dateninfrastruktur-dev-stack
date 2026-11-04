@@ -1,338 +1,675 @@
-name: ${COMPOSE_PROJECT_NAME:-dateninfrastruktur-dev-stack}
-
-services:
-  garage:
-    image: dxflrs/garage:v2.4.1
-    command: ["/garage", "server", "--single-node", "--default-bucket"]
-    restart: unless-stopped
-    environment:
-      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}
-      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}
-      GARAGE_DEFAULT_BUCKET: ch.so.daten
-      RUST_LOG: garage=info
-    ports:
-      - "127.0.0.1:${GARAGE_S3_PORT:-13900}:3900"
-    expose:
-      - "3901"
-      - "3902"
-      - "3903"
-    volumes:
-      - ${RUNTIME_DIR:-./.runtime/local}/garage.toml:/etc/garage.toml:ro
-      - garage-meta:/var/lib/garage/meta
-      - garage-data:/var/lib/garage/data
-    healthcheck:
-      test: ["CMD", "/garage", "status"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-
-  garage-init:
-    image: amazon/aws-cli:2.38.1
-    restart: "no"
-    depends_on:
-      garage:
-        condition: service_healthy
-    environment:
-      AWS_ENDPOINT_URL: http://garage:3900
-      AWS_DEFAULT_REGION: garage
-      AWS_ACCESS_KEY_ID: ${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}
-      AWS_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}
-      AWS_EC2_METADATA_DISABLED: "true"
-      GARAGE_BUCKET: ch.so.daten
-      GARAGE_PRIVATE_BUCKET: ch.so.dateninfrastruktur.private
-      GARAGE_PRIVATE_OBJECT_KEY: private-foundation-smoke.txt
-      GARAGE_PRIVATE_OBJECT_ID: ${PRIVATE_TEST_OBJECT_ID:?Run ./scripts/init.sh first}
-      GARAGE_PUBLIC_PORT: ${GATEWAY_PORT:-18081}
-    volumes:
-      - ./services/garage/init:/init:ro
-    entrypoint: ["/bin/sh", "/init/initialize.sh"]
-
-  s3-browser:
-    image: rclone/rclone:1.75.2
-    restart: unless-stopped
-    depends_on:
-      garage:
-        condition: service_healthy
-    environment:
-      RCLONE_CONFIG_GARAGE_TYPE: s3
-      RCLONE_CONFIG_GARAGE_PROVIDER: Other
-      RCLONE_CONFIG_GARAGE_ENV_AUTH: "false"
-      RCLONE_CONFIG_GARAGE_ACCESS_KEY_ID: ${GARAGE_BROWSER_ACCESS_KEY:?Run ./scripts/init.sh first}
-      RCLONE_CONFIG_GARAGE_SECRET_ACCESS_KEY: ${GARAGE_BROWSER_SECRET_KEY:?Run ./scripts/init.sh first}
-      RCLONE_CONFIG_GARAGE_REGION: garage
-      RCLONE_CONFIG_GARAGE_ENDPOINT: http://garage:3900
-      RCLONE_CONFIG_GARAGE_FORCE_PATH_STYLE: "true"
-    command:
-      - serve
-      - http
-      - garage:ch.so.daten
-      - --addr
-      - :8080
-      - --baseurl
-      - /ch.so.daten
-      - --read-only
-      - --dir-cache-time
-      - 0s
-    expose:
-      - "8080"
-    healthcheck:
-      test: ["CMD", "rclone", "lsd", "garage:ch.so.daten"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 5s
-
-  jenkins:
-    image: ${JENKINS_IMAGE:-dateninfrastruktur-jenkins:local}
-    restart: unless-stopped
-    depends_on:
-      garage:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:${GATEWAY_PORT:-18081}:${GATEWAY_PORT:-18081}"
-    environment:
-      JENKINS_RUNTIME_MODE: dev
-      CASC_JENKINS_CONFIG: /opt/datenportal/casc/jenkins-stack.yaml
-      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?Run ./scripts/init.sh first}
-      JENKINS_URL: http://localhost:${GATEWAY_PORT:-18081}/jenkins/
-      JENKINS_OPTS: --prefix=/jenkins
-      THEMEN_REPO_MODE: working-tree
-      THEMEN_REPO_URL: ""
-      THEMEN_REPO_PATH: /workspace/themenrepo
-      THEMEN_REPO_BRANCH: ${THEMEN_REPO_BRANCH:-main}
-      THEMEN_REPO_WRITE_BACK_ENABLED: "false"
-      ORG_GRADLE_PROJECT_gitWriteBack: "false"
-      ORG_GRADLE_PROJECT_s3Publish: "true"
-      ORG_GRADLE_PROJECT_publicationManifestUrl: http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten/current.json
-      ORG_GRADLE_PROJECT_catalogDownloadBase: http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten
-      ORG_GRADLE_PROJECT_portalReloadUrl: http://sodata:8080/admin/catalog/reload
-      ORG_GRADLE_PROJECT_portalReloadToken: ${DATENINFRASTRUKTUR_PORTAL_RELOAD_TOKEN:?Run ./scripts/init.sh first}
-      ORG_GRADLE_PROJECT_s3Endpoint: http://garage:3900
-      ORG_GRADLE_PROJECT_s3Region: garage
-      ORG_GRADLE_PROJECT_s3BucketName: ch.so.daten
-      ORG_GRADLE_PROJECT_s3AccessKey: ${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}
-      ORG_GRADLE_PROJECT_s3SecretKey: ${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}
-      ORG_GRADLE_PROJECT_s3Acl: private
-    volumes:
-      - jenkins-home:/var/jenkins_home
-      - ./services/jenkins/jenkins-stack.yaml:/opt/datenportal/casc/jenkins-stack.yaml:ro
-      - ../dateninfrastruktur-themenrepo:/workspace/themenrepo:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/jenkins/login >/dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
-
-  downloads:
-    image: apache/apisix:3.19.0-debian
-    restart: unless-stopped
-    network_mode: service:jenkins
-    depends_on:
-      jenkins:
-        condition: service_started
-      garage:
-        condition: service_healthy
-      s3-browser:
-        condition: service_healthy
-    environment:
-      APISIX_STAND_ALONE: "true"
-      APISIX_NODE_LISTEN: ${GATEWAY_PORT:-18081}
-    volumes:
-      - ./services/apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
-      - ./services/apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
-    healthcheck:
-      test: ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/$${APISIX_NODE_LISTEN}; printf 'GET /gateway-health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; IFS= read -r status <&3; [[ \"$$status\" == *' 200 '* ]]"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 5s
-
-  sodata:
-    image: ${SODATA_IMAGE:-dateninfrastruktur-sodata:local}
-    build:
-      context: ${SODATA_REPO_DIR:-../dateninfrastruktur-sodata}
-      dockerfile: Dockerfile
-      target: jvm-runtime
-      args:
-        IMAGE_VERSION: local
-    restart: on-failure:3
-    depends_on:
-      downloads:
-        condition: service_healthy
-    expose:
-      - "8080"
-    environment:
-      DATENINFRASTRUKTUR_ADMIN_RELOAD_TOKEN: ${DATENINFRASTRUKTUR_PORTAL_RELOAD_TOKEN:?Run ./scripts/init.sh first}
-      DATENINFRASTRUKTUR_CATALOG_SOURCE_TYPE: manifest
-      DATENINFRASTRUKTUR_CATALOG_HTTP_URL: http://jenkins:${GATEWAY_PORT:-18081}/ch.so.daten/current.json
-      DATENINFRASTRUKTUR_CATALOG_DOWNLOAD_URL: http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten
-      DATENINFRASTRUKTUR_CATALOG_DUCKDB_SOURCE_TYPE: manifest
-      DATENINFRASTRUKTUR_EXPLORE_ENABLED: "false"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health >/dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
-
-  postgres:
-    image: postgres:16.10-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Run ./scripts/init.sh first}
-      POSTGRES_DB: postgres
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-
-  postgres-init:
-    image: postgres:16.10-alpine
-    restart: "no"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGHOST: postgres
-      PGUSER: postgres
-      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Run ./scripts/init.sh first}
-      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run ./scripts/init.sh first}
-      SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD:?Run ./scripts/init.sh first}
-    volumes:
-      - ./services/postgres/init:/init:ro
-    entrypoint: ["/bin/sh", "/init/initialize.sh"]
-
-  clickhouse:
-    image: clickhouse/clickhouse-server:26.8
-    restart: unless-stopped
-    environment:
-      CLICKHOUSE_DEFAULT_PASSWORD: ${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}
-    ports:
-      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-18123}:8123"
-      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-19000}:9000"
-    volumes:
-      - clickhouse-data:/var/lib/clickhouse
-      - clickhouse-logs:/var/log/clickhouse-server
-      - ./services/clickhouse/config.d:/etc/clickhouse-server/config.d:ro
-      - ./services/clickhouse/users.d:/etc/clickhouse-server/users.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --user default --password \"$${CLICKHOUSE_DEFAULT_PASSWORD}\" --query 'SELECT 1' >/dev/null"]
-      interval: 5s
-      timeout: 5s
-      retries: 60
-      start_period: 10s
-
-  clickhouse-init:
-    image: clickhouse/clickhouse-server:26.8
-    restart: "no"
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-    environment:
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_DEFAULT_PASSWORD: ${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}
-      CLICKHOUSE_ADMIN_USER: ${CLICKHOUSE_ADMIN_USER:-ch_admin}
-      CLICKHOUSE_ADMIN_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:?Run ./scripts/init.sh first}
-      CLICKHOUSE_TEST_READER_PASSWORD: ${CLICKHOUSE_TEST_READER_PASSWORD:?Run ./scripts/init.sh first}
-      CLICKHOUSE_SUPERSET_READER_PASSWORD: ${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Run ./scripts/init.sh first}
-    volumes:
-      - ./services/clickhouse/init:/init:ro
-    entrypoint: ["/bin/sh", "/init/initialize.sh"]
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.8.1
-    restart: unless-stopped
-    command: ["start-dev", "--import-realm", "--http-port=8080"]
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run ./scripts/init.sh first}
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run ./scripts/init.sh first}
-      KC_HTTP_ENABLED: "true"
-      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-18080}
-      KC_HOSTNAME_STRICT: "false"
-      KC_HEALTH_ENABLED: "true"
-      KC_METRICS_ENABLED: "false"
-    ports:
-      - "127.0.0.1:${KEYCLOAK_PORT:-18080}:8080"
-    volumes:
-      - ${RUNTIME_DIR:-./.runtime/local}/keycloak-realm.json:/opt/keycloak/data/import/dateninfrastruktur-realm.json:ro
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
-      interval: 10s
-      timeout: 5s
-      retries: 60
-      start_period: 30s
-
-  superset:
-    image: ${SUPERSET_IMAGE:-dateninfrastruktur-superset:local}
-    build:
-      context: ./services/superset
-      args:
-        SUPERSET_VERSION: 6.1.0
-        CLICKHOUSE_CONNECT_VERSION: 1.11.0
-        PSYCOPG2_VERSION: 2.9.13
-    restart: unless-stopped
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-      clickhouse-init:
-        condition: service_completed_successfully
-    environment:
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?Run ./scripts/init.sh first}
-      SUPERSET_ADMIN_USERNAME: admin
-      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?Run ./scripts/init.sh first}
-      SUPERSET_ADMIN_EMAIL: admin@example.invalid
-      SUPERSET_DB_HOST: postgres
-      SUPERSET_DB_PORT: "5432"
-      SUPERSET_DB_NAME: superset
-      SUPERSET_DB_USER: superset
-      SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD:?Run ./scripts/init.sh first}
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_DB: foundation
-      CLICKHOUSE_SUPERSET_USER: ${CLICKHOUSE_SUPERSET_USER:-superset_reader}
-      CLICKHOUSE_SUPERSET_PASSWORD: ${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Run ./scripts/init.sh first}
-    ports:
-      - "127.0.0.1:${SUPERSET_PORT:-18088}:8088"
-    volumes:
-      - superset-home:/app/superset_home
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)\""]
-      interval: 10s
-      timeout: 5s
-      retries: 60
-      start_period: 120s
-
-  aws:
-    image: amazon/aws-cli:2.38.1
-    profiles: ["tools"]
-    depends_on:
-      garage:
-        condition: service_healthy
-    environment:
-      AWS_ENDPOINT_URL: http://garage:3900
-      AWS_DEFAULT_REGION: garage
-      AWS_ACCESS_KEY_ID: ${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}
-      AWS_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}
-      AWS_EC2_METADATA_DISABLED: "true"
-    entrypoint: ["aws", "--endpoint-url", "http://garage:3900", "--region", "garage"]
-
-volumes:
-  garage-meta:
-  garage-data:
-  jenkins-home:
-  postgres-data:
-  clickhouse-data:
-  clickhouse-logs:
-  superset-home:
+{
+  "name": "${COMPOSE_PROJECT_NAME:-dateninfrastruktur-dev-stack}",
+  "services": {
+    "postgres": {
+      "image": "${POSTGRES_IMAGE:?explicit image tag}",
+      "build": {
+        "context": ".",
+        "dockerfile": "services/postgres/Dockerfile"
+      },
+      "restart": "unless-stopped",
+      "command": [
+        "postgres",
+        "-c",
+        "log_statement=none",
+        "-c",
+        "log_min_error_statement=panic"
+      ],
+      "environment": {
+        "POSTGRES_PASSWORD": "${POSTGRES_ADMIN_PASSWORD:?explicit credential}"
+      },
+      "volumes": [
+        "postgres-data:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d postgres"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 40
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "garage": {
+      "image": "dxflrs/garage:v2.4.1",
+      "command": [
+        "/garage",
+        "server",
+        "--single-node",
+        "--default-bucket"
+      ],
+      "restart": "unless-stopped",
+      "environment": {
+        "GARAGE_DEFAULT_ACCESS_KEY": "${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}",
+        "GARAGE_DEFAULT_SECRET_KEY": "${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}",
+        "GARAGE_DEFAULT_BUCKET": "ch.so.daten",
+        "RUST_LOG": "warn"
+      },
+      "expose": [
+        "3901",
+        "3902",
+        "3903"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}/garage.toml:/etc/garage.toml:ro",
+        "garage-meta:/var/lib/garage/meta",
+        "garage-data:/var/lib/garage/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "/garage",
+          "status"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 30
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "clickhouse": {
+      "image": "clickhouse/clickhouse-server:26.8",
+      "restart": "unless-stopped",
+      "environment": {
+        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}"
+      },
+      "ports": [
+        "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-18123}:8123",
+        "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-19000}:9000"
+      ],
+      "volumes": [
+        "clickhouse-data:/var/lib/clickhouse",
+        "clickhouse-logs:/var/log/clickhouse-server",
+        "./services/clickhouse/config.d:/etc/clickhouse-server/config.d:ro",
+        "./services/clickhouse/users.d:/etc/clickhouse-server/users.d:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "clickhouse-client --user default --password \"$${CLICKHOUSE_DEFAULT_PASSWORD}\" --query 'SELECT 1' >/dev/null"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 60,
+        "start_period": "10s"
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "jenkins": {
+      "image": "${JENKINS_IMAGE:?existing verified image}",
+      "restart": "unless-stopped",
+      "depends_on": {
+        "garage": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "JENKINS_RUNTIME_MODE": "dev",
+        "CASC_JENKINS_CONFIG": "/opt/datenportal/casc/jenkins-stack.yaml",
+        "JENKINS_ADMIN_PASSWORD": "${JENKINS_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
+        "JENKINS_URL": "http://localhost:${GATEWAY_PORT:-18081}/jenkins/",
+        "JENKINS_OPTS": "--prefix=/jenkins",
+        "THEMEN_REPO_MODE": "working-tree",
+        "THEMEN_REPO_URL": "",
+        "THEMEN_REPO_PATH": "/workspace/themenrepo",
+        "THEMEN_REPO_BRANCH": "${THEMEN_REPO_BRANCH:-main}",
+        "THEMEN_REPO_WRITE_BACK_ENABLED": "false",
+        "ORG_GRADLE_PROJECT_gitWriteBack": "false",
+        "ORG_GRADLE_PROJECT_s3Publish": "true",
+        "ORG_GRADLE_PROJECT_publicationManifestUrl": "http://gateway:9080/ch.so.daten/current.json",
+        "ORG_GRADLE_PROJECT_catalogDownloadBase": "http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten",
+        "ORG_GRADLE_PROJECT_portalReloadUrl": "",
+        "ORG_GRADLE_PROJECT_portalReloadToken": "",
+        "ORG_GRADLE_PROJECT_s3Endpoint": "http://garage:3900",
+        "ORG_GRADLE_PROJECT_s3Region": "garage",
+        "ORG_GRADLE_PROJECT_s3BucketName": "ch.so.daten",
+        "ORG_GRADLE_PROJECT_s3AccessKey": "${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}",
+        "ORG_GRADLE_PROJECT_s3SecretKey": "${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}",
+        "ORG_GRADLE_PROJECT_s3Acl": "private",
+        "ORG_GRADLE_PROJECT_catalogSourceType": "database",
+        "ORG_GRADLE_PROJECT_reloadPortal": "false"
+      },
+      "volumes": [
+        "jenkins-home:/var/jenkins_home",
+        "./services/jenkins/jenkins-stack.yaml:/opt/datenportal/casc/jenkins-stack.yaml:ro",
+        "${THEMEN_REPO_DIR}:/workspace/themenrepo:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8080/jenkins/login >/dev/null"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30,
+        "start_period": "30s"
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "keycloak": {
+      "image": "quay.io/keycloak/keycloak:26.8.1",
+      "restart": "unless-stopped",
+      "command": [
+        "start-dev",
+        "--import-realm",
+        "--http-port=8080"
+      ],
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "KC_DB": "postgres",
+        "KC_DB_URL": "jdbc:postgresql://postgres:5432/keycloak",
+        "KC_DB_USERNAME": "keycloak",
+        "KC_DB_PASSWORD": "${KEYCLOAK_DB_PASSWORD:?Run ./scripts/init.sh first}",
+        "KC_BOOTSTRAP_ADMIN_USERNAME": "admin",
+        "KC_BOOTSTRAP_ADMIN_PASSWORD": "${KEYCLOAK_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
+        "KC_HTTP_ENABLED": "true",
+        "KC_HOSTNAME": "http://localhost:${KEYCLOAK_PORT:-18080}",
+        "KC_HOSTNAME_STRICT": "false",
+        "KC_HEALTH_ENABLED": "true",
+        "KC_METRICS_ENABLED": "false",
+        "KC_HOSTNAME_BACKCHANNEL_DYNAMIC": "true"
+      },
+      "ports": [
+        "127.0.0.1:${KEYCLOAK_PORT:-18080}:8080"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}/realm-initial.json:/opt/keycloak/data/import/realm.json:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 60,
+        "start_period": "30s"
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "superset": {
+      "image": "${SUPERSET_IMAGE:?explicit image tag}",
+      "build": {
+        "context": "./services/superset",
+        "args": {
+          "SUPERSET_VERSION": "6.1.0",
+          "CLICKHOUSE_CONNECT_VERSION": "1.11.0",
+          "PSYCOPG2_VERSION": "2.9.13"
+        }
+      },
+      "restart": "unless-stopped",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        },
+        "clickhouse": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "SUPERSET_SECRET_KEY": "${SUPERSET_SECRET_KEY:?Run ./scripts/init.sh first}",
+        "SUPERSET_ADMIN_USERNAME": "admin",
+        "SUPERSET_ADMIN_PASSWORD": "${SUPERSET_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
+        "SUPERSET_ADMIN_EMAIL": "admin@example.invalid",
+        "SUPERSET_DB_HOST": "postgres",
+        "SUPERSET_DB_PORT": "5432",
+        "SUPERSET_DB_NAME": "superset",
+        "SUPERSET_DB_USER": "superset",
+        "SUPERSET_DB_PASSWORD": "${SUPERSET_DB_PASSWORD:?Run ./scripts/init.sh first}",
+        "CLICKHOUSE_HOST": "clickhouse",
+        "CLICKHOUSE_HTTP_PORT": "8123",
+        "CLICKHOUSE_DB": "foundation",
+        "CLICKHOUSE_SUPERSET_USER": "${CLICKHOUSE_SUPERSET_USER:-superset_reader}",
+        "CLICKHOUSE_SUPERSET_PASSWORD": "${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Run ./scripts/init.sh first}"
+      },
+      "ports": [
+        "127.0.0.1:${SUPERSET_PORT:-18088}:8088"
+      ],
+      "volumes": [
+        "superset-home:/app/superset_home"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)\""
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 60,
+        "start_period": "120s"
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "admin": {
+      "image": "${ADMIN_IMAGE:?explicit image tag}",
+      "build": {
+        "context": "../dateninfrastruktur-admin",
+        "target": "jvm-runtime"
+      },
+      "restart": "unless-stopped",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "DI_MANAGEMENT_WRITER_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
+        "DI_MANAGEMENT_WRITER_USERNAME": "di_writer",
+        "DI_MANAGEMENT_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
+        "DI_MANAGEMENT_AUTHORIZATION_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
+        "DI_MANAGEMENT_AUTHORIZATION_USERNAME": "di_authz",
+        "DI_MANAGEMENT_AUTHORIZATION_PASSWORD": "${DI_AUTHZ_PASSWORD}",
+        "DI_MANAGEMENT_AUDIT_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
+        "DI_MANAGEMENT_AUDIT_USERNAME": "di_audit_reader",
+        "DI_MANAGEMENT_AUDIT_PASSWORD": "${DI_AUDIT_READER_PASSWORD}",
+        "DI_WEB_ISSUER": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur",
+        "DI_WEB_JWKSURI": "http://keycloak:8080/realms/dateninfrastruktur/protocol/openid-connect/certs",
+        "DI_WEB_AUDIENCE": "management-api",
+        "DI_WEB_PUBLICORIGIN": "http://localhost:${GATEWAY_PORT}",
+        "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/8080; printf \"GET /actuator/health/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; IFS= read -r status <&3; [[ \"$$status\" == *\" 200 \"* ]]'"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 40,
+        "start_period": "15s"
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "sodata": {
+      "image": "${SODATA_IMAGE:?explicit image tag}",
+      "build": {
+        "context": "${SODATA_REPO_DIR:-../dateninfrastruktur-sodata}",
+        "dockerfile": "Dockerfile",
+        "target": "jvm-runtime",
+        "args": {
+          "IMAGE_VERSION": "local"
+        }
+      },
+      "restart": "on-failure:3",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "expose": [
+        "8080"
+      ],
+      "environment": {
+        "DATENINFRASTRUKTUR_CATALOG_SOURCE_TYPE": "database",
+        "DATENINFRASTRUKTUR_CATALOG_DATABASE_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
+        "DATENINFRASTRUKTUR_CATALOG_DATABASE_USERNAME": "di_public",
+        "DATENINFRASTRUKTUR_CATALOG_DATABASE_PASSWORD": "${DI_PUBLIC_PASSWORD}",
+        "DATENINFRASTRUKTUR_EXPLORE_ENABLED": "false"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8080/actuator/health >/dev/null"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30,
+        "start_period": "30s"
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "origin": {
+      "image": "rclone/rclone:1.75.2",
+      "restart": "unless-stopped",
+      "depends_on": {
+        "garage": {
+          "condition": "service_healthy"
+        }
+      },
+      "volumes": [
+        "${RUNTIME_DIR}/origin.conf:/config/rclone/rclone.conf:ro"
+      ],
+      "command": [
+        "serve",
+        "webdav",
+        "managed:di-managed-private/downloads",
+        "--addr",
+        ":8080",
+        "--baseurl",
+        "/downloads",
+        "--read-only",
+        "--disable-dir-list",
+        "--disable-zip",
+        "--etag-hash",
+        "auto",
+        "--dir-cache-time",
+        "0s",
+        "--poll-interval",
+        "0",
+        "--vfs-cache-mode",
+        "off",
+        "--buffer-size",
+        "0",
+        "--contimeout",
+        "2s",
+        "--timeout",
+        "3s",
+        "--retries",
+        "1",
+        "--low-level-retries",
+        "1",
+        "--response-header",
+        "Content-Disposition: attachment",
+        "--response-header",
+        "Cache-Control: no-store"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "wget -S -O /dev/null http://127.0.0.1:8080/downloads/ 2>&1 | grep -q 'HTTP/1.1'"
+        ],
+        "interval": "5s",
+        "timeout": "3s",
+        "retries": 30
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "gateway": {
+      "image": "apache/apisix:3.19.0-debian",
+      "restart": "unless-stopped",
+      "ports": [
+        "127.0.0.1:${GATEWAY_PORT}:9080"
+      ],
+      "depends_on": {
+        "admin": {
+          "condition": "service_healthy"
+        },
+        "sodata": {
+          "condition": "service_healthy"
+        },
+        "origin": {
+          "condition": "service_healthy"
+        },
+        "jenkins": {
+          "condition": "service_healthy"
+        }
+      },
+      "volumes": [
+        "./services/apisix/config.single.yaml:/usr/local/apisix/conf/config.yaml:ro",
+        "${RUNTIME_DIR}/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9080; printf \"GET /gateway-health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; IFS= read -r status <&3; [[ \"$$status\" == *\" 200 \"* ]]'"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 40
+      },
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "management-setup": {
+      "image": "${TOOL_IMAGE}",
+      "build": {
+        "context": "../dateninfrastruktur-admin",
+        "target": "tooling",
+        "additional_contexts": {
+          "postgres_tools": "service:postgres",
+          "stack_source": "."
+        }
+      },
+      "profiles": [
+        "setup"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "DI_DATABASE_TARGET": "postgresql",
+        "DI_TOOL_RUNTIME": "/runtime/tools",
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "PGDATABASE": "dateninfrastruktur_management",
+        "PGUSER": "postgres",
+        "PGPASSWORD": "${POSTGRES_ADMIN_PASSWORD}",
+        "DI_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
+        "DI_AUTHZ_PASSWORD": "${DI_AUTHZ_PASSWORD}",
+        "DI_PUBLIC_PASSWORD": "${DI_PUBLIC_PASSWORD}",
+        "DI_AUDIT_READER_PASSWORD": "${DI_AUDIT_READER_PASSWORD}",
+        "DI_MIGRATOR_PASSWORD": "${DI_MIGRATOR_PASSWORD}"
+      },
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "command": [
+        "setup"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "postgres-init": {
+      "image": "${TOOL_IMAGE}",
+      "profiles": [
+        "setup"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "entrypoint": [
+        "python3",
+        "/opt/stack-tools/initialize_postgres.py"
+      ],
+      "environment": {
+        "DI_DATABASE_TARGET": "postgresql",
+        "DI_TOOL_RUNTIME": "/runtime/tools",
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "PGDATABASE": "postgres",
+        "PGUSER": "postgres",
+        "PGPASSWORD": "${POSTGRES_ADMIN_PASSWORD}",
+        "DI_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
+        "DI_AUTHZ_PASSWORD": "${DI_AUTHZ_PASSWORD}",
+        "DI_PUBLIC_PASSWORD": "${DI_PUBLIC_PASSWORD}",
+        "DI_AUDIT_READER_PASSWORD": "${DI_AUDIT_READER_PASSWORD}",
+        "DI_MIGRATOR_PASSWORD": "${DI_MIGRATOR_PASSWORD}",
+        "KEYCLOAK_DB_PASSWORD": "${KEYCLOAK_DB_PASSWORD}",
+        "SUPERSET_DB_PASSWORD": "${SUPERSET_DB_PASSWORD}"
+      },
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "garage-setup": {
+      "image": "${TOOL_IMAGE}",
+      "profiles": [
+        "setup"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "garage": {
+          "condition": "service_healthy"
+        }
+      },
+      "entrypoint": [
+        "python3",
+        "/opt/stack-tools/setup_garage.py"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "clickhouse-init": {
+      "image": "clickhouse/clickhouse-server:26.8",
+      "restart": "no",
+      "depends_on": {
+        "clickhouse": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "CLICKHOUSE_HOST": "clickhouse",
+        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}",
+        "CLICKHOUSE_ADMIN_USER": "${CLICKHOUSE_ADMIN_USER:-ch_admin}",
+        "CLICKHOUSE_ADMIN_PASSWORD": "${CLICKHOUSE_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
+        "CLICKHOUSE_TEST_READER_PASSWORD": "${CLICKHOUSE_TEST_READER_PASSWORD:?Run ./scripts/init.sh first}",
+        "CLICKHOUSE_SUPERSET_READER_PASSWORD": "${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Run ./scripts/init.sh first}"
+      },
+      "volumes": [
+        "./services/clickhouse/init:/init:ro"
+      ],
+      "entrypoint": [
+        "/bin/sh",
+        "/init/initialize.sh"
+      ],
+      "profiles": [
+        "setup"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "management-operator": {
+      "image": "${TOOL_IMAGE}",
+      "profiles": [
+        "tools"
+      ],
+      "restart": "no",
+      "environment": {
+        "DI_DATABASE_TARGET": "postgresql",
+        "DI_TOOL_RUNTIME": "/runtime/tools",
+        "DI_MANAGEMENT_WRITER_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
+        "DI_MANAGEMENT_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
+        "DI_OPERATOR_ISSUER": "urn:di:operator",
+        "DI_OPERATOR_SUBJECT": "managed-delivery",
+        "DI_RCLONE_EXECUTABLE": "/usr/local/bin/rclone",
+        "DI_RCLONE_CONFIG": "/runtime/origin.conf",
+        "DI_PRIVATE_STORAGE_PROFILE": "managed",
+        "DI_PRIVATE_STORAGE_REMOTE": "managed:di-managed-private"
+      },
+      "entrypoint": [
+        "java",
+        "-Dloader.main=ch.so.agi.dateninfrastruktur.admin.operator.ManagedDeliveryCommand",
+        "-cp",
+        "/opt/admin/app.jar",
+        "org.springframework.boot.loader.launch.PropertiesLauncher"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "test-fixture": {
+      "image": "${TEST_TOOL_IMAGE}",
+      "build": {
+        "context": "../dateninfrastruktur-admin",
+        "target": "test-tools",
+        "additional_contexts": {
+          "postgres_tools": "service:postgres",
+          "stack_source": "."
+        }
+      },
+      "profiles": [
+        "test"
+      ],
+      "restart": "no",
+      "environment": {
+        "DI_COMPOSE_TEST_FIXTURE": "${DI_TEST_FIXTURE}",
+        "DI_TEST_URL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
+        "DI_TEST_ADMIN_PASSWORD": "${POSTGRES_ADMIN_PASSWORD}",
+        "DI_TEST_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
+        "DI_TEST_AUTHZ_PASSWORD": "${DI_AUTHZ_PASSWORD}",
+        "DI_TEST_PILOT_ISSUER": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur",
+        "DI_TEST_PILOT_FIXTURE": "/runtime/fixture.json"
+      },
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "storage-tool": {
+      "image": "rclone/rclone:1.75.2",
+      "profiles": [
+        "tools"
+      ],
+      "restart": "no",
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime:ro"
+      ],
+      "entrypoint": [
+        "rclone",
+        "--config",
+        "/runtime/operator.conf"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    }
+  },
+  "volumes": {
+    "postgres-data": {
+      "name": "${POSTGRES_VOLUME}"
+    },
+    "garage-meta": {
+      "name": "${GARAGE_META_VOLUME}"
+    },
+    "garage-data": {
+      "name": "${GARAGE_DATA_VOLUME}"
+    },
+    "jenkins-home": {
+      "name": "${JENKINS_VOLUME}"
+    },
+    "clickhouse-data": {
+      "name": "${CLICKHOUSE_DATA_VOLUME}"
+    },
+    "clickhouse-logs": {
+      "name": "${CLICKHOUSE_LOG_VOLUME}"
+    },
+    "superset-home": {
+      "name": "${SUPERSET_VOLUME}"
+    }
+  }
+}

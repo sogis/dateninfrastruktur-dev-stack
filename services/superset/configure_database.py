@@ -23,9 +23,11 @@ def main():
             .filter_by(database_name="clickhouse_foundation")
             .one_or_none()
         )
-        if database is None:
-            database = Database(database_name="clickhouse_foundation")
-            db.session.add(database)
+        if database is not None:
+            print("Bestehende Superset-Verbindung bleibt unverändert.")
+            return
+        database = Database(database_name="clickhouse_foundation")
+        db.session.add(database)
         database.sqlalchemy_uri = uri
         database.expose_in_sqllab = True
         database.allow_ctas = False

@@ -1,0 +1,94 @@
+"""One explicit Compose context. No secondary container lifecycle."""
+import hashlib,json,os,pathlib,re,secrets,shlex,subprocess
+ROOT=pathlib.Path(__file__).resolve().parents[1]
+def read_env(path):
+    values={}
+    for line in pathlib.Path(path).read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):continue
+        key,sep,value=line.partition('=')
+        if not sep or not re.fullmatch('[A-Z][A-Z0-9_]*',key):raise RuntimeError('Invalid private configuration format')
+        parts=shlex.split(value,comments=False)
+        if len(parts)>1:raise RuntimeError('Ambiguous private configuration value')
+        values[key]=parts[0] if parts else ''
+    return values
+def write_private(path,text):
+    path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.parent.chmod(0o700)
+    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
+    with os.fdopen(fd,'w') as f:f.write(text)
+    path.chmod(0o600)
+class ComposeContext:
+    def __init__(self,env_file):
+        self.env_file=pathlib.Path(env_file).resolve();self.values=read_env(self.env_file);self.project=self.values['COMPOSE_PROJECT_NAME'];self.runtime=pathlib.Path(self.values['RUNTIME_DIR']).resolve()
+        if not re.fullmatch('[a-z][a-z0-9-]{3,62}',self.project) or not self.runtime.is_relative_to((ROOT/'.runtime').resolve()) or self.env_file.parent!=self.runtime:raise RuntimeError('Compose project/runtime binding mismatch')
+        self.base=['docker','compose','--project-name',self.project,'--env-file',str(self.env_file),'--file',str(ROOT/'compose.yaml')]
+    def redact(self,value):
+        for k,v in self.values.items():
+            if v and re.search('PASSWORD|SECRET|TOKEN|ACCESS_KEY',k):value=value.replace(v,'[REDACTED]')
+        return value
+    def verify_project(self):
+        ids=subprocess.check_output(['docker','ps','-aq','--filter','label=com.docker.compose.project='+self.project],text=True).split()
+        for cid in ids:
+            value=json.loads(subprocess.check_output(['docker','inspect',cid],text=True))[0];labels=value['Config'].get('Labels') or {}
+            if labels.get('di.instance')!=self.values['INSTANCE_ID'] or labels.get('com.docker.compose.project.config_files')!=str(ROOT/'compose.yaml') or labels.get('com.docker.compose.project.working_dir')!=str(ROOT):raise RuntimeError('OWNERSHIP_MISMATCH: existing project requires planned migration')
+    def command(self,args,input=None,check=True):
+        if any(arg in ['up','down','stop','restart','run','exec','rm'] for arg in args):self.verify_project()
+        env={k:os.environ[k] for k in ['PATH','HOME','DOCKER_HOST','DOCKER_CONTEXT','DOCKER_CONFIG','TMPDIR','SSH_AUTH_SOCK'] if k in os.environ};env.update(self.values)
+        p=subprocess.run(self.base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
+        if p.returncode and check:raise RuntimeError(self.redact((p.stdout+p.stderr)[-8000:]))
+        return p
+def init_context(project,ports=None,test_fixture=False):
+    if not re.fullmatch('[a-z][a-z0-9-]{3,62}',project):raise RuntimeError('Invalid project')
+    runtime=ROOT/'.runtime'/project;env_file=runtime/'runtime.env'
+    if env_file.exists():return ComposeContext(env_file)
+    # Fresh mode never adopts an existing running foundation under its default name.
+    existing=subprocess.check_output(['docker','ps','-aq','--filter','label=com.docker.compose.project='+project],text=True).strip()
+    if existing:raise RuntimeError('Existing project requires explicit planned migration, never fresh init')
+    values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres-ma-f','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader','THEMEN_REPO_DIR':str(ROOT.parent/'dateninfrastruktur-themenrepo')}
+    if ports:values.update({k:str(v) for k,v in ports.items()})
+    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_AUTHZ_PASSWORD','DI_PUBLIC_PASSWORD','DI_AUDIT_READER_PASSWORD','DI_MIGRATOR_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','GARAGE_DEFAULT_SECRET_KEY']:values[key]=secrets.token_hex(32)
+    values['GARAGE_DEFAULT_ACCESS_KEY']='GK'+secrets.token_hex(16)
+    values['GARAGE_ORIGIN_ACCESS_KEY']='';values['GARAGE_ORIGIN_SECRET_KEY']=''
+    for key,tag in [('ADMIN_IMAGE','admin'),('TOOL_IMAGE','tools'),('TEST_TOOL_IMAGE','test-tools'),('POSTGRES_IMAGE','postgres'),('SODATA_IMAGE','sodata'),('SUPERSET_IMAGE','superset')]:values[key]='dateninfrastruktur-'+tag+':'+project
+    # Reuse a real unchanged Jenkins image, never overwrite the user's :local tag.
+    values['JENKINS_IMAGE']=subprocess.check_output(['docker','image','inspect','--format','{{.Id}}','dateninfrastruktur-jenkins:local'],text=True).strip()
+    write_private(env_file,''.join(k+'='+shlex.quote(v)+'\n' for k,v in values.items()))
+    context=ComposeContext(env_file);render(context);return context
+def render(context):
+    v=context.values;r=context.runtime
+    garage=(ROOT/'services/garage/garage.toml.template').read_text()
+    for key in ['RPC_SECRET','ADMIN_TOKEN','METRICS_TOKEN']:garage=garage.replace('__'+key+'__',secrets.token_hex(32))
+    if not (r/'garage.toml').exists():write_private(r/'garage.toml',garage)
+    conf='\n'.join(['[managed]','type = s3','provider = Other','env_auth = false','access_key_id = '+v['GARAGE_ORIGIN_ACCESS_KEY'],'secret_access_key = '+v['GARAGE_ORIGIN_SECRET_KEY'],'endpoint = http://garage:3900','region = garage','force_path_style = true','no_check_bucket = true',''])
+    write_private(r/'origin.conf',conf)
+    realm=json.loads((ROOT/'services/keycloak/realm-template.json').read_text())
+    if v['DI_TEST_FIXTURE']!='true':realm['users']=[]
+    for user in realm['users']:user['credentials'][0]['value']=v['KEYCLOAK_DEMO_PASSWORD']
+    audience={'name':'management-api audience','protocol':'openid-connect','protocolMapper':'oidc-audience-mapper','config':{'included.custom.audience':'management-api','access.token.claim':'true','id.token.claim':'false'}}
+    realm['clients']=[{'clientId':'management-gateway','enabled':True,'protocol':'openid-connect','publicClient':False,'secret':v['DI_OIDC_CLIENT_SECRET'],'standardFlowEnabled':True,'directAccessGrantsEnabled':False,'redirectUris':['http://localhost:'+v['GATEWAY_PORT']+'/oidc/callback'],'webOrigins':['http://localhost:'+v['GATEWAY_PORT']],'protocolMappers':[audience]}]
+    if v['DI_TEST_FIXTURE']=='true':realm['clients'].append({'clientId':'management-test','enabled':True,'protocol':'openid-connect','publicClient':True,'standardFlowEnabled':False,'directAccessGrantsEnabled':True,'protocolMappers':[audience]})
+    if not (r/'realm-initial.json').exists():write_private(r/'realm-initial.json',json.dumps(realm,indent=2))
+    # Non-root Keycloak reads the bind-mounted initial definition; parent remains0700.
+    (r/'realm-initial.json').chmod(0o644)
+    template=json.loads((ROOT/'services/apisix/routes.template.json').read_text())
+    def substitute(value):
+        if isinstance(value,dict):return {k:substitute(x) for k,x in value.items()}
+        if isinstance(value,list):return [substitute(x) for x in value]
+        if isinstance(value,str):
+            for k,x in v.items():value=value.replace('${'+k+'}',x)
+        return value
+    write_private(r/'apisix.yaml',json.dumps(substitute(template),indent=2)+'\n#END\n');(r/'apisix.yaml').chmod(0o644)
+
+def setup_context(context):
+    context.command(['up','-d','--wait','--wait-timeout','240','postgres','garage','clickhouse'])
+    for service in ['postgres-init','management-setup','garage-setup','clickhouse-init']:
+        context.command(['--profile','setup','run','--rm','--no-deps',service])
+    print('Explicit setup complete; no application demo seed')
+if __name__=='__main__':
+    import argparse
+    p=argparse.ArgumentParser();p.add_argument('action',choices=['init','build','setup','up','status']);p.add_argument('--project',default='dateninfrastruktur-dev-stack');p.add_argument('--env');p.add_argument('--test-fixture',action='store_true');a=p.parse_args()
+    c=init_context(a.project,test_fixture=a.test_fixture) if a.action=='init' else ComposeContext(a.env or ROOT/'.runtime'/a.project/'runtime.env')
+    if a.action=='build':c.command(['build','admin','sodata','management-setup','superset']+(['test-fixture'] if c.values['DI_TEST_FIXTURE']=='true' else []))
+    elif a.action=='setup':setup_context(c)
+    elif a.action=='up':c.command(['up','-d','--wait','--wait-timeout','300'])
+    elif a.action=='status':print('http://localhost:'+c.values['GATEWAY_PORT'])
+    print('Compose operation completed for '+c.project)

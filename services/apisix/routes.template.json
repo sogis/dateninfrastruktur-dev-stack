@@ -1,0 +1,259 @@
+{
+  "global_rules": [
+    {
+      "id": "canonical-managed-paths",
+      "plugins": {
+        "fault-injection": {
+          "abort": {
+            "http_status": 400,
+            "body": "Invalid canonical request path",
+            "headers": {
+              "Cache-Control": "no-store"
+            },
+            "percentage": 100,
+            "vars": [
+              [
+                [
+                  "real_request_uri",
+                  "~~",
+                  "^/downloads(?=[/?]|$)(?!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$)"
+                ]
+              ],
+              [
+                [
+                  "real_request_uri",
+                  "~~",
+                  "(?i)^[^?]*(?:%2[ef]|%5c|%00|\\\\|//|/\\.\\.?(?:/|$))"
+                ]
+              ]
+            ]
+          }
+        },
+        "response-rewrite": {
+          "headers": {
+            "set": {
+              "Cache-Control": "no-store"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "routes": [
+    {
+      "id": "internal-deny",
+      "priority": 200,
+      "uris": [
+        "/internal",
+        "/internal/*",
+        "/actuator/*",
+        "/admin",
+        "/admin/*",
+        "/s3/*",
+        "/legacy/*",
+        "/ch.so.daten",
+        "/ch.so.daten/*",
+        "/ch.so.dateninfrastruktur.private",
+        "/ch.so.dateninfrastruktur.private/*",
+        "/di-managed-private",
+        "/di-managed-private/*",
+        "/auth",
+        "/auth/*"
+      ],
+      "plugins": {
+        "mocking": {
+          "response_status": 403,
+          "response_example": "Forbidden"
+        }
+      }
+    },
+    {
+      "id": "download",
+      "priority": 100,
+      "uris": [
+        "/downloads",
+        "/downloads/*"
+      ],
+      "plugins": {
+        "openid-connect": {
+          "client_id": "management-gateway",
+          "client_secret": "${DI_OIDC_CLIENT_SECRET}",
+          "discovery": "http://keycloak:8080/realms/dateninfrastruktur/.well-known/openid-configuration",
+          "scope": "openid profile email",
+          "redirect_uri": "http://localhost:${GATEWAY_PORT}/oidc/callback",
+          "ssl_verify": false,
+          "use_pkce": true,
+          "set_access_token_header": true,
+          "access_token_in_authorization_header": true,
+          "set_id_token_header": false,
+          "set_userinfo_header": false,
+          "session": {
+            "secret": "${DI_SESSION_SECRET}",
+            "cookie_name": "di_management_session",
+            "cookie_path": "/",
+            "cookie_secure": false,
+            "cookie_http_only": true,
+            "cookie_same_site": "Lax"
+          },
+          "unauth_action": "pass"
+        },
+        "forward-auth": {
+          "uri": "http://admin:8080/internal/authorization/check",
+          "request_method": "GET",
+          "request_headers": [
+            "Authorization",
+            "X-Request-ID"
+          ],
+          "extra_headers": {
+            "X-DI-Gateway-Credential": "${DI_GATEWAY_SECRET}",
+            "X-Forwarded-Uri": "$real_request_uri"
+          },
+          "upstream_headers": [
+            "Authorization",
+            "Cookie",
+            "X-Access-Token",
+            "X-ID-Token",
+            "X-Userinfo",
+            "X-DI-Gateway-Credential"
+          ],
+          "allow_degradation": false,
+          "status_on_error": 503,
+          "timeout": 2000,
+          "keepalive": true
+        },
+        "response-rewrite": {
+          "headers": {
+            "set": {
+              "Cache-Control": "no-store"
+            }
+          }
+        }
+      },
+      "upstream": {
+        "type": "roundrobin",
+        "nodes": {
+          "origin:8080": 1
+        }
+      },
+      "timeout": {
+        "connect": 2,
+        "send": 5,
+        "read": 5
+      }
+    },
+    {
+      "id": "management",
+      "priority": 100,
+      "uris": [
+        "/management",
+        "/management/*",
+        "/access/*",
+        "/oidc/callback"
+      ],
+      "plugins": {
+        "openid-connect": {
+          "client_id": "management-gateway",
+          "client_secret": "${DI_OIDC_CLIENT_SECRET}",
+          "discovery": "http://keycloak:8080/realms/dateninfrastruktur/.well-known/openid-configuration",
+          "scope": "openid profile email",
+          "redirect_uri": "http://localhost:${GATEWAY_PORT}/oidc/callback",
+          "ssl_verify": false,
+          "use_pkce": true,
+          "set_access_token_header": true,
+          "access_token_in_authorization_header": true,
+          "set_id_token_header": false,
+          "set_userinfo_header": false,
+          "session": {
+            "secret": "${DI_SESSION_SECRET}",
+            "cookie_name": "di_management_session",
+            "cookie_path": "/",
+            "cookie_secure": false,
+            "cookie_http_only": true,
+            "cookie_same_site": "Lax"
+          }
+        }
+      },
+      "upstream": {
+        "type": "roundrobin",
+        "nodes": {
+          "admin:8080": 1
+        }
+      }
+    },
+    {
+      "id": "management-assets",
+      "priority": 100,
+      "uri": "/assets/*",
+      "upstream": {
+        "type": "roundrobin",
+        "nodes": {
+          "admin:8080": 1
+        }
+      }
+    },
+    {
+      "id": "public-catalog",
+      "priority": 0,
+      "uri": "/*",
+      "upstream": {
+        "type": "roundrobin",
+        "nodes": {
+          "sodata:8080": 1
+        }
+      }
+    },
+    {
+      "id": "gateway-health",
+      "priority": 1000,
+      "uri": "/gateway-health",
+      "plugins": {
+        "mocking": {
+          "response_status": 200,
+          "response_example": "ok"
+        }
+      }
+    },
+    {
+      "id": "jenkins-root",
+      "priority": 200,
+      "uri": "/jenkins",
+      "plugins": {
+        "redirect": {
+          "uri": "/jenkins/",
+          "ret_code": 308
+        }
+      }
+    },
+    {
+      "id": "delivery-entry",
+      "priority": 200,
+      "uris": [
+        "/anlieferung",
+        "/anlieferung/"
+      ],
+      "plugins": {
+        "redirect": {
+          "uri": "/jenkins/gretl-datenportal/",
+          "ret_code": 302
+        }
+      }
+    },
+    {
+      "id": "jenkins",
+      "priority": 200,
+      "uri": "/jenkins/*",
+      "upstream": {
+        "type": "roundrobin",
+        "nodes": {
+          "jenkins:8080": 1
+        },
+        "pass_host": "pass",
+        "timeout": {
+          "connect": 10,
+          "send": 300,
+          "read": 300
+        }
+      }
+    }
+  ]
+}
