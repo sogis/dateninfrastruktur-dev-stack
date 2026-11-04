@@ -7,7 +7,7 @@
 | MA-B | ABGENOMMEN (20261104T153442Z) | erst nach MA-A |
 | MA-C | ABGENOMMEN (20261104T162930Z) | erst nach MA-B |
 | MA-D | ABGENOMMEN (20261104T182312Z) | erst nach MA-C |
-| MA-E | IN_PROGRESS | erst nach MA-D; enthält Gesamtintegration |
+| MA-E | IN_REVIEW | erst nach MA-D; enthält Gesamtintegration |
 
 Vorhandene unversionierte Grundinstallationsnachweise bleiben Nutzerarbeit.
 Aktuelle Quellstände werden erst nach lokalen Produktcommits im konkreten ignorierten Handoff gebunden.

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 stack="$(cd "$(dirname "$0")/../.." && pwd)"
-exec python3 "$(dirname "$stack")/dateninfrastruktur-admin/scripts/setup.py" "$@"
+admin="$(dirname "$stack")/dateninfrastruktur-admin"
+export DI_MANAGEMENT_RUNTIME_DIR="${DI_MANAGEMENT_RUNTIME_DIR:-$admin/.runtime/managed/database}"
+exec python3 "$admin/scripts/managed_setup.py" "$@"

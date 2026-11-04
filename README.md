@@ -1,5 +1,52 @@
 # dateninfrastruktur-dev-stack
 
+## Management und geschützte Downloads (MA-0 bis MA-E)
+
+Die Management-/Access-Laufzeit ist ein eigener, isolierter Ausbau mit dem sechsten
+Geschwisterrepo `dateninfrastruktur-admin`. Die nachfolgenden Foundation-Anweisungen
+bleiben für deren eigenständigen Stack gültig; dortige frühere Umfangsausschlüsse
+sind keine Beschränkung dieses Ausbaus. Bestehende Jenkins-/ClickHouse-/Superset-
+Instanzen und ihre `.env` werden durch Managementkommandos nicht geändert.
+
+Voraussetzung: Java25, Python3, Docker, Geschwister ADMIN/PUBLIC. Explizite
+Ersteinrichtung und JVM-Start aus diesem Repository:
+
+```bash
+./scripts/management/setup.sh
+./scripts/management/up.sh
+./scripts/management/status.sh
+./scripts/management/stop.sh
+./scripts/management/up.sh
+```
+
+`status.sh` nennt die beiden zufälligen Loopback-Gateway-URLs. `/` ist der
+DB-Katalog, `/management` die Verwaltung, `/access/me` der Selbstbedienungsbereich.
+Der erste Start enthält keine Beispieldatensätze/Freigaben. Setup/Bootstrap sind
+explizite Operatoraktionen. Start/Stop/Neustart erhalten Daten, UUIDs und Secrets.
+Nur Gateways haben Hostports; DB, Keycloak, Admin und rclone/S3 sind intern.
+Der ursprüngliche DB-Bootstrapport wird vor dem Anwendungsstart entfernt.
+
+Der abschliessende Integrationstest richtet **eigene synthetische** Pilotdaten,
+eigene Benutzercredentials und zwei Instanzen pro Anwendung ein und entfernt
+standardmässig nur seine geprüften eigenen Ressourcen:
+
+```bash
+./scripts/management/test.sh --phase MA-E
+# Für eine explizit behaltene lokale Demo aus ADMIN:
+python3 scripts/test_downloads_all.py --keep-runtime
+```
+
+Die Demo liegt separat unter ADMIN/.runtime/managed-test; ihr Status ist mit
+`DI_MANAGEMENT_RUNTIME_DIR=<absolut-ADMIN>/.runtime/managed-test/database
+./scripts/management/status.sh` abrufbar. Credentials stehen ausschliesslich in
+der privaten `identity/state.json` unter demselben Runtimeordner, nie in Git.
+Die beauftragte unabhängige Abnahme steht in
+[WORK_QUEUE](docs/implementation/management-and-access/WORK_QUEUE.md).
+Betrieb und Vertrauensgrenzen: [Management-/Dateibetrieb](../dateninfrastruktur-admin/docs/managed-downloads.md).
+
+
+## Bestehende Grundinstallation
+
 Lokale, eigenständige Grundinstallation der Dateninfrastruktur des Kantons
 Solothurn. Der Stack baut Jenkins/GRETL, Sodata und Superset aus den fünf neuen
 Geschwisterrepos und ergänzt Garage, APISIX, PostgreSQL, Keycloak und
