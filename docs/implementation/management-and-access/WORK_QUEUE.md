@@ -6,7 +6,7 @@
 | MA-A | ABGENOMMEN (20261104T143229Z) | erst nach unabhängigem ABGENOMMEN für MA-0 |
 | MA-B | ABGENOMMEN (20261104T153442Z) | erst nach MA-A |
 | MA-C | ABGENOMMEN (20261104T162930Z) | erst nach MA-B |
-| MA-D | IN_PROGRESS | erst nach MA-C |
+| MA-D | AWAITING_INDEPENDENT_REVIEW | erst nach MA-C |
 | MA-E | WAITING | erst nach MA-D; enthält Gesamtintegration |
 
 Vorhandene unversionierte Grundinstallationsnachweise bleiben Nutzerarbeit.
