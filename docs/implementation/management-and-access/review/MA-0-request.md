@@ -58,9 +58,11 @@ Nur vollständiges unabhängiges ABGENOMMEN an genau diesem Satz erlaubt MA-A.
 
 ## Runnerkorrektur vor Erstabnahme
 
-Erster tatsächlicher Reviewstart blieb mit `Agent not found` geschlossen, ohne
-Report oder Abnahme. OpenCode2.2.5 löst eine frisch angelegte Projektkonfiguration
-verzögert auf. Runner prüft jetzt mit `debug agents --standalone` die wirkliche
-Entdeckung des primary-Reviewagenten vor der neuen Review-Sitzung (maximal drei
-Auflösungsversuche). Kein Ersatzagent/Modellfallback. Sämtliche MA-0-Pflichtchecks
-bleiben frisch auszuführen; kein übertragener unabhängiger Beleg.
+Tatsächliche Reviewstarts mit abweichendem subprocess-cwd, aber geerbtem PWD
+blieben mit `Agent not found` geschlossen, ohne Report oder Abnahme. Ursache
+gezielt reproduziert: OpenCode2.2.5 run verwendet PWD zur Projektermittlung.
+Ein identischer subprocess-Aufruf mit PWD=isoliertes Workspace funktioniert
+und führt echte Shell-Werkzeuge dort aus. Runner gleicht cwd und PWD jetzt an
+und prüft die tatsächliche Entdeckung des primary-Reviewagenten zusätzlich mit
+`debug agents --standalone`. Kein Ersatzagent/Modellfallback. Alle M00–M02
+bleiben frisch auszuführen; keine unabhängigen Belege übertragen.
