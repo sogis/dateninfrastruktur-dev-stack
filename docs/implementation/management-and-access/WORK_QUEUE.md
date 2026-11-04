@@ -3,7 +3,7 @@
 | Phase | Status | Gate |
 |---|---|---|
 | MA-0 | ABGENOMMEN (20261104T141858Z) | Bestand/Versionen, isolierter Boot/Cayenne/PG-Spike und autonome Reviewkette |
-| MA-A | IN_PROGRESS | erst nach unabhängigem ABGENOMMEN für MA-0 |
+| MA-A | AWAITING_INDEPENDENT_REVIEW | erst nach unabhängigem ABGENOMMEN für MA-0 |
 | MA-B | WAITING | erst nach MA-A |
 | MA-C | WAITING | erst nach MA-B |
 | MA-D | WAITING | erst nach MA-C |
