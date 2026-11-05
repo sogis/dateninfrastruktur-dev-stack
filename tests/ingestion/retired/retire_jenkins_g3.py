@@ -12,6 +12,8 @@ LOCK='org.jenkins.plugins.lockableresources.LockableResourcesManager'
 LOCAL_USERS={'admin','seed-user','read-user','agi-user','mfk-user','statistikdienst-user'}
 OLD_REALM='hudson.security.HudsonPrivateSecurityRealm'
 OLD_LOCK='datenportal-topic-repository'
+# Exact original image default present in the retained local Jenkins Home.
+OLD_IMAGE_CASC_SHA='281a78fd205c57c4fb683a6d6a25bb1469e75bdaf899b1717ec34a7c19236dfe'
 SAFE=re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z')
 JENKINS_VOLUME_ROOT=pathlib.Path('/jenkins-home')
 RUNTIME=pathlib.Path('/runtime')
@@ -71,7 +73,8 @@ def old_assets(home):
         if (home/'casc_configs').is_symlink() or not regular(old_casc) or old_casc.stat().st_size>1048576:
             raise RuntimeError('Old JCasC path is unverified')
         text=old_casc.read_text()
-        if not all(word in text for word in (OLD_LOCK,'gretl-datenportal','securityRealm:','local:')):
+        scoped_stack_config=all(word in text for word in (OLD_LOCK,'gretl-datenportal','securityRealm:','local:'))
+        if not scoped_stack_config and digest(old_casc)!=OLD_IMAGE_CASC_SHA:
             raise RuntimeError('Old JCasC content is unverified')
         paths.append(old_casc)
     user_dir=home/'users'

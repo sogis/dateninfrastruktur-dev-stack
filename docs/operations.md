@@ -12,7 +12,10 @@ keinen eigenen Hostport.
 
 ## Frische Installation und Normalstart
 
-Benötigt werden Docker mit Compose/Buildx, Python 3, Java 21 und Maven. Der
+Benötigt werden Docker mit Compose/Buildx und Python 3. Der Jenkins-/HPI-Build
+verwendet Java 21 und Maven auf dem Host; Java 17 für GRETL ist im Image.
+Admin und Sodata bauen mit Java 25 im Container, und lokale Gradle-Tests
+dieser Anwendungen benötigen Java 25 auf dem Host. Der
 Jenkinsbuild verwendet das lokal vorhandene, in
 [MA-G0 gebundene Toolchain-Image](implementation/storage-and-delivery/contracts/g0-toolchain.json).
 Ohne dessen exakten Image- und JAR-Nachweis bricht der Build ab. Aus

@@ -3,6 +3,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent/'retired'))
 import retire_jenkins_g3 as retire
@@ -37,6 +38,21 @@ class ScopedRetirement(unittest.TestCase):
             self.assertEqual((archive/'jobs/gretl-datenportal-seed/builds/1/log').read_text(),'historic bytes')
             self.assertTrue((archive/'assets/users/agi-user/config.xml').is_file())
             self.assertTrue((home/'jobs/other/config.xml').is_file() and (foreign/'config.xml').is_file())
+
+    def test_old_image_default_requires_exact_bound_content(self):
+        with tempfile.TemporaryDirectory() as root:
+            home=pathlib.Path(root)
+            (home/'config.xml').write_text(f'<hudson><securityRealm class="{retire.OLD_REALM}"/></hudson>')
+            (home/(retire.GLOBAL+'.xml')).write_text(f'<{retire.GLOBAL}><urlName>gretl-datenportal</urlName></{retire.GLOBAL}>')
+            cfg=home/'casc_configs/jenkins.yaml'
+            cfg.parent.mkdir()
+            cfg.write_text('jenkins:\n  securityRealm:\n    activeDirectory: {}\n')
+            bound=retire.digest(cfg)
+            with patch.object(retire,'OLD_IMAGE_CASC_SHA',bound):
+                self.assertIn('casc_configs/jenkins.yaml',retire.old_assets(home))
+                cfg.write_text(cfg.read_text()+'# changed\n')
+                with self.assertRaisesRegex(RuntimeError,'Old JCasC content is unverified'):
+                    retire.old_assets(home)
 
 if __name__=='__main__':
     unittest.main()

@@ -9,6 +9,18 @@ Abgenommene Basis: [MA-G4](MA-G4-accepted.md) mit diesen sechs Quell-SHAs:
 - PLUGIN `cd1be45d43cc319aba12ad757ec7a29fef95975b`
 - TOPICS `57933e7916744b38262024c0f7c2e3af94c0cc5a`
 
+Der erste unabhängige Lauf `20261105T232632Z` endete mit `NACHARBEIT`.
+Die neue Serien-Testfixture publizierte vor ihrer ersten Ausgabe. Die
+Korrektur legt Ausgaben zuerst an, publiziert danach Reihe und Ausgaben und
+setzt den aktuellen Zeiger. Kein Produktvertrag wurde gelockert. Die
+isolierte Gegenprüfung von Sodata hat historische/aktuelle Ausgaben und
+Pagination bestätigt. Die Betriebsanleitung trennt die Java-Versionen.
+Der einmalige Jenkins-Archivschritt akzeptiert zusätzlich nur den exakten
+belegten SHA-256 der Altimage-Vorlage; ein geändertes Exemplar wird abgewiesen.
+Der ursprüngliche G5-Lauf ist nach einer G50-Teilbeobachtung mit Exit 1
+abgebrochen. Es gibt keine erfolgreich ausgeführten Pflichtchecks zum
+Übernehmen. Keine frühere abgenommene Phasensuite wiederholen.
+
 Alle G50–G59 frisch und unabhängig prüfen. Ein eigener erfolgreicher
 End-to-End-Lauf aus dem isolierten STACK:
 
