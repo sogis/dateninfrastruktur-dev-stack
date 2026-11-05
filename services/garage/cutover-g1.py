@@ -38,6 +38,35 @@ def inventory(client,bucket):
         for item in page.get('Contents',[]):result[item['Key']]=object_info(client,bucket,item['Key'])
     return result
 
+def bind_foundation_fixture(target,client,access,proof):
+    """The original S3 CreateBucket created a key-local alias, never a global one."""
+    alias='ch.so.dateninfrastruktur.private'
+    if proof['bucket']!=alias or proof['key']!='private-foundation-smoke.txt' or proof['size']!=51:raise CutoverError('UNKNOWN_FOUNDATION_FIXTURE')
+    key=target.api('GetKeyInfo',id=access)
+    matches=[b for b in key['buckets'] if alias in b['localAliases']]
+    if len(matches)!=1:raise CutoverError('FOUNDATION_LOCAL_ALIAS_NOT_UNIQUE')
+    bucket=target.api('GetBucketInfo',id=matches[0]['id'])
+    entries=[b for b in target.api('ListBuckets') if b['id']==bucket['id']]
+    if len(entries)!=1 or entries[0]['globalAliases'] or entries[0]['localAliases']!=[{'accessKeyId':access,'alias':alias}]:raise CutoverError('FOUNDATION_ALIAS_OWNERSHIP_NOT_EXCLUSIVE')
+    objects=inventory(client,alias)
+    if set(objects)!={proof['key']} or objects[proof['key']]['size']!=proof['size'] or objects[proof['key']]['sha256']!=proof['sha256']:raise CutoverError('FOUNDATION_FIXTURE_NOT_PROVEN')
+    return {'bucket':alias,'bucket_id':bucket['id'],'local_access_key_id':access,'objects':objects,'proof':proof}
+
+def retire_foundation_fixture(target,client,smoke):
+    """Called only after the actual private target and runtime have been verified."""
+    try:bucket=target.api('GetBucketInfo',id=smoke['bucket_id'])
+    except Exception as error:
+        if getattr(error,'status',None)!=404:raise
+        # A recreated alias is a new identity and must never be deleted.
+        if any(a=={'accessKeyId':smoke['local_access_key_id'],'alias':smoke['bucket']} for b in target.api('ListBuckets') for a in b['localAliases']):raise CutoverError('FOUNDATION_ALIAS_REASSIGNED')
+        return
+    entries=[b for b in target.api('ListBuckets') if b['id']==bucket['id']]
+    if len(entries)!=1 or entries[0]['globalAliases'] or entries[0]['localAliases']!=[{'accessKeyId':smoke['local_access_key_id'],'alias':smoke['bucket']}]:raise CutoverError('FOUNDATION_ALIAS_OWNERSHIP_CHANGED')
+    remaining=inventory(client,smoke['bucket'])
+    if any(k not in smoke['objects'] or v!=smoke['objects'][k] for k,v in remaining.items()):raise CutoverError('FOUNDATION_FIXTURE_CHANGED')
+    for key in remaining:client.delete_object(Bucket=smoke['bucket'],Key=key)
+    target.api('DeleteBucket',id=smoke['bucket_id'])
+
 class PrivateBucketCutover:
     def __init__(self,target,source_client,target_client,load_references,write_private,root,host_binding):
         if target.endpoint!='http://garage:3900' or target.bucket!=TARGET:raise CutoverError('NONLOCAL_STORAGE_TARGET')

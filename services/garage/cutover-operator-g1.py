@@ -6,7 +6,7 @@ import boto3
 from botocore.config import Config
 sys.path[:0]=['/opt/stack-tools','/opt/admin/scripts']
 from setup_garage import StorageTarget,GarageProvisioner,write_secrets_atomically,encode
-from cutover_g1 import PrivateBucketCutover,CutoverError,digest,TARGET,SOURCE,inventory
+from cutover_g1 import PrivateBucketCutover,CutoverError,digest,TARGET,SOURCE,inventory,bind_foundation_fixture,retire_foundation_fixture
 from management_db import sql
 import tomllib
 
@@ -41,10 +41,7 @@ def plan():
         keys['old_browser']=actual
     bound=engine(keys).plan()
     if proof_path.exists():
-        bucket=target.api('GetBucketInfo',globalAlias=proof['bucket'])
-        objects=inventory(client(keys['old_target']),proof['bucket'])
-        if set(objects)!={proof['key']} or objects[proof['key']]['size']!=proof['size'] or objects[proof['key']]['sha256']!=proof['sha256']:raise CutoverError('FOUNDATION_FIXTURE_NOT_PROVEN')
-        bound['foundation_smoke']={'bucket':proof['bucket'],'bucket_id':bucket['id'],'objects':objects,'proof':proof}
+        bound['foundation_smoke']=bind_foundation_fixture(target,client(keys['old_target']),keys['old_target']['accessKeyId'],proof)
     allowed={bound['binding']['source_bucket_id'],bound['binding']['target_bucket_id']}
     if 'foundation_smoke' in bound:allowed.add(bound['foundation_smoke']['bucket_id'])
     # An old application key attached to an unknown bucket is never globally deleted.
@@ -87,20 +84,7 @@ def finish():
     if e.journal(bound)['state']=='VERIFIED':e.confirm_switch(bound,verify)
     print(json.dumps(e.retire_source(bound,verify)))
     if 'foundation_smoke' in bound:
-        smoke=bound['foundation_smoke']
-        try:bucket=target.api('GetBucketInfo',globalAlias=smoke['bucket'])
-        except Exception as error:
-            if getattr(error,'status',None)!=404:raise
-            try:target.api('GetBucketInfo',id=smoke['bucket_id'])
-            except Exception as missing:
-                if getattr(missing,'status',None)!=404:raise
-            else:raise CutoverError('FOUNDATION_ALIAS_LOST')
-        else:
-            if bucket['id']!=smoke['bucket_id']:raise CutoverError('FOUNDATION_BUCKET_CHANGED')
-            old=client(keys['old_target']);remaining=inventory(old,smoke['bucket'])
-            if any(k not in smoke['objects'] or v!=smoke['objects'][k] for k,v in remaining.items()):raise CutoverError('FOUNDATION_FIXTURE_CHANGED')
-            for key in remaining:old.delete_object(Bucket=smoke['bucket'],Key=key)
-            target.api('DeleteBucket',id=smoke['bucket_id'])
+        retire_foundation_fixture(target,client(keys['old_target']),bound['foundation_smoke'])
     for key in {v['accessKeyId']:v for v in keys.values()}.values():
         try:current=target.api('GetKeyInfo',id=key['accessKeyId'],showSecretKey='true')
         except Exception as error:

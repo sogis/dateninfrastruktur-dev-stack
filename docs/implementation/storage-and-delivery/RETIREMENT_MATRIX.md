@@ -65,3 +65,8 @@ Legacy-Katalogimport inklusive seiner Tests; dessen Erhaltungsaussage wird durch
 die neue nichtleere Schema-/Storage-Übernahmeprobe ersetzt. Die historischen
 Importerbelege und der alte Quellcommit bleiben erhalten.
 Die jeweilige Phase ergänzt ihren eigenen konkreten Diff-/Test-/Reviewbeleg.
+
+G1-Review MINOR-1: Der verwaiste `ADMIN/scripts/test_operator_contract.py` des
+entfernten Legacyimports ist ebenfalls entfernt. Ersatz: G16 prueft den echten
+Schema-/Auditvertrag samt unbekanntem Vorgänger; G17 erhaelt den kontrollierten
+Dateipfad. Keine Modell-/Auditvertraege fuer das alte Importkommando reaktivieren.
