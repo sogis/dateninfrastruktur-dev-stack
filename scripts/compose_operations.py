@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Public lifecycle: one explicit Compose context, no legacy runtime or implicit seed."""
 import argparse,json,pathlib,sys,os,subprocess
-from compose_runtime import ROOT,ComposeContext,init_context,setup_context
+from compose_runtime import ROOT,ComposeContext,init_context,setup_context,read_env,render
 from consolidation import private_write
 ACTIVE=ROOT/'.runtime/active-compose.json'
 
@@ -38,14 +38,20 @@ def volume_bindings(c):
 def setup(c):
     # An existing management database is verified by the explicit tool, never
     # passed through initial role creation, ClickHouse seeding or model import.
+    if c.values.get('DI_STORAGE_BUCKET')!='ch.so.daten':raise RuntimeError('Explicit reviewed MA-G storage cutover required; normal setup never migrates existing storage')
     c.command(['up','--no-build','-d','--wait','--wait-timeout','240','postgres'])
     q="SELECT count(*) FROM pg_database WHERE datname='dateninfrastruktur_management';"
     count=c.command(['exec','-T','postgres','psql','-X','-q','-At','-U','postgres','-d','postgres','-c',q]).stdout.strip()
+    fresh=count=='0' and not (c.runtime/'setup-complete.json').exists()
     if (c.runtime/'setup-complete.json').exists():
         if count!='1':raise RuntimeError('Known management database is missing; retained setup must not create an empty replacement')
         c.command(['--profile','setup','run','--rm','--no-deps','management-setup','verify'])
     elif count=='0':setup_context(c)
     else:c.command(['--profile','setup','run','--rm','--no-deps','management-setup'])
+    if not fresh:
+        c.command(['up','--no-build','-d','--wait','--wait-timeout','120','garage'])
+        c.command(['--profile','setup','run','--rm','--no-deps','garage-setup'])
+        c.values=read_env(c.env_file);render(c)
     private_write(c.runtime/'setup-complete.json',{'instance':c.values['INSTANCE_ID'],'mode':'explicit-setup','volumes':volume_bindings(c)})
 
 def main():
@@ -57,6 +63,7 @@ def main():
     if a.build_only and a.action!='up':p.error('--build-only requires up')
     if a.action in ['init','setup','up','restart'] and (ROOT/'.runtime/active-recovery.json').exists():raise RuntimeError('An explicit rollback is active; target startup requires source/target reconciliation')
     c=resolve(a.env,a.project,a.action=='init')
+    if a.action in ['setup','up','restart'] and c.values.get('DI_STORAGE_BUCKET')!='ch.so.daten':raise RuntimeError('Explicit reviewed MA-G storage cutover required; no legacy startup fallback')
     if a.action in ['init','setup','up','restart'] and (c.runtime/'rollback-active.json').exists():raise RuntimeError('An explicit rollback is active for this target; startup is blocked')
     if a.action=='init':
         if not a.env and not a.project and not ACTIVE.exists():activate(c)

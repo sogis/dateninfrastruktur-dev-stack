@@ -1,11 +1,11 @@
 # MA-G Arbeitsstand
 
-MA-G0 unabhängig erstabgenommen; Dokumentationsdelta G00/G04 in Prüfung.
+MA-G0 unabhängig ABGENOMMEN; MA-G1 implementiert; unabhängiges Review läuft.
 
 | Phase | Status | Unabhängiger Nachweis |
 |---|---|---|
-| MA-G0 | DELTA_REVIEW | review/MA-G0-initial-accepted.md |
-| MA-G1 | NOT_STARTED | – |
+| MA-G0 | ABGENOMMEN | review/MA-G0-accepted.md |
+| MA-G1 | IN_REVIEW | review/MA-G1-request.md |
 | MA-G2 | NOT_STARTED | – |
 | MA-G3 | NOT_STARTED | – |
 | MA-G4 | NOT_STARTED | – |

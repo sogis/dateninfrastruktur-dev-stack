@@ -70,8 +70,10 @@ Standardadressen: Gateway/Portal/Admin/Jenkins `http://localhost:18081/`,
 Anlieferung `/anlieferung`, Jenkins `/jenkins/`, Keycloak `http://localhost:18080/`,
 Superset `http://localhost:18088/`, ClickHouse HTTP/native 18123/19000.
 Admin, Sodata, PostgreSQL, Garage und Origin haben keine direkten Hostports.
-Alte öffentliche Manifest-/Bucketpfade sind gesperrt. Bestehende Legacyobjekte
-bleiben im Speicher erhalten; es gibt keinen öffentlichen S3-Browser mehr.
+Alte öffentliche Manifest-/Bucketpfade sind gesperrt. Im MA-G-Ziel ist
+`ch.so.daten` der einzige private Anwendungsbucket. Origin liest ausschliesslich
+`downloads/` mit dem Reader; Webdienste erhalten keine Storagecredentials.
+Die tatsächliche lokale Umschaltung ist im aktiven WORK_QUEUE ausgewiesen.
 
 ## Operatoren und Tests
 
@@ -81,15 +83,16 @@ Eine Verteilung wird mit dem vorhandenen Javaoperator aktiviert:
 ./scripts/management/activate-distribution.sh <dataset-uuid> <revision> <distribution-uuid>
 ```
 
-Der Legacy-Metadatenimport bleibt explizit über
-`python3 scripts/compose_operator.py legacy-import <ausgewählte.xtf>` erreichbar.
-Standard ist Dry-run; Apply verlangt Auswahl sowie technischen Actor-Issuer/-Subject.
-Input und Bericht liegen privat im aktiven Runtimebereich. Kein neuer Publisher.
+Der frühere Legacy-Metadatenimport ist entfernt. Ein alter Storagebestand wird
+nicht durch normales Setup oder Start migriert: diese Befehle verlangen die
+geprüfte explizite MA-G1-Umstellung. Normales Setup erzeugt bei frischen Instanzen
+den privaten Bucket sowie getrennte Writer-/Readerkeys. Wiederholtes Setup
+behält vorhandene Keys, Secrets, Objekte und Fachdaten; unbekannte Zuordnungen
+oder fehlende bekannte Ressourcen verursachen einen geschlossenen Fehler.
 
-Der normale Start führt weder GRETL-Seed noch Erstpublikation oder Portalreload
-aus. Legacy-S3-Publikation im DB-Katalogmodus wird vor fachlichen Taskaktionen
-klar abgewiesen; lokale Legacyartefakte mit `-Ps3Publish=false` bleiben möglich.
-Der eigenständige ClickHouse-Ladepfad und seine Archive werden nicht umgebaut.
+Normalstart führt keine Schemaänderung, Seeds, Purges oder Portalreloads aus.
+Der CSV-Verarbeitungsweg wird erst nach den jeweils unabhängigen MA-G2–G4-
+Abnahmen freigeschaltet. Historische Ladebelege bleiben an ihren bisherigen Orten.
 
 `smoke-test.sh` liest nur den gewählten aktiven Kontext. Phasentests entstehen
 explizit isoliert über `test-consolidation.sh --phase MA-F1/MA-F2/MA-F3/MA-F4`.

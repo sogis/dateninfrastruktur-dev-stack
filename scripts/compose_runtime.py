@@ -51,9 +51,10 @@ def init_context(project,ports=None,test_fixture=False):
     if existing:raise RuntimeError('Existing project requires explicit planned migration, never fresh init')
     values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres-ma-f','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader','THEMEN_REPO_DIR':str(ROOT.parent/'dateninfrastruktur-themenrepo')}
     if ports:values.update({k:str(v) for k,v in ports.items()})
-    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_AUTHZ_PASSWORD','DI_PUBLIC_PASSWORD','DI_AUDIT_READER_PASSWORD','DI_MIGRATOR_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','GARAGE_DEFAULT_SECRET_KEY']:values[key]=secrets.token_hex(32)
-    values['GARAGE_DEFAULT_ACCESS_KEY']='GK'+secrets.token_hex(16)
-    values['GARAGE_ORIGIN_ACCESS_KEY']='';values['GARAGE_ORIGIN_SECRET_KEY']=''
+    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_AUTHZ_PASSWORD','DI_PUBLIC_PASSWORD','DI_AUDIT_READER_PASSWORD','DI_MIGRATOR_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET']:values[key]=secrets.token_hex(32)
+    values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
+    for kind in ['WRITER','READER']:
+        values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
     for key,tag in [('ADMIN_IMAGE','admin'),('TOOL_IMAGE','tools'),('TEST_TOOL_IMAGE','test-tools'),('POSTGRES_IMAGE','postgres'),('SODATA_IMAGE','sodata'),('SUPERSET_IMAGE','superset')]:values[key]='dateninfrastruktur-'+tag+':'+project
     # Reuse a real unchanged Jenkins image, never overwrite the user's :local tag.
     values['JENKINS_IMAGE']=subprocess.check_output(['docker','image','inspect','--format','{{.Id}}','dateninfrastruktur-jenkins:local'],text=True).strip()
@@ -64,10 +65,15 @@ def render(context):
     garage=(ROOT/'services/garage/garage.toml.template').read_text()
     for key in ['RPC_SECRET','ADMIN_TOKEN','METRICS_TOKEN']:garage=garage.replace('__'+key+'__',secrets.token_hex(32))
     if not (r/'garage.toml').exists():write_private(r/'garage.toml',garage)
-    def storage_conf(key,secret):
-        return '\n'.join(['[managed]','type = s3','provider = Other','env_auth = false','access_key_id = '+key,'secret_access_key = '+secret,'endpoint = http://garage:3900','region = garage','force_path_style = true','no_check_bucket = true',''])
-    write_private(r/'origin.conf',storage_conf(v['GARAGE_ORIGIN_ACCESS_KEY'],v['GARAGE_ORIGIN_SECRET_KEY']))
-    write_private(r/'operator.conf',storage_conf(v.get('GARAGE_MANAGED_ACCESS_KEY') or v['GARAGE_DEFAULT_ACCESS_KEY'],v.get('GARAGE_MANAGED_SECRET_KEY') or v['GARAGE_DEFAULT_SECRET_KEY']))
+    def storage_conf(kind):
+        key=v.get('DI_STORAGE_'+kind+'_ACCESS_KEY');secret=v.get('DI_STORAGE_'+kind+'_SECRET_KEY')
+        if not key or not secret:raise RuntimeError('Explicit dedicated storage '+kind.lower()+' credential missing; run reviewed setup')
+        return '\n'.join(['[storage]','type = s3','provider = Other','env_auth = false','access_key_id = '+key,'secret_access_key = '+secret,'endpoint = http://garage:3900','region = garage','force_path_style = true','no_check_bucket = true',''])
+    # Fresh init precedes explicit Garage setup. Never render an empty or more privileged fallback.
+    if v.get('DI_STORAGE_READER_ACCESS_KEY') or v.get('DI_STORAGE_READER_SECRET_KEY'):
+        write_private(r/'origin.conf',storage_conf('READER'))
+    if v.get('DI_STORAGE_WRITER_ACCESS_KEY') or v.get('DI_STORAGE_WRITER_SECRET_KEY'):
+        write_private(r/'operator.conf',storage_conf('WRITER'))
     realm=json.loads((ROOT/'services/keycloak/realm-template.json').read_text())
     if v['DI_TEST_FIXTURE']!='true':realm['users']=[]
     for user in realm['users']:user['credentials'][0]['value']=v['KEYCLOAK_DEMO_PASSWORD']
@@ -95,6 +101,9 @@ def setup_context(context):
     context.command(['up','-d','--wait','--wait-timeout','240','postgres','garage','clickhouse'])
     for service in ['postgres-init','management-setup','garage-setup','clickhouse-init']:
         context.command(['--profile','setup','run','--rm','--no-deps',service])
+        if service=='garage-setup':
+            context.values=read_env(context.env_file)
+            render(context)
     print('Explicit setup complete; no application demo seed')
 if __name__=='__main__':
     import argparse

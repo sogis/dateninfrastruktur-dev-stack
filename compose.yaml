@@ -39,14 +39,10 @@
       "command": [
         "/garage",
         "server",
-        "--single-node",
-        "--default-bucket"
+        "--single-node"
       ],
       "restart": "unless-stopped",
       "environment": {
-        "GARAGE_DEFAULT_ACCESS_KEY": "${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}",
-        "GARAGE_DEFAULT_SECRET_KEY": "${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}",
-        "GARAGE_DEFAULT_BUCKET": "ch.so.daten",
         "RUST_LOG": "warn"
       },
       "expose": [
@@ -123,17 +119,6 @@
         "THEMEN_REPO_BRANCH": "${THEMEN_REPO_BRANCH:-main}",
         "THEMEN_REPO_WRITE_BACK_ENABLED": "false",
         "ORG_GRADLE_PROJECT_gitWriteBack": "false",
-        "ORG_GRADLE_PROJECT_s3Publish": "true",
-        "ORG_GRADLE_PROJECT_publicationManifestUrl": "http://gateway:9080/ch.so.daten/current.json",
-        "ORG_GRADLE_PROJECT_catalogDownloadBase": "http://localhost:${GATEWAY_PORT:-18081}/ch.so.daten",
-        "ORG_GRADLE_PROJECT_portalReloadUrl": "",
-        "ORG_GRADLE_PROJECT_portalReloadToken": "",
-        "ORG_GRADLE_PROJECT_s3Endpoint": "http://garage:3900",
-        "ORG_GRADLE_PROJECT_s3Region": "garage",
-        "ORG_GRADLE_PROJECT_s3BucketName": "ch.so.daten",
-        "ORG_GRADLE_PROJECT_s3AccessKey": "${GARAGE_DEFAULT_ACCESS_KEY:?Run ./scripts/init.sh first}",
-        "ORG_GRADLE_PROJECT_s3SecretKey": "${GARAGE_DEFAULT_SECRET_KEY:?Run ./scripts/init.sh first}",
-        "ORG_GRADLE_PROJECT_s3Acl": "private",
         "ORG_GRADLE_PROJECT_catalogSourceType": "database",
         "ORG_GRADLE_PROJECT_reloadPortal": "false"
       },
@@ -354,7 +339,7 @@
       "command": [
         "serve",
         "webdav",
-        "managed:di-managed-private/downloads",
+        "storage:ch.so.daten/downloads",
         "--addr",
         ":8080",
         "--baseurl",
@@ -530,13 +515,14 @@
         "di.instance": "${INSTANCE_ID}"
       },
       "environment": {
-        "DI_MIGRATION_IMPORT_KEYS": "${DI_MIGRATION_IMPORT_KEYS:-false}",
-        "GARAGE_DEFAULT_ACCESS_KEY": "${GARAGE_DEFAULT_ACCESS_KEY:-}",
-        "GARAGE_DEFAULT_SECRET_KEY": "${GARAGE_DEFAULT_SECRET_KEY:-}",
-        "GARAGE_ORIGIN_ACCESS_KEY": "${GARAGE_ORIGIN_ACCESS_KEY:-}",
-        "GARAGE_ORIGIN_SECRET_KEY": "${GARAGE_ORIGIN_SECRET_KEY:-}",
-        "GARAGE_MANAGED_ACCESS_KEY": "${GARAGE_MANAGED_ACCESS_KEY:-}",
-        "GARAGE_MANAGED_SECRET_KEY": "${GARAGE_MANAGED_SECRET_KEY:-}"
+        "INSTANCE_ID": "${INSTANCE_ID}",
+        "DI_STORAGE_BUCKET": "${DI_STORAGE_BUCKET}",
+        "DI_STORAGE_ENDPOINT": "${DI_STORAGE_ENDPOINT}",
+        "DI_STORAGE_REGION": "${DI_STORAGE_REGION}",
+        "DI_STORAGE_WRITER_ACCESS_KEY": "${DI_STORAGE_WRITER_ACCESS_KEY}",
+        "DI_STORAGE_WRITER_SECRET_KEY": "${DI_STORAGE_WRITER_SECRET_KEY}",
+        "DI_STORAGE_READER_ACCESS_KEY": "${DI_STORAGE_READER_ACCESS_KEY}",
+        "DI_STORAGE_READER_SECRET_KEY": "${DI_STORAGE_READER_SECRET_KEY}"
       }
     },
     "clickhouse-init": {
@@ -583,9 +569,7 @@
         "DI_OPERATOR_ISSUER": "urn:di:operator",
         "DI_OPERATOR_SUBJECT": "managed-delivery",
         "DI_RCLONE_EXECUTABLE": "/usr/local/bin/rclone",
-        "DI_RCLONE_CONFIG": "/runtime/origin.conf",
-        "DI_PRIVATE_STORAGE_PROFILE": "managed",
-        "DI_PRIVATE_STORAGE_REMOTE": "managed:di-managed-private"
+        "DI_RCLONE_CONFIG": "/runtime/origin.conf"
       },
       "entrypoint": [
         "java",
@@ -934,14 +918,22 @@
       "restart": "no",
       "entrypoint": [
         "python3",
-        "/opt/stack-tools/migration/storage.py",
-        "verify-target"
+        "/opt/stack-tools/setup_garage.py"
       ],
       "volumes": [
         "${RUNTIME_DIR}:/runtime:ro"
       ],
       "labels": {
         "di.instance": "${INSTANCE_ID}"
+      },
+      "command": [
+        "verify"
+      ],
+      "environment": {
+        "INSTANCE_ID": "${INSTANCE_ID}",
+        "DI_STORAGE_BUCKET": "${DI_STORAGE_BUCKET}",
+        "DI_STORAGE_ENDPOINT": "${DI_STORAGE_ENDPOINT}",
+        "DI_STORAGE_REGION": "${DI_STORAGE_REGION}"
       }
     },
     "fixture-namespace-parent": {

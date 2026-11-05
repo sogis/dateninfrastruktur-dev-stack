@@ -6,7 +6,7 @@ Java25/Boot/Cayenne bleibt Standard. Kein HA und kein separater Managementlaunch
 
 **Betrieb:** [operations.md](docs/operations.md). **Bestandsübernahme und Rückfall:**
 [migration-ma-f.md](docs/migration-ma-f.md). **Aktueller Auftrag/Phasenstand:**
-[WORK_QUEUE.md](docs/implementation/compose-consolidation/WORK_QUEUE.md).
+[WORK_QUEUE.md](docs/implementation/storage-and-delivery/WORK_QUEUE.md).
 Historische Grundinstallations-/MA-A–E-Berichte bleiben unverändert erhalten.
 
 Nach ausdrücklichem Setup oder überprüfter Migration:
@@ -22,8 +22,9 @@ Nach ausdrücklichem Setup oder überprüfter Migration:
 Portal, Administration und Jenkins: http://localhost:18081/; Anlieferung
 `/anlieferung`, Jenkins `/jenkins/`. Keycloak: http://localhost:18080/;
 Superset: http://localhost:18088/. Alle URLs sind im aktiven privaten Kontext
-konfiguriert. Alte öffentliche S3-/Manifestpfade sind gesperrt; ihre Daten bleiben
-aufbewahrt. Normalstart enthält keine Demo-Grants, Seedpublikation oder Reloads.
+konfiguriert. Alte öffentliche S3-/Manifestpfade sind gesperrt. Der ausdrücklich
+freigegebene lokale Altinhalt von `ch.so.daten` wird bei der geprüften MA-G1-
+Umstellung entfernt; registrierte private Dateien bleiben bytegleich erhalten. Normalstart enthält keine Demo-Grants, Seedpublikation oder Reloads.
 
 Eine bestehende Installation wird kontrolliert migriert und niemals durch leere
 Daten ersetzt. Die tatsächliche lokale Umschaltung ist gesondert im Phasenstand

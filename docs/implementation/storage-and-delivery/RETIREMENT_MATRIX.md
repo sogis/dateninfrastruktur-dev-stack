@@ -12,7 +12,7 @@ nicht verändert. Die Phasenspalte ist ein Umsetzungsauftrag, kein Erledigt-Nach
 | ADMIN models/SO_AGI_DataInfrastructure_Catalog_20261104.ili Distribution | ili2pg/Mapping | Neues Catalogmodell ohne storageProfile/legacyAccessUrl | G16/G21 | G1 |
 | ADMIN src/main/java/ch/so/agi/dateninfrastruktur/admin/catalog/DeliveryRegistrationService.java | Operator/Backend | Profilfreie Registrierung; später einziger validierter CSVabschluss | G16/G25/G28/G48 | G1/G2/G4 |
 | ADMIN src/main/java/ch/so/agi/dateninfrastruktur/admin/catalog/RclonePrivateObjectVerifier.java | Operator | Fester Key/Endpoint, keine Profilauswahl | G17/G18 | G1 |
-| ADMIN scripts/legacy_import.py und Gradle legacyImport | One-shot Herkunftsimport | Nach verifiziertem Cutover aus aktivem Tool-/Imagepfad entfernen | G56 | G5 |
+| ADMIN scripts/legacy_import.py und Gradle legacyImport | One-shot Herkunftsimport | MA-F-Herkunftsübernahme abgeschlossen: entfernen; neues Storageupgrade erhält bestehende DBobjekte | G14/G16/G56 | G1 |
 | ADMIN scripts/managed_runtime.py, identity_runtime.py, managed_control.py | historische Launcher | Aktive Aliase entfernen, generische Schematools behalten | G50/G56 | G5 |
 | PUBLIC src/main/java/ch/so/agi/datenportal/catalog/importxtf/ | CatalogImportConfiguration | Entfernen; ausschliesslich JdbcCatalogRepository | G29/G56/G57 | G5 |
 | PUBLIC catalog/service/CatalogSnapshotLoader.java, CatalogSnapshotBuilder.java, CatalogReloadService.java (unter src/main/java/ch/so/agi/datenportal/) | Snapshot-/Reloadbetrieb | Entfernen, DB-Query/VMs behalten | G56/G57 | G5 |
@@ -60,5 +60,8 @@ Grants/Decisions und alle 208 vorhandenen Auditzeilen bleiben erhalten.
 
 ## Nachweise
 
-G0 inventarisiert, entfernt aber noch keinen Produktpfad und keine Nutzerdaten.
+G0 inventarisiert ohne Produkt-/Datenänderung. G1 entfernt den abgeschlossenen
+Legacy-Katalogimport inklusive seiner Tests; dessen Erhaltungsaussage wird durch
+die neue nichtleere Schema-/Storage-Übernahmeprobe ersetzt. Die historischen
+Importerbelege und der alte Quellcommit bleiben erhalten.
 Die jeweilige Phase ergänzt ihren eigenen konkreten Diff-/Test-/Reviewbeleg.
