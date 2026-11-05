@@ -70,3 +70,8 @@ G1-Review MINOR-1: Der verwaiste `ADMIN/scripts/test_operator_contract.py` des
 entfernten Legacyimports ist ebenfalls entfernt. Ersatz: G16 prueft den echten
 Schema-/Auditvertrag samt unbekanntem Vorgänger; G17 erhaelt den kontrollierten
 Dateipfad. Keine Modell-/Auditvertraege fuer das alte Importkommando reaktivieren.
+
+G1 nach lokalem verifiziertem Cutover: `scripts/ingestion_cutover_g1.py` entfernt;
+`services/garage/cutover-g1.py` und `cutover-operator-g1.py` aus aktivem Build/API
+entfernt. Eng benannte Kopien unter `tests/ingestion/retired/` sind ausschliesslich
+synthetische Regressionfixtures, kein Runtime-Modus. Docker-COPY entfernt.

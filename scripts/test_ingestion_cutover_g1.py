@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """G14/G15/G17/G19 on the canonical topology and synthetic PG/S3 state."""
 import hashlib,json,pathlib,secrets,subprocess,sys
-from ingestion_cutover_g1 import probe
+from ingestion_probe import probe
 from compose_runtime import ROOT,init_context,ComposeContext,write_private,update_context
 from compose_operations import build,setup
 from test_consolidation_f1 import reserve_ports,cleanup
@@ -17,6 +17,7 @@ def run():
         return p.stdout
     try:
         build(c);setup(c);c=ComposeContext(c.env_file)
+        write_private(c.runtime/'cutover_g1.py',(ROOT/'tests/ingestion/retired/cutover_g1.py').read_text())
         prefix='maf-f4-g1-'+secrets.token_hex(4)
         command(['--profile','test','run','--rm','--no-deps','-e','DI_TEST_DATASET_PREFIX='+prefix,'test-fixture'])
         garage=json.loads(subprocess.check_output(['docker','inspect',command(['ps','-q','garage']).strip()]))[0]
@@ -32,7 +33,7 @@ def run():
         if operator:
             private=c.runtime/'ma-g1-cutover';private.mkdir(mode=0o700)
             write_private(private/'host-binding.json',json.dumps({'binding':binding}))
-            write_private(c.runtime/'cutover-operator-g1.py',(ROOT/'services/garage/cutover-operator-g1.py').read_text())
+            write_private(c.runtime/'cutover-operator-g1.py',(ROOT/'tests/ingestion/retired/cutover_operator_g1.py').read_text())
             source=json.loads((c.runtime/'g1-source-key.json').read_text())
             c=update_context(c,{prefix+'_'+field:source[name] for prefix in ['GARAGE_DEFAULT','GARAGE_MANAGED','GARAGE_ORIGIN'] for field,name in [('ACCESS_KEY','accessKeyId'),('SECRET_KEY','secretAccessKey')]})
             def operation(action):

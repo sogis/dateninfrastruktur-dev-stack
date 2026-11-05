@@ -4,7 +4,7 @@ Removed from active distribution after the reviewed local operation.
 import json,os,pathlib,sys,hashlib,re
 import boto3
 from botocore.config import Config
-sys.path[:0]=['/opt/stack-tools','/opt/admin/scripts']
+sys.path[:0]=['/runtime','/opt/stack-tools','/opt/admin/scripts']
 from setup_garage import StorageTarget,GarageProvisioner,write_secrets_atomically,encode
 from cutover_g1 import PrivateBucketCutover,CutoverError,digest,TARGET,SOURCE,inventory,bind_foundation_fixture,retire_foundation_fixture
 from management_db import sql

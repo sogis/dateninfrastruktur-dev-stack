@@ -3,7 +3,7 @@ import io,json,os,pathlib,sys,uuid,hashlib,zipfile,copy,urllib.request,urllib.er
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-sys.path[:0]=['/opt/stack-tools','/opt/admin/scripts']
+sys.path[:0]=['/runtime','/opt/stack-tools','/opt/admin/scripts']
 from setup_garage import load_storage_target,write_secrets_atomically
 from cutover_g1 import PrivateBucketCutover,CutoverError,object_info,inventory,digest,SOURCE,TARGET,CANARY,CANARY_BYTES
 from management_db import sql

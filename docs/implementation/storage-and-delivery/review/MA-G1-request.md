@@ -7,48 +7,48 @@
 - PLUGIN base: `5535624776f3c1958192f45782f8724c08b31dd7`
 - TOPICS base: `7c83135d69ada644e6e9a0352c3eb1308f798861`
 
-## Delta nach unabhängigem ABGENOMMEN
+## Abschlussdelta nach tatsächlichem lokalem Storagecutover
 
-Vorheriger akzeptierter Lauf: `20261105T160802Z`.
-Report-SHA256: `4d71d770e172fd5e82930d0f85070dfca33f27abbcb6b09755477a2e4e1ec62c`.
+Vollständige unabhängige Erstabnahme: `20261105T160802Z`, Report-SHA256
+`4d71d770e172fd5e82930d0f85070dfca33f27abbcb6b09755477a2e4e1ec62c`.
+Die optionale key-lokale Foundationkorrektur wurde danach separat unabhängig
+akzeptiert: `20261105T162915Z`, Report-SHA256
+`169cbf830d11a7f72be6eeb29c1833ad0fcf29868d414f07f65eec4d2eeb5900`.
 
-Nach der Codeabnahme hat die **lesende** lokale Planvorbereitung korrekt vor
-jeder Mutation gestoppt: Der eindeutig bekannte Foundation-Smoke-Bucket hat
-keinen globalen Alias. Er wurde durch den ursprünglichen S3-CreateBucket als
-key-lokaler Alias erzeugt. Es gab keine Löschung, kein Schema-Upgrade und kein
-Stoppen eines Nutzerdienstes. Der Download-Vorhervergleich ist erfolgreich.
+Nach den beiden Abnahmen wurde der ausdrücklich beauftragte **tatsächliche**
+lokale Storagecutover ausgeführt und verifiziert. Bereinigter Bericht:
+`LOCAL_STORAGE_CUTOVER.md`. Original-ENV/Dateien/Tokens bleiben privat und sind
+nicht Teil des Handoffs. Ein eigener Test-Compose ist nicht dieser lokale Nachweis.
 
-Änderung ausschliesslich am optionalen, einmaligen Foundation-Fixtureschritt:
-Key-lokalen Alias über exakt den inventarisierten Defaultkey auflösen, dann
-vollständige Bucket-ID und exklusive Aliaszuordnung binden. Keine globale
-Namensfallbacksuche. Read-back-SHA/Grösse und genau ein bekanntes Objekt bleiben
-Pflicht. Beim Retire ausschliesslich die gebundene ID; unbekannte Objekte und
-Alias-Neuzuordnung verursachen Fehler ohne Löschung. Nach verlorener Delete-
-Bestätigung ist eine fehlende alte ID nur lesend prüfbar.
+Änderung: Einmaligen Hostoperator löschen, Engine/Tooloperator ausschliesslich als
+eng benannte synthetische Regressionfixtures unter `tests/ingestion/retired/`
+behalten. Docker-COPY entfernen; normales Toolimage enthält die Engine nicht mehr.
+Testtreiber kopieren benötigte Fixturemodule nur in eigene private Test-Runtimes.
+Lesende Browserprobe als Testhilfe ohne mutierende Lifecycle-API extrahieren.
+README, Retirementmatrix und Status spiegeln den abgeschlossenen lokalen Schritt.
 
-Frisch auszuführen: **G14, G19** mit
+G14/G19 frisch prüfen:
 
 ```sh
 python3 scripts/test_ingestion_foundation_g1.py
 ```
 
-Der echte Garage-Test prüft key-lokale Auflösung, tatsächliche Objektbytes,
-einen separaten gleichnamigen globalen Bucket als unberührte Kontrolle,
-unbekanntes Objekt vor Retirement, erfolgreichen und wiederholten Abschluss,
-sowie eine Aliasneuzuordnung mit weiterhin erhaltenen neuen Bytes.
-Mindestens eine eigene relevante Gegenprobe wirklich ausführen.
+Prüft normales tatsächliches Toolimage ohne Cutovermodul sowie dieselbe reale
+key-lokale Foundation-/GET-Hash-/Unknownobjekt-/Globalnamenkontroll-/Retire-/
+Aliasneuzuordnungsprobe über die testweise kopierte unveränderte Engine.
+Zusätzlich statisch keine aktive Host-/Compose-/Operatorreferenz auf die
+entfernten Einstiege; keine vorhandene Legacyimport-Testreferenz reaktivieren.
+Eigene Gegenprobe ausführen, z.B. frühzeitige Verweigerung eines entfernten
+Operator-/Normalstart-Migrationspfads oder wirksame Nichtverfügbarkeit im Image.
 
-G10–G13/G15–G18 aus dem gebundenen akzeptierten Bericht einzeln übernehmen,
-sofern der Reviewer die Nichtbetroffenheit bestätigt: Provisioner, Normalsetup,
-allgemeine private Copy-/Purge-/Resumezustände, INTERLIS/SQL/ORM/Fingerprint,
-Browser-/Grant-/Downloadkette, Container-Recreate und Credentials sind unverändert.
-Der bestehende allgemeine Operator-Test ohne Foundationquelle ist unverändert;
-keine erneute komplette Browser-/Schema-/Cutoversuite allein für den lokalen Alias.
+G10–G13/G15–G18 werden einzeln aus der vollständigen **ersten** Abnahme gebunden
+übernommen: dort sind diese Checks tatsächlich EXECUTED, kein blosses Weiterreichen
+eines CARRIED-Urteils. Normales Garage-Provisioning, allgemeine Copy-/Purge-/
+Resumezustände, INTERLIS/SQL/ORM/Fingerprint, Browser-/Grant-/Downloadkette sowie
+Container-Recreate/Credentials sind unverändert. Zwischenzeitliche Änderungen
+betreffen nur den separat bereits akzeptierten optionalen Fixtureschritt,
+Testablage/aktive Retirementgrenzen und Dokumentation. Reviewer muss diese
+Nichtbetroffenheit an beiden Diffs selbst bestätigen. Keine pauschale Wiederholung
+aller Browser-/Schema-/Cutoversuiten für das Entfernen eines abgeschlossenen Tools.
 
-Zusätzlich nur README-Korrektur zum aktiven Auftrag/entfernten Legacyimport und
-Entfernung des vom Reviewer benannten verwaisten Tests `test_operator_contract.py`.
-Dieser hatte keine aktive Harness-/Gradle-Referenz und prüfte ausschliesslich das
-bereits entfernte Importkommando. Ersatz ist in der Retirementmatrix genannt.
-
-Der tatsächliche lokale Cutover bleibt bis zur Annahme dieses Deltas geschlossen.
-Der eingefrorene vorherige G1-Stand und alle ursprünglichen Belege bleiben erhalten.
+Die nächste Phase bleibt bis zur aktuellen unabhängigen Abschlussabnahme gesperrt.

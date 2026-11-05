@@ -14,6 +14,8 @@ def run():
         command(['build','postgres','management-tool-build'])
         command(['up','--no-build','-d','--wait','--wait-timeout','120','garage'])
         command(['--profile','setup','run','--rm','--no-deps','garage-setup']);c=ComposeContext(c.env_file)
+        command(['--profile','setup','run','--rm','--no-deps','--entrypoint','python3','management-setup','-c',"from pathlib import Path; assert not Path('/opt/stack-tools/cutover_g1.py').exists(); print('PASS G19 normal tool image has no one-shot cutover module')"])
+        write_private(c.runtime/'cutover_g1.py',(ROOT/'tests/ingestion/retired/cutover_g1.py').read_text())
         write_private(c.runtime/'foundation-fixture.py',(ROOT/'tests/ingestion/foundation-fixture.py').read_text())
         names=['DI_TEST_FIXTURE','COMPOSE_PROJECT_NAME','INSTANCE_ID','DI_STORAGE_BUCKET','DI_STORAGE_ENDPOINT','DI_STORAGE_REGION']
         print(command(['--profile','setup','run','--rm','--no-deps',*[v for name in names for v in ['-e',name]],'--entrypoint','python3','management-setup','/runtime/foundation-fixture.py']).strip())

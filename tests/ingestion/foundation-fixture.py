@@ -2,7 +2,7 @@
 import hashlib,os,pathlib,sys
 import boto3
 from botocore.config import Config
-sys.path[:0]=['/opt/stack-tools']
+sys.path[:0]=['/runtime','/opt/stack-tools']
 from setup_garage import load_storage_target
 from cutover_g1 import bind_foundation_fixture,retire_foundation_fixture,CutoverError,inventory
 if os.environ.get('DI_TEST_FIXTURE')!='true' or not os.environ['COMPOSE_PROJECT_NAME'].startswith('mag-g1-foundation-'):raise RuntimeError('Synthetic owned project required')
