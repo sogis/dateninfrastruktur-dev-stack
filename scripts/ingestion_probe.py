@@ -9,4 +9,3 @@ def probe(c,mode):
     p=subprocess.run(['./gradlew','--no-daemon','integrationTest','--tests','*StorageCutoverProbeIT'],cwd=ROOT.parent/'dateninfrastruktur-admin',env=env,capture_output=True,text=True)
     write_private(c.runtime/'ma-g1-cutover'/('probe-'+mode+'.log'),c.redact(p.stdout+p.stderr))
     if p.returncode:raise RuntimeError('Existing same-token download probe failed; source retained; private probe log')
-

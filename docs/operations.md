@@ -77,11 +77,17 @@ Die tatsächliche lokale Umschaltung ist im aktiven WORK_QUEUE ausgewiesen.
 
 ## Operatoren und Tests
 
-Eine Verteilung wird mit dem vorhandenen Javaoperator aktiviert:
+Neue CSV-Versionen werden ausschliesslich über den gebundenen, validierten
+Ingestionabschluss angenommen. Die manuelle Versions-/Dateiaktivierung wurde
+entfernt. Der explizite Operator vergibt den ersten `manage_submitters`-Auftrag:
 
 ```sh
-./scripts/management/activate-distribution.sh <dataset-uuid> <revision> <distribution-uuid>
+python3 scripts/compose_operator.py bootstrap-submitters <private-request.json>
 ```
+
+Scope-/Dateivertrag und aktueller Phasenstand:
+[MA-G2 Backend](implementation/storage-and-delivery/MA-G2_BACKEND.md).
+Kein Aufruf beim Normalstart und keine automatische Rechtevergabe.
 
 Der frühere Legacy-Metadatenimport ist entfernt. Ein alter Storagebestand wird
 nicht durch normales Setup oder Start migriert: diese Befehle verlangen die

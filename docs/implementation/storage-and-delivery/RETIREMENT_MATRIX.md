@@ -75,3 +75,15 @@ G1 nach lokalem verifiziertem Cutover: `scripts/ingestion_cutover_g1.py` entfern
 `services/garage/cutover-g1.py` und `cutover-operator-g1.py` aus aktivem Build/API
 entfernt. Eng benannte Kopien unter `tests/ingestion/retired/` sind ausschliesslich
 synthetische Regressionfixtures, kein Runtime-Modus. Docker-COPY entfernt.
+
+## Implementierungsstand MA-G2
+
+Die manuelle Versionsregistrierung und Dateiverifikation/-aktivierung sind bereits
+in G2 aus `DeliveryRegistrationService` entfernt. Der Service ist nun der einzige
+validierte CSV-Annahmekern. `RclonePrivateObjectVerifier`, `ManagedDeliveryCommand`
+und `scripts/management/activate-distribution.sh` sind gelöscht; `compose_operator.py`
+bedient ausschliesslich den expliziten `manage_submitters`-Bootstrap. Normale
+Web-/Toolimages enthalten keinen manuellen Dateianahmepfad. Historische
+unknown/prepared-Fixtures bleiben nur im ausdrücklichen Testprofil; die
+Vorgänger-Upgradetests bauen G1 aus seinen gepinnten Commits. Tatsächliche
+CSV-/Format-/Storage-/CH-Verifikation und die Projektion folgen in G4.

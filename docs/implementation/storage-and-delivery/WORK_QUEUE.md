@@ -1,12 +1,12 @@
 # MA-G Arbeitsstand
 
-MA-G0 unabhängig ABGENOMMEN; MA-G1 Code-/Migrationsabnahme und lokale Umstellung abgeschlossen; abschliessendes Retirementdelta im Review.
+MA-G0/G1 unabhängig ABGENOMMEN; lokaler Storagecutover verifiziert; MA-G2 implementiert, unabhängiges Review ausstehend.
 
 | Phase | Status | Unabhängiger Nachweis |
 |---|---|---|
 | MA-G0 | ABGENOMMEN | review/MA-G0-accepted.md |
-| MA-G1 | IN_REVIEW | review/MA-G1-request.md |
-| MA-G2 | NOT_STARTED | – |
+| MA-G1 | ABGENOMMEN | review/MA-G1-accepted.md |
+| MA-G2 | AWAITING_INDEPENDENT_REVIEW | review/MA-G2-request.md |
 | MA-G3 | NOT_STARTED | – |
 | MA-G4 | NOT_STARTED | – |
 | MA-G5 | NOT_STARTED | – |
