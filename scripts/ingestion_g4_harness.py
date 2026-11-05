@@ -1,5 +1,5 @@
 """Isolated G4 helpers. Commands and credentials are fixed to the owned fixture."""
-import base64,hashlib,hmac,json,os,pathlib,re,shutil,urllib.error,urllib.parse,urllib.request,uuid
+import base64,copy,hashlib,hmac,json,os,pathlib,re,shutil,urllib.error,urllib.parse,urllib.request,uuid
 from ingestion_g3_harness import ADMIN,ROOT,compose,owned,shell,subject,target_sql,wait_for,write_private
 from provision_ingestion_oidc import provision
 
@@ -77,8 +77,9 @@ def get(c,path,token=None):
 def storage(c,key):
     owned(c);assert re.fullmatch(r'(?:downloads|ingestion)/[a-z0-9./-]+',key) and '..' not in key
     # Base64 only for safe binary transport over the text Compose adapter.
-    p=c.command(['--profile','setup','run','--rm','--no-deps','-T','--entrypoint','sh','management-setup','-ec','rclone --config /runtime/operator.conf copyto "$1" /tmp/data --retries 1 >/dev/null && base64 /tmp/data','fixture','storage:ch.so.daten/'+key],check=False)
-    if p.returncode:raise AssertionError('Private fixture object was not readable using the bound storage writer')
+    p=c.command(['--profile','setup','run','--rm','--no-deps','-T','--entrypoint','sh','management-setup','-ec','rclone --config /runtime/operator.conf copyto "$1" /tmp/data --retries 1 >/dev/null; test -f /tmp/data || exit 41; base64 /tmp/data','fixture','storage:ch.so.daten/'+key],check=False)
+    if p.returncode==41:raise AssertionError(f'Private fixture read produced no file for {key}')
+    if p.returncode:raise AssertionError(f'Private fixture read for {key} failed with exit {p.returncode}')
     return base64.b64decode(p.stdout)
 
 def complete_again(c,row,change=None):
@@ -90,7 +91,10 @@ def complete_again(c,row,change=None):
     with urllib.request.urlopen(urllib.request.Request(issuer+'/protocol/openid-connect/token',data=form),timeout=15) as response:token=json.loads(response.read(32769))['access_token']
     names={'input':'INPUT_VERIFIED','incoming':'INCOMING_VALIDATED','snapshot':'SNAPSHOT_VALIDATED','candidate':'CANDIDATE_VERIFIED','outputs':'ARTIFACTS_VERIFIED'}
     manifest={'schemaVersion':1,'submissionId':row['id'],'executionId':id,'fence':binding['fence'],'planDigest':binding['plan_digest'],**{k:row['evidence'][v] for k,v in names.items()}}
-    if change:change(manifest)
+    if change:
+        # Mutate the attack request only; later history checks reuse the evidence.
+        manifest=copy.deepcopy(manifest)
+        change(manifest)
     p=json.dumps({'id':id,'token':token,'body':{'binding':{'fence':binding['fence'],'leaseSecret':secret},'manifest':manifest}})
     program="""import json,sys,uuid,urllib.request,urllib.error
 x=json.load(sys.stdin)

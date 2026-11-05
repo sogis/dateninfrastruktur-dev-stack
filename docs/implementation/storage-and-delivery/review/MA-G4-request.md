@@ -13,11 +13,22 @@ Testdateien verändern. Die frühere MA-G3-Abnahme ist gebunden und
 `MA-G3-accepted.md` nennt ihren nicht blockierenden ZIP-Hinweis. Der G4-
 Kandidat härtet die Vorprüfung vor der Aktivierung des echten Prozessors.
 
+Der erste unabhängige Lauf `20261105T221949Z` endete mit `NACHARBEIT`.
+Er bestätigte intakte gespeicherte Objekte separat, aber der integrierte
+Lauf brach beim Historiennachweis ab. Der G45-Negativtest änderte durch
+eine flache Kopie den Dateischlüssel des späteren G41-Nachweises. Jetzt
+ändert er nur den manipulierten HTTP-Request; der Speicherlesetest meldet
+eine fehlende Datei ausdrücklich. Der Queue-Unit-Test entfernt seine
+Testaufträge noch unter dem Queue-Lock, damit sein Jenkins-Testverzeichnis
+nicht mit einem anlaufenden Build kollidiert. Seit dem ersten Review hat
+sich kein Produktcode geändert. Die Teilbeobachtungen des abgebrochenen
+Laufs sind keine übernehmbaren PASS-Nachweise. Den G4-Harness deshalb bis
+zum Ende neu ausführen; keine abgeschlossenen MA-G0–G3-Suiten wiederholen.
+
 Ausführbare Nachweise im isolierten STACK:
 
 ```sh
 python3 scripts/test_ingestion_processing_g4.py
-python3 scripts/test_ingestion_backend_g2.py
 ```
 
 Der erste Harness baut das tatsächliche HPI, das vollständige Runnerbundle
@@ -30,10 +41,11 @@ unterbricht eigene ClickHouse-, Garage- und Admin-Abhängigkeiten, prüft die
 verlorene Annahmeantwort mit einem echten wiederholten HTTP-Request und
 validiert den nachfolgenden aktuellen SQL-Stand. Er kontrolliert die laufenden
 CPS-Dateien auch auf die neu hinzugekommenen S3-/CH-Credentials.
-Nach Archivierung bleibt
-die Historie erhalten. Der zweite Harness prüft die betroffenen Rechte-,
-Fence-, Transaktions- und Annahmeverträge mit eigener PG-Datenbank; dessen
-synthetische Attestierungen gelten nicht als End-to-End-Verarbeitungsnachweis.
+Nach Archivierung bleibt die Historie erhalten. Der gezielte unabhängige
+G4-Lauf prüft die tatsächlich betroffenen Rechte-, Fence-, Transaktions- und
+Annahmeverträge mit echten Artefakten. Der separaten Entwicklerregression
+`test_ingestion_backend_g2.py` dienen synthetische Attestierungen; diese
+sind kein End-to-End-Verarbeitungsnachweis.
 
 Die vollständigen Laufzeitbelege liegen nur unter dem eigenen
 `.runtime/mag-g4-*`. Keine Originalinstanz, keine Nutzerdumps, keine echten
