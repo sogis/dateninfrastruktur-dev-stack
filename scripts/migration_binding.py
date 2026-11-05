@@ -3,11 +3,11 @@ import hashlib,pathlib
 from compose_runtime import ROOT
 
 def artifact_hashes():
-    paths=[ROOT/'compose.yaml',ROOT/'scripts/compose_runtime.py']
-    for pattern in ['scripts/migration*.py','services/apisix/*','services/garage/*','services/postgres/Dockerfile','services/postgres/compatibility/*','services/migration/*']:
+    paths=[ROOT/'compose.yaml',*[ROOT/'scripts'/name for name in ['compose_runtime.py','compose_operations.py','compose_operator.py','consolidation.py']]]
+    for pattern in ['scripts/migration*.py','services/apisix/*','services/garage/*','services/postgres/Dockerfile','services/postgres/init/*','services/postgres/compatibility/*','services/migration/*']:
         paths.extend(p for p in ROOT.glob(pattern) if p.is_file())
     admin=ROOT.parent/'dateninfrastruktur-admin'
-    paths+=[admin/'Dockerfile',admin/'scripts/principal_identity_migration.py',admin/'scripts/setup_explicit.py',admin/'scripts/upgrade_contract.py',admin/'db/persistence-contract.properties']
+    paths+=[admin/'Dockerfile',*[admin/'scripts'/name for name in ['management_db.py','database_target.py','audit_setup.py','contract_fingerprint.py','persistence_contract.py','verify_physical_mapping.py']],admin/'scripts/principal_identity_migration.py',admin/'scripts/setup_explicit.py',admin/'scripts/upgrade_contract.py',admin/'db/persistence-contract.properties']
     paths.extend((admin/'db/migrations').glob('*.sql'))
     return {str(p.relative_to(ROOT.parent)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
 

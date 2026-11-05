@@ -22,7 +22,7 @@ def restart_order(states,modes):
         if not progress:raise RuntimeError('OWNERSHIP_MISMATCH: cyclic source namespace dependency')
     return ordered
 
-def rollback(plan,context,journal):
+def rollback(plan,context,journal,before_stop=None):
     if journal.get('status')=='RETIRED':raise RuntimeError('ROLLBACK_UNSAFE: retired resources require explicit archived reconstruction')
     if journal.get('database_restored'):
         expected=journal.get('target_management_baseline')
@@ -34,6 +34,7 @@ def rollback(plan,context,journal):
     for state in states:verify_source(state['ref'],plan['scope'])
     modes={state['ref']['id']:inspect(state['ref']['id'])['HostConfig']['NetworkMode'] for state in states}
     ordered=restart_order(states,modes)
+    if before_stop:before_stop()
     context.command(['stop'])
     for state in ordered:
         cid=verify_source(state['ref'],plan['scope']);running=inspect(cid)['State']['Running']
@@ -84,6 +85,10 @@ class Migration:
         self.assert_target_binding()
         from compose_runtime import read_env
         from migration_db import verify_source
+        if action=='verify-target':
+            config=self.root/'storage.json'
+            if self.journal.get('storage_config_sha256')!=digest(config):raise RuntimeError('SOURCE_CHANGED: retained storage endpoint/credential binding')
+            self.context.command(['--profile','tools','run','--rm','--no-deps','storage-verify']);return
         ref=self.plan['sources']['management_garage'];raw=inspect(verify_source(ref,self.plan['scope']));secret=self.plan['source_storage']
         if digest(secret['path'])!=secret['sha256']:raise RuntimeError('SOURCE_CHANGED: storage credential reference')
         values=json.loads(pathlib.Path(secret['path']).read_text()) if secret['format']=='json' else read_env(secret['path'])
@@ -92,6 +97,7 @@ class Migration:
         target_name=self.context.project+'-garage-1'
         # Exact private config; source credentials are never command arguments or report content.
         private_write(self.root/'storage.json',{'bucket':'di-managed-private','source':{'endpoint':'http://'+raw['Name'].lstrip('/')+':3900','access_key':values[secret['access_field']],'secret_key':values[secret['secret_field']]},'target':{'endpoint':'http://'+target_name+':3900','access_key':self.context.values['GARAGE_MANAGED_ACCESS_KEY'],'secret_key':self.context.values['GARAGE_MANAGED_SECRET_KEY']}})
+        self.journal['storage_config_sha256']=digest(self.root/'storage.json')
         self.context.command(['--profile','migration','run','--pull','never','--rm','--no-deps','migration-storage',action])
     def verify_sources(self):
         from migration_backup import verify_keycloak_source
@@ -157,4 +163,5 @@ class Migration:
         print('Target verified privately: logical restore, current identity bindings, immutable old audit and exact object bytes/metadata; not yet cut over')
     def rollback(self):
         self.assert_target_binding()
-        rollback(self.plan,self.context,self.journal);self.save()
+        from migration_lifecycle import rollback as lifecycle_rollback
+        lifecycle_rollback(self)

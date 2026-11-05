@@ -15,6 +15,22 @@ def bound_file(ref,destination):
     if len(values)!=1 or not pathlib.Path(values[0]).is_file():raise RuntimeError('OWNERSHIP_MISMATCH: missing source configuration bind')
     return pathlib.Path(values[0])
 
+def jenkins_jobs(port,password,require_idle=False):
+    import base64,urllib.request
+    request=urllib.request.Request('http://localhost:'+str(port)+'/jenkins/api/json?tree=jobs[name]',headers={'Authorization':'Basic '+base64.b64encode(('admin:'+password).encode()).decode()})
+    try:
+        with urllib.request.urlopen(request,timeout=30) as response:names=sorted(job['name'] for job in json.load(response)['jobs'])
+        if require_idle:
+            def get(path):
+                r=urllib.request.Request('http://localhost:'+str(port)+'/jenkins/'+path,headers=dict(request.headers))
+                with urllib.request.urlopen(r,timeout=30) as response:return json.load(response)
+            queued=get('queue/api/json?tree=items[id]')['items']
+            computers=get('computer/api/json?tree=computer[executors[currentExecutable[url]],oneOffExecutors[currentExecutable[url]]]')['computer']
+            if queued or any(executor.get('currentExecutable') for computer in computers for key in ['executors','oneOffExecutors'] for executor in computer.get(key,[])):raise RuntimeError('SOURCE_BUSY: Jenkins still has active/queued jobs; no source stopped')
+        return names
+    except RuntimeError:raise
+    except Exception:raise RuntimeError('SOURCE_READ_FAILED: local Jenkins account/job snapshot; credentials withheld') from None
+
 def prepare(inventory,output,target_project='dateninfrastruktur'):
     output=pathlib.Path(output).resolve()
     if not output.is_relative_to((STACK/'.runtime').resolve()):raise RuntimeError('Private migration plan must remain under STACK/.runtime')
@@ -53,6 +69,7 @@ def prepare(inventory,output,target_project='dateninfrastruktur'):
         if actual['keycloak'].get(old):values[new]=actual['keycloak'][old]
     needed=['KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','GARAGE_DEFAULT_ACCESS_KEY','GARAGE_DEFAULT_SECRET_KEY']
     if any(not values.get(k) for k in needed) or any(not roles.get(r) for r in ['di_writer','di_authz','di_public','di_audit_reader','di_migrator']):raise RuntimeError('CREDENTIAL_REFERENCE_MISSING: selected application configuration')
+    if (STACK/'.runtime'/target_project/'runtime.env').exists():raise RuntimeError('TARGET_NOT_EMPTY: pre-existing target runtime requires its original matching migration plan; no credentials overwritten')
     context=init_context(target_project)
     updates={k:values[k] for k in needed}
     updates.update({r.upper()+'_PASSWORD':v for r,v in roles.items() if r in ['di_writer','di_authz','di_public','di_audit_reader','di_migrator']})
@@ -64,5 +81,6 @@ def prepare(inventory,output,target_project='dateninfrastruktur'):
     if context.values['POSTGRES_VOLUME'] in {m.get('Name') for r in [foundation['postgres'],pg[0]] for m in r['mounts']}:raise RuntimeError('OWNERSHIP_MISMATCH: logical restore must use a NEW PostgreSQL volume')
     garage_config=bound_file(foundation['garage'],'/etc/garage.toml');write_private(context.runtime/'garage.toml',garage_config.read_text());render(context)
     plan={'schema_version':1,'operation_id':str(uuid.uuid4()),'mode':'migrate','status':'INVENTORIED','scope':scope,'source_refs':refs,'sources':sources,'source_states':[{'ref':r,'running':inspect(r['id'])['State']['Running'],'restart':r['restart']} for r in refs],'target_project':context.project,'target_env':str(context.env_file),'target_instance':context.values['INSTANCE_ID'],'target_env_sha256':digest(context.env_file),'target_artifacts':artifact_hashes(),'target_runtime_files':runtime_hashes(context),'source_old_issuer':managed['keycloak']+'/realms/dateninfrastruktur','target_issuer':'http://localhost:'+context.values['KEYCLOAK_PORT']+'/realms/dateninfrastruktur','retire_allowlist':[r['id'] for r in refs],'retained_volumes':sorted({m['Name'] for r in refs for m in r['mounts'] if m['Type']=='volume'}),'secret_refs':[ef,{'path':str(roles_file),'sha256':digest(roles_file)},state_ref],'source_storage':{'path':state_ref['path'],'sha256':state_ref['sha256'],'format':'json','access_field':'storageKey','secret_field':'storageSecret'},'foundation_garage_config':{'path':str(garage_config),'sha256':digest(garage_config)},'identity_policy':'Exact existing UUID only; Foundation password credentials; current selected MA profile; Foundation master/control-plane identity retained; old MA control-plane state kept in complete H2 backup','live_status':'LOCAL_CUTOVER_PENDING'}
-    private_write(output,plan);private_write(context.runtime/'migration/source-inspect.json',{r['id']:inspect(r['id']) for r in refs})
+    jobs=context.runtime/'migration/source-jenkins.json';private_write(jobs,{'names':jenkins_jobs(values.get('GATEWAY_PORT','18081'),updates['JENKINS_ADMIN_PASSWORD'])});plan['source_jenkins_sha256']=digest(jobs);plan['source_jenkins_port']=values.get('GATEWAY_PORT','18081')
+    metadata=context.runtime/'migration/source-inspect.json';private_write(metadata,{r['id']:inspect(r['id']) for r in refs});plan['source_inspect_sha256']=digest(metadata);private_write(output,plan)
     return plan

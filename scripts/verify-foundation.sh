@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cd "${REPO_DIR}"
-
-./scripts/test-isolation-config.sh
-./scripts/smoke-test.sh
-./scripts/test-postgres.sh
-./scripts/test-keycloak.sh
-./scripts/test-clickhouse.sh
-./scripts/test-jdbc.sh
-./scripts/test-superset.sh
-./scripts/test-private-storage.sh
-
-echo "Alle Foundation-Prüfungen sind erfolgreich abgeschlossen."
+printf '%s\n' 'Dieser Grundinstallationspfad ist historisch. Verwende scripts/test-consolidation.sh --phase MA-F1/MA-F2/MA-F3/MA-F4 für isolierte Tests oder scripts/smoke-test.sh für den aktiven Compose-Kontext. Keine Legacyinstanz wurde gestartet oder verändert.' >&2
+exit 2

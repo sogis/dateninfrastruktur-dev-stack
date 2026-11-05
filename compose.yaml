@@ -925,6 +925,81 @@
       "labels": {
         "di.instance": "${INSTANCE_ID}"
       }
+    },
+    "storage-verify": {
+      "image": "${TOOL_IMAGE}",
+      "profiles": [
+        "tools"
+      ],
+      "restart": "no",
+      "entrypoint": [
+        "python3",
+        "/opt/stack-tools/migration/storage.py",
+        "verify-target"
+      ],
+      "volumes": [
+        "${RUNTIME_DIR}:/runtime:ro"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      }
+    },
+    "fixture-namespace-parent": {
+      "image": "python:3.13.7-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844",
+      "profiles": [
+        "migration-fixture"
+      ],
+      "restart": "no",
+      "entrypoint": [
+        "python",
+        "-m",
+        "http.server",
+        "8088"
+      ],
+      "ports": [
+        "127.0.0.1:${GATEWAY_PORT}:8089"
+      ],
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8088')"
+        ],
+        "interval": "2s",
+        "timeout": "2s",
+        "retries": 30
+      }
+    },
+    "fixture-namespace-child": {
+      "image": "python:3.13.7-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844",
+      "profiles": [
+        "migration-fixture"
+      ],
+      "restart": "no",
+      "entrypoint": [
+        "python",
+        "-c",
+        "from http.server import BaseHTTPRequestHandler,HTTPServer\nfrom pathlib import Path\nclass Handler(BaseHTTPRequestHandler):\n def do_GET(self):\n  p=Path('/tmp/legacy-namespace-state');b=p.read_bytes() if p.exists() else b'not-seeded';self.send_response(200);self.end_headers();self.wfile.write(b)\nHTTPServer(('0.0.0.0',8089),Handler).serve_forever()"
+      ],
+      "network_mode": "service:fixture-namespace-parent",
+      "labels": {
+        "di.instance": "${INSTANCE_ID}"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8089')"
+        ],
+        "interval": "2s",
+        "timeout": "2s",
+        "retries": 30
+      }
     }
   },
   "volumes": {

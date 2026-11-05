@@ -33,7 +33,8 @@ def check_topology(c,empty=False):
     assert {s['Service'] for s in ps}==SERVICES and len(ps)==10
     assert all(s['State']=='running' and s.get('Health')=='healthy' for s in ps)
     for n,s in cfg['services'].items():
-        assert not s.get('container_name') and not s.get('network_mode')
+        assert not s.get('container_name')
+        if not s.get('profiles'):assert not s.get('network_mode')
         if n in ['postgres','garage','origin','admin','sodata','jenkins']:assert not s.get('ports')
         assert not any('.jar' in str(v.get('source','')) for v in s.get('volumes',[]))
     assert set(sql(c,"SELECT datname FROM pg_database WHERE datname NOT IN ('postgres','template0','template1');",'postgres').splitlines())=={'keycloak','superset','dateninfrastruktur_management'}
@@ -116,7 +117,7 @@ printf '%s\\n' "allprojects { layout.buildDirectory = file('/tmp/maf-adapter/bui
 export JAVA_HOME=/opt/java/openjdk17
 export PATH="$JAVA_HOME/bin:$PATH"
 cd /workspace/themenrepo
-./gradlew --offline --no-daemon --project-cache-dir /tmp/maf-adapter/cache -I shared/gradle/init.gradle -I /tmp/maf-adapter/init.gradle reloadPortal -x verifyOpendata -Ps3Publish=true -PreloadPortal=true -PcatalogSourceType=database
+./gradlew --offline --no-daemon --project-cache-dir /tmp/maf-adapter/cache -I shared/gradle/init.gradle -I /tmp/maf-adapter/init.gradle reloadPortal -x verifyOpendata -Ps3Publish=false -PreloadPortal=true -PcatalogSourceType=database
 """
     result=c.command(['exec','-T','jenkins','bash','-s'],adapter)
     assert 'reloadPortal SKIPPED' in result.stdout and 'reloadPortal=false' in result.stdout

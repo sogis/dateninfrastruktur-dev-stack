@@ -26,7 +26,13 @@ def inventory(s3,bucket):
 def run(mode):
     config=json.loads((ROOT/'storage.json').read_text());source=client(config['source']);target=client(config['target']);bucket=config.get('bucket','di-managed-private')
     if bucket!='di-managed-private':raise RuntimeError('VERIFICATION_FAILED: only the selected managed bucket may be copied')
-    original=inventory(source,bucket);manifest=ROOT/'storage-manifest.json'
+    manifest=ROOT/'storage-manifest.json'
+    if mode=='verify-target':
+        if not manifest.exists():raise RuntimeError('VERIFICATION_FAILED: no bound storage manifest')
+        original=json.loads(manifest.read_text())
+        if any(object_info(target,bucket,key)!=wanted for key,wanted in original.items()):raise RuntimeError('VERIFICATION_FAILED: retained target object content/metadata')
+        print('Target storage verified against immutable source manifest: '+str(len(original))+' objects');return
+    original=inventory(source,bucket)
     if manifest.exists() and json.loads(manifest.read_text())!=original:raise RuntimeError('SOURCE_CHANGED: managed objects')
     if mode=='source-inventory':
         if not manifest.exists():manifest.write_text(json.dumps(original,sort_keys=True,indent=2));manifest.chmod(0o600)
