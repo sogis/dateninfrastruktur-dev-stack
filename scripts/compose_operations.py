@@ -73,6 +73,9 @@ def main():
         expected=json.loads(marker.read_text()).get('volumes')
         if expected and expected!=volume_bindings(c):raise RuntimeError('OWNERSHIP_MISMATCH: persistent volume mapping changed; explicit migration required')
     if (a.action=='restart' or (a.action=='up' and not a.build_only)) and not marker.exists():raise RuntimeError('Explicit setup or verified migration is required; normal start never seeds an empty replacement')
+    if a.action=='restart' or (a.action=='up' and not a.build_only):
+        if c.values.get('JENKINS_IMAGE')!='sha256:'+c.values.get('DI_JENKINS_IMAGE_SHA256','') or len(c.values.get('DI_JENKINS_IMAGE_SHA256',''))!=64:
+            raise RuntimeError('Bind the locally built CSV candidate with scripts/bind_jenkins_image.py before starting the stack')
     if a.action in ['build','setup'] or (a.action=='up' and not a.skip_build):build(c)
     if a.build_only:
         return

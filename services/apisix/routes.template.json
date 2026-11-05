@@ -233,7 +233,7 @@
       ],
       "plugins": {
         "redirect": {
-          "uri": "/jenkins/gretl-datenportal/",
+          "uri": "/jenkins/data-delivery/",
           "ret_code": 302
         }
       }

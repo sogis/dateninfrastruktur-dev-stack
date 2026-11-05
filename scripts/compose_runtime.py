@@ -1,5 +1,6 @@
 """One explicit Compose context. No secondary container lifecycle."""
 import hashlib,json,os,pathlib,re,secrets,shlex,subprocess
+from ingestion_clients import extend_fresh
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 def encode_env(value):
     # Docker dotenv double quotes plus escaped dollars; JSON covers quotes,
@@ -51,13 +52,13 @@ def init_context(project,ports=None,test_fixture=False):
     if existing:raise RuntimeError('Existing project requires explicit planned migration, never fresh init')
     values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres-ma-f','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader','THEMEN_REPO_DIR':str(ROOT.parent/'dateninfrastruktur-themenrepo')}
     if ports:values.update({k:str(v) for k,v in ports.items()})
-    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_AUTHZ_PASSWORD','DI_PUBLIC_PASSWORD','DI_AUDIT_READER_PASSWORD','DI_MIGRATOR_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_INGESTION_PLUGIN_SECRET','DI_INGESTION_LEASE_SECRET']:values[key]=secrets.token_hex(32)
+    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_AUTHZ_PASSWORD','DI_PUBLIC_PASSWORD','DI_AUDIT_READER_PASSWORD','DI_MIGRATOR_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_INGESTION_PLUGIN_SECRET','DI_INGESTION_LEASE_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET']:values[key]=secrets.token_hex(32)
     values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
     for kind in ['WRITER','READER']:
         values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
     for key,tag in [('ADMIN_IMAGE','admin'),('TOOL_IMAGE','tools'),('TEST_TOOL_IMAGE','test-tools'),('POSTGRES_IMAGE','postgres'),('SODATA_IMAGE','sodata'),('SUPERSET_IMAGE','superset')]:values[key]='dateninfrastruktur-'+tag+':'+project
-    # Reuse a real unchanged Jenkins image, never overwrite the user's :local tag.
-    values['JENKINS_IMAGE']=subprocess.check_output(['docker','image','inspect','--format','{{.Id}}','dateninfrastruktur-jenkins:local'],text=True).strip()
+    # Placeholder until an explicit candidate build is bound by immutable ID.
+    values['JENKINS_IMAGE']='dateninfrastruktur-jenkins:'+project
     write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     context=ComposeContext(env_file);render(context);return context
 def render(context):
@@ -80,7 +81,9 @@ def render(context):
     audience={'name':'management-api audience','protocol':'openid-connect','protocolMapper':'oidc-audience-mapper','config':{'included.custom.audience':'management-api','access.token.claim':'true','id.token.claim':'false'}}
     realm['clients']=[{'clientId':'management-gateway','enabled':True,'protocol':'openid-connect','publicClient':False,'secret':v['DI_OIDC_CLIENT_SECRET'],'standardFlowEnabled':True,'directAccessGrantsEnabled':False,'redirectUris':['http://localhost:'+v['GATEWAY_PORT']+'/oidc/callback'],'webOrigins':['http://localhost:'+v['GATEWAY_PORT']],'protocolMappers':[audience]}]
     if v['DI_TEST_FIXTURE']=='true':realm['clients'].append({'clientId':'management-test','enabled':True,'protocol':'openid-connect','publicClient':True,'standardFlowEnabled':False,'directAccessGrantsEnabled':True,'protocolMappers':[audience]})
-    if not (r/'realm-initial.json').exists():write_private(r/'realm-initial.json',json.dumps(realm,indent=2))
+    if not (r/'realm-initial.json').exists():
+        extend_fresh(realm,v)
+        write_private(r/'realm-initial.json',json.dumps(realm,indent=2))
     # Non-root Keycloak reads the bind-mounted initial definition; parent remains0700.
     (r/'realm-initial.json').chmod(0o644)
     template=json.loads((ROOT/'services/apisix/routes.template.json').read_text())

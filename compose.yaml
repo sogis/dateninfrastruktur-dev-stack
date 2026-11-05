@@ -103,29 +103,34 @@
       "image": "${JENKINS_IMAGE:?existing verified image}",
       "restart": "unless-stopped",
       "depends_on": {
-        "garage": {
+        "keycloak": {
+          "condition": "service_healthy"
+        },
+        "admin": {
           "condition": "service_healthy"
         }
       },
       "environment": {
-        "JENKINS_RUNTIME_MODE": "dev",
-        "CASC_JENKINS_CONFIG": "/opt/datenportal/casc/jenkins-stack.yaml",
-        "JENKINS_ADMIN_PASSWORD": "${JENKINS_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
-        "JENKINS_URL": "http://localhost:${GATEWAY_PORT:-18081}/jenkins/",
+        "CASC_JENKINS_CONFIG": "/opt/dateninfrastruktur/casc/jenkins-stack.yaml",
+        "JENKINS_URL": "http://localhost:${GATEWAY_PORT}/jenkins/",
         "JENKINS_OPTS": "--prefix=/jenkins",
-        "THEMEN_REPO_MODE": "working-tree",
-        "THEMEN_REPO_URL": "",
-        "THEMEN_REPO_PATH": "/workspace/themenrepo",
-        "THEMEN_REPO_BRANCH": "${THEMEN_REPO_BRANCH:-main}",
-        "THEMEN_REPO_WRITE_BACK_ENABLED": "false",
-        "ORG_GRADLE_PROJECT_gitWriteBack": "false",
-        "ORG_GRADLE_PROJECT_catalogSourceType": "database",
-        "ORG_GRADLE_PROJECT_reloadPortal": "false"
+        "DI_JENKINS_ISSUER": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur",
+        "DI_JENKINS_AUTHORIZATION_URL": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur/protocol/openid-connect/auth",
+        "DI_JENKINS_LOGOUT_URL": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur/protocol/openid-connect/logout",
+        "DI_JENKINS_PUBLIC_ORIGIN": "http://localhost:${GATEWAY_PORT}",
+        "DI_JENKINS_INSTANCE": "${INSTANCE_ID}",
+        "DI_JENKINS_IMAGE_SHA256": "${DI_JENKINS_IMAGE_SHA256:-}",
+        "DI_INGESTION_MAX_UPLOAD_BYTES": "${DI_INGESTION_MAX_UPLOAD_BYTES:-104857600}"
       },
+      "secrets": [
+        "JENKINS_ADMIN_PASSWORD",
+        "DI_JENKINS_OIDC_CLIENT_SECRET",
+        "DI_INGESTION_PLUGIN_SECRET",
+        "DI_INGESTION_EXECUTOR_CLIENT_SECRET"
+      ],
       "volumes": [
         "jenkins-home:/var/jenkins_home",
-        "./services/jenkins/jenkins-stack.yaml:/opt/datenportal/casc/jenkins-stack.yaml:ro",
-        "${THEMEN_REPO_DIR}:/workspace/themenrepo:ro"
+        "./services/jenkins/jenkins-stack.yaml:/opt/dateninfrastruktur/casc/jenkins-stack.yaml:ro"
       ],
       "healthcheck": {
         "test": [
@@ -575,7 +580,8 @@
         "DI_MANAGEMENT_WRITER_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
         "DI_MANAGEMENT_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
         "DI_OPERATOR_ISSUER": "urn:di:operator",
-        "DI_OPERATOR_SUBJECT": "managed-delivery"
+        "DI_OPERATOR_SUBJECT": "managed-delivery",
+        "DI_INGESTION_ISSUER": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur"
       },
       "entrypoint": [
         "java",
@@ -1002,6 +1008,12 @@
         "retries": 30
       }
     }
+  },
+  "secrets": {
+    "JENKINS_ADMIN_PASSWORD": {"environment": "JENKINS_ADMIN_PASSWORD"},
+    "DI_JENKINS_OIDC_CLIENT_SECRET": {"environment": "DI_JENKINS_OIDC_CLIENT_SECRET"},
+    "DI_INGESTION_PLUGIN_SECRET": {"environment": "DI_INGESTION_PLUGIN_SECRET"},
+    "DI_INGESTION_EXECUTOR_CLIENT_SECRET": {"environment": "DI_INGESTION_EXECUTOR_CLIENT_SECRET"}
   },
   "volumes": {
     "postgres-data": {

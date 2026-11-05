@@ -2,6 +2,7 @@
   "apisix": {
     "node_listen": 9080,
     "enable_ipv6": false,
+    "dns_resolver_valid": 2,
     "ssl": {
       "enable": false
     }
@@ -18,7 +19,8 @@
     "error_log": "/dev/stderr",
     "http": {
       "access_log": "/dev/stdout",
-      "access_log_format": "$remote_addr $uri $status"
+      "access_log_format": "$remote_addr $uri $status",
+      "client_max_body_size": "257m"
     }
   }
 }

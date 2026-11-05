@@ -5,14 +5,14 @@ from compose_operations import resolve
 from compose_runtime import ComposeContext,encode_env
 
 KEYS=('DI_INGESTION_PLUGIN_SECRET','DI_INGESTION_LEASE_SECRET')
-def prepare(context):
+def prepare(context,keys=KEYS):
     context.verify_project()
     lock=context.runtime/'ingestion-credentials.lock'
     fd=os.open(lock,os.O_RDWR|os.O_CREAT,0o600)
     with os.fdopen(fd,'r+') as owner:
         fcntl.flock(owner,fcntl.LOCK_EX)
         before=context.env_file.read_bytes();current=ComposeContext(context.env_file);extra=[]
-        for key in KEYS:
+        for key in keys:
             if key in current.values:
                 if len(current.values[key])<32:raise RuntimeError('Existing ingestion credential is invalid; no automatic replacement')
             else:extra.append(key+'='+encode_env(secrets.token_hex(32))+'\n')
