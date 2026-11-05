@@ -1,0 +1,44 @@
+{
+  "example_only": true,
+  "schema_version": 1,
+  "phase": "MA-G0",
+  "candidate_id": "REPLACE_AT_REVIEW",
+  "verdict": "NICHT_PRUEFBAR",
+  "binding": {
+    "handoff_sha256": "REPLACE",
+    "specification_sha256": "REPLACE",
+    "request_sha256": "REPLACE",
+    "repositories": []
+  },
+  "reviewer": {
+    "actual_provider_model": "deepseek/deepseek-flash",
+    "opencode_version": "REPLACE_WITH_REAL_2_X",
+    "session_id": "SESSION_FROM_RUNNER"
+  },
+  "checks": [],
+  "counterexample": {
+    "hypothesis": "REPLACE",
+    "command": "REPLACE",
+    "cwd": "REPLACE",
+    "expected": "REPLACE",
+    "observed": "NOT_EXECUTED",
+    "executed": false,
+    "evidence_path": "REPLACE"
+  },
+  "code_review": {
+    "goal_reached": false,
+    "read_diff": false,
+    "findings": []
+  },
+  "integrity": {
+    "product_unchanged": false
+  },
+  "open_required_checks": [
+    "G00",
+    "G01",
+    "G02",
+    "G03",
+    "G04"
+  ],
+  "note": "Nur strukturelle Vorlage. Exakten vorhandenen review_gate-Vertrag übernehmen; nie eine Vorlage als PASS werten."
+}

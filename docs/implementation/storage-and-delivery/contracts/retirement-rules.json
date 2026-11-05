@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "purpose": "Abnahmeinput; echte aktive Pfade und eng begrenzte Historicalausnahmen in MA-G0 vervollständigen. Kein blinder Delete-Runner.",
+  "forbidden_active_concepts": [
+    "second_application_data_bucket",
+    "public_object_acl",
+    "permission_team_yaml",
+    "organization_pipeline_generation",
+    "manifest_catalog_fallback",
+    "legacy_publication_mode",
+    "arbitrary_dataset_build_parameters",
+    "default_storage_credential_fallback",
+    "direct_user_job_build",
+    "user_jwt_in_pipeline_parameters"
+  ],
+  "search_terms": [
+    "di-managed-private",
+    "GARAGE_DEFAULT_ACCESS_KEY",
+    "GARAGE_MANAGED_ACCESS_KEY",
+    "DI_MIGRATION_IMPORT_KEYS",
+    "storageProfile",
+    "legacyAccessUrl",
+    "current.json",
+    "publishToDatenportal",
+    "prepareDatenportalWorkspace",
+    "METADATA_FILE",
+    "PUBLICATION_MODE",
+    "RELOAD_PORTAL",
+    "gretl-datenportal-teams.yaml"
+  ],
+  "allowed_categories": [
+    "current_specification_describing_removal",
+    "immutable_historical_review_document",
+    "provenance_and_license",
+    "isolated_negative_test_fixture",
+    "temporarily_required_one_shot_upgrade_before_cutover"
+  ],
+  "rule": "Ausnahme braucht exakten Pfad/Grund; niemals ein pauschales docs/** oder tests/**. Nach Livecutover keine One-shot-Upgradefunktion im normalen Produktimage/CLI."
+}
