@@ -64,11 +64,11 @@ print('seven application roles: own database positive, foreign existing database
         assert sql(c,'SELECT (SELECT count(*) FROM di_management.dataset)+(SELECT count(*) FROM di_management.accessgrant);')=='0'
         status,_,body=http('http://localhost:'+c.values['GATEWAY_PORT']+'/');assert status==200 and b'MA-E Pilot' not in body
     print('PASS F04/F05/F06: exactly ten canonical services, one native PG16.10, three DBs, role boundaries, empty fresh catalog',flush=True)
-def seed(c,database_service='postgres'):
-    c.command(['--profile','test','run','--pull','never','--rm','--no-deps','test-fixture'])
+def seed(c,database_service='postgres',fixture_args=None,preserve_storage_config=False):
+    c.command(['--profile','test','run','--pull','never','--rm','--no-deps',*(fixture_args or []),'test-fixture'])
     fixture=json.loads((c.runtime/'fixture.json').read_text());payload=c.runtime/'payload';payload.mkdir(exist_ok=True)
     conf=(c.runtime/'origin.conf').read_text().replace(c.values['GARAGE_ORIGIN_ACCESS_KEY'],c.values['GARAGE_DEFAULT_ACCESS_KEY']).replace(c.values['GARAGE_ORIGIN_SECRET_KEY'],c.values['GARAGE_DEFAULT_SECRET_KEY'])
-    write_private(c.runtime/'operator.conf',conf)
+    if not preserve_storage_config:write_private(c.runtime/'operator.conf',conf)
     for f in fixture['files']:
         path=payload/(f['kind']+'-'+f['filename'])
         if path.suffix=='.csv':path.write_text('kind,version,wert\n'+f['kind']+','+f['filename']+',42\n',encoding='utf-8')
