@@ -55,6 +55,21 @@ credentials:
               id: di-ingestion-executor-client
               description: 'Dedicated Keycloak ingestion executor client'
               secret: '${DI_INGESTION_EXECUTOR_CLIENT_SECRET}'
+          - string:
+              scope: SYSTEM
+              id: di-csv-storage-id
+              description: 'Private CSV archive and distribution writer ID'
+              secret: '${DI_STORAGE_WRITER_ACCESS_KEY}'
+          - string:
+              scope: SYSTEM
+              id: di-csv-storage-secret
+              description: 'Private CSV archive and distribution writer secret'
+              secret: '${DI_STORAGE_WRITER_SECRET_KEY}'
+          - string:
+              scope: SYSTEM
+              id: di-csv-clickhouse-loader
+              description: 'Private ClickHouse candidate loader'
+              secret: '${DI_CH_LOADER_PASSWORD}'
 unclassified:
   location:
     url: '${JENKINS_URL}'

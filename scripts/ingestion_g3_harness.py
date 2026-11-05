@@ -7,7 +7,7 @@ from migration_db import target_sql
 ADMIN=ROOT.parent/'dateninfrastruktur-admin'
 JENKINS=ROOT.parent/'dateninfrastruktur-jenkins-dev'
 def owned(c):
-    if not c.project.startswith('mag-g3-') or c.values['DI_TEST_FIXTURE']!='true':raise RuntimeError('Isolated G3 test context required')
+    if not c.project.startswith(('mag-g3-','mag-g4-')) or c.values['DI_TEST_FIXTURE']!='true':raise RuntimeError('Isolated G3 test context required')
     c.verify_project()
 def compose(c,args,log):
     owned(c);p=c.command(args,check=False);write_private(c.runtime/log,c.redact(p.stdout+p.stderr))
@@ -73,8 +73,8 @@ def verify_run_hygiene(c,require_binding=True,require_cps=False):
     cmd=['exec','-T','jenkins','sh','-ec','find /var/jenkins_home/jobs/di-csv-ingest/builds -type f \\( -name build.xml -o -name log -o -name program.dat \\) -exec cat {} + | base64']
     raw=base64.b64decode(c.command(cmd).stdout);assert raw
     assert not re.search(rb'eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{15,}',raw) and b'refresh_token' not in raw
-    for key in ['DI_INGESTION_PLUGIN_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_LEASE_SECRET','KEYCLOAK_DEMO_PASSWORD','JENKINS_ADMIN_PASSWORD']:
-        assert c.values[key].encode() not in raw
+    for key in ['DI_INGESTION_PLUGIN_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_LEASE_SECRET','KEYCLOAK_DEMO_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_STORAGE_WRITER_ACCESS_KEY','DI_STORAGE_WRITER_SECRET_KEY','DI_CH_LOADER_PASSWORD']:
+        if c.values.get(key):assert c.values[key].encode() not in raw
     assert not re.search(rb'<lease>[0-9a-f]{64}</lease>',raw)
     if require_binding:assert b'DeliveryRunBindingAction' in raw and re.search(rb'<lease>\{[A-Za-z0-9+/=]+\}</lease>',raw)
     if require_cps:

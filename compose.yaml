@@ -126,7 +126,10 @@
         "JENKINS_ADMIN_PASSWORD",
         "DI_JENKINS_OIDC_CLIENT_SECRET",
         "DI_INGESTION_PLUGIN_SECRET",
-        "DI_INGESTION_EXECUTOR_CLIENT_SECRET"
+        "DI_INGESTION_EXECUTOR_CLIENT_SECRET",
+        "DI_STORAGE_WRITER_ACCESS_KEY",
+        "DI_STORAGE_WRITER_SECRET_KEY",
+        "DI_CH_LOADER_PASSWORD"
       ],
       "volumes": [
         "jenkins-home:/var/jenkins_home",
@@ -279,6 +282,8 @@
         "DI_WEB_PUBLICORIGIN": "http://localhost:${GATEWAY_PORT}",
         "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}",
         "DI_INGESTION_ENABLED": "true",
+        "DI_INGESTION_PROJECTIONENABLED": "true",
+        "DI_CH_PROJECTOR_PASSWORD": "${DI_CH_PROJECTOR_PASSWORD:-}",
         "DI_INGESTION_PLUGINSECRET": "${DI_INGESTION_PLUGIN_SECRET:-}",
         "DI_INGESTION_LEASESECRET": "${DI_INGESTION_LEASE_SECRET:-}",
         "DI_INGESTION_JENKINSINSTANCE": "${INSTANCE_ID}",
@@ -567,6 +572,20 @@
       "labels": {
         "di.instance": "${INSTANCE_ID}"
       }
+    },
+    "clickhouse-ingestion-setup": {
+      "image": "clickhouse/clickhouse-server:26.8",
+      "restart": "no",
+      "profiles": ["setup"],
+      "environment": {
+        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD}",
+        "DI_CH_LOADER_PASSWORD": "${DI_CH_LOADER_PASSWORD:-}",
+        "DI_CH_PROJECTOR_PASSWORD": "${DI_CH_PROJECTOR_PASSWORD:-}",
+        "DI_CH_READER_PASSWORD": "${DI_CH_READER_PASSWORD:-}"
+      },
+      "volumes": ["./services/clickhouse/init:/init:ro"],
+      "entrypoint": ["/bin/sh", "/init/ingestion.sh"],
+      "labels": {"di.instance": "${INSTANCE_ID}"}
     },
     "management-operator": {
       "image": "${TOOL_IMAGE}",
@@ -1013,7 +1032,10 @@
     "JENKINS_ADMIN_PASSWORD": {"environment": "JENKINS_ADMIN_PASSWORD"},
     "DI_JENKINS_OIDC_CLIENT_SECRET": {"environment": "DI_JENKINS_OIDC_CLIENT_SECRET"},
     "DI_INGESTION_PLUGIN_SECRET": {"environment": "DI_INGESTION_PLUGIN_SECRET"},
-    "DI_INGESTION_EXECUTOR_CLIENT_SECRET": {"environment": "DI_INGESTION_EXECUTOR_CLIENT_SECRET"}
+    "DI_INGESTION_EXECUTOR_CLIENT_SECRET": {"environment": "DI_INGESTION_EXECUTOR_CLIENT_SECRET"},
+    "DI_STORAGE_WRITER_ACCESS_KEY": {"environment": "DI_STORAGE_WRITER_ACCESS_KEY"},
+    "DI_STORAGE_WRITER_SECRET_KEY": {"environment": "DI_STORAGE_WRITER_SECRET_KEY"},
+    "DI_CH_LOADER_PASSWORD": {"environment": "DI_CH_LOADER_PASSWORD"}
   },
   "volumes": {
     "postgres-data": {

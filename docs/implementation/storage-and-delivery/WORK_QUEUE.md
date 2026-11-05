@@ -1,14 +1,14 @@
 # MA-G Arbeitsstand
 
-MA-G0–G2 unabhängig ABGENOMMEN; lokaler Storagecutover verifiziert; MA-G3 als Kandidat im unabhängigen Review.
+MA-G0–G3 unabhängig ABGENOMMEN; lokaler Storagecutover verifiziert; MA-G4 als Kandidat im unabhängigen Review.
 
 | Phase | Status | Unabhängiger Nachweis |
 |---|---|---|
 | MA-G0 | ABGENOMMEN | review/MA-G0-accepted.md |
 | MA-G1 | ABGENOMMEN | review/MA-G1-accepted.md |
 | MA-G2 | ABGENOMMEN | review/MA-G2-accepted.md |
-| MA-G3 | IN_REVIEW | review/MA-G3-request.md |
-| MA-G4 | NOT_STARTED | – |
+| MA-G3 | ABGENOMMEN | review/MA-G3-accepted.md |
+| MA-G4 | IN_REVIEW | review/MA-G4-request.md |
 | MA-G5 | NOT_STARTED | – |
 
 ## Lokaler Zustand

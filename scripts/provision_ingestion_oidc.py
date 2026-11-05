@@ -6,6 +6,7 @@ from compose_runtime import ComposeContext,write_private
 from ingestion_clients import clients,executor_subject,EXECUTOR,JENKINS,ROLE_NAMES
 from prepare_ingestion_g2 import prepare,KEYS
 
+CH_KEYS=('DI_CH_LOADER_PASSWORD','DI_CH_PROJECTOR_PASSWORD','DI_CH_READER_PASSWORD')
 OIDC_KEYS=('DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET')
 
 def call(base,path,method='GET',token=None,data=None,expected=(200,)):
@@ -39,7 +40,7 @@ def provision(context):
         if value and value.get('attributes',{}).get('di.managed')!='ingestion-v1':raise RuntimeError('Unowned delivery client collision; no change')
         key=OIDC_KEYS[0] if name==JENKINS else OIDC_KEYS[1]
         if value and key not in context.values:raise RuntimeError('Owned client credential not bound to this runtime; no rotation')
-    prepare(context,KEYS+OIDC_KEYS);context=ComposeContext(context.env_file)
+    prepare(context,KEYS+OIDC_KEYS+CH_KEYS);context=ComposeContext(context.env_file)
     def verify_representation(want,have):
         for key in ('clientId','protocol','publicClient','enabled','directAccessGrantsEnabled','standardFlowEnabled','serviceAccountsEnabled','implicitFlowEnabled','redirectUris','webOrigins','fullScopeAllowed','defaultClientScopes','optionalClientScopes'):
             if key in want:
