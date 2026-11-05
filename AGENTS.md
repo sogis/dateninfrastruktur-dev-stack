@@ -45,3 +45,42 @@ Bestehende identifizierte eigene Daten/Volumes/Identitäten/Secrets kontrolliert
 auch der Container-Schreibschichten. Keine fremden Ressourcen ändern. Phasen
 strikt nacheinander, unabhängige OpenCode2-/DeepSeek-Flash1017-Abnahme je Phase.
 Berichte unter compose-consolidation/, Rohbelege unter STACK/.runtime/compose-review/.
+
+## Geltung der historischen Aufträge
+
+Die vorstehenden MA-0–F-/Grundinstallationsgrenzen gelten nur für ihre damaligen
+Aufträge. Für den ausdrücklich aktivierten MA-G-Auftrag gilt `../AGENTS.md` und
+vollständig `../dateninfrastruktur-dev-stack/docs/implementation/storage-and-delivery/`.
+Aktive Altverträge werden gemäss MA-G ersetzt; Sicherheits- und Datenerhaltungsregeln
+bleiben bindend. Historische Dokumente und Nutzerarbeit nicht umschreiben.
+
+## Aktueller Auftrag MA-G: Storage und CSV-Anlieferung
+
+Bei einem MA-G-Sitzungsauftrag vollständig lesen:
+`dateninfrastruktur-dev-stack/docs/implementation/storage-and-delivery/README.md`,
+`EXECUTION_PLAN.md`, sämtliche SPEC-Dateien, `TEST_PLAN.md`, `SOURCES.md`,
+`AGENTS_ERGAENZUNG.md`, JSON-Verträge und rollenbezogenen Start-/Reviewprompt.
+
+Codex implementiert MA-G0..MA-G5. OpenCode 2.x mit DeepSeek Flash 1017 prüft
+nach jeder Phase autonom unabhängig. Reviewer reparieren keine Produktdateien.
+Nur ABGENOMMEN am aktuellen SHA-Satz öffnet die nächste Phase. Nach Korrekturen
+nur betroffene Verträge und sinnvolle Regressionen neu prüfen.
+
+MA-G ersetzt aktive Storage-/Publikations-/Teams-/Organisationsjobverträge.
+API-Breaks sind erlaubt; keine Kompatibilitätsmodi, Aliase oder Fallbacks.
+Ein privater Bucket `ch.so.daten`, ein generischer CSVjob, Fachrechte in PG.
+Ein Compose-Projekt mit einem PG16/PostGIS und je einer Instanz aller Dienste.
+Kein HA, keine Backupautomatisierung, kein CI-Neubau, kein Spezialjobframework.
+
+Nur der bisherige Inhalt des eindeutig identifizierten lokalen Entwicklungsbuckets
+`ch.so.daten` darf nach geprüfter Vorbereitung einmalig gelöscht werden.
+Referenzierte private Dateien, Fachrechte, Identitäten und Auditdaten erhalten.
+Keine produktiven/fremden S3-Instanzen, Volumes, Jobs oder Nutzerarbeit verändern.
+Technische Personenrechte/Teams nicht mehr in YAML oder Jenkinsjobs spiegeln.
+Das Plugin fragt die Admin-API; Upload-/Jobparameter sind keine Autorisierung.
+Normalstart enthält weder Purge, automatische Migration noch fachliche Seeds.
+
+Aktive Berichte: `storage-and-delivery/`; rohe Belege: ignoriertes
+`STACK/.runtime/ingestion-review/`. Die tatsächlich aktive Workspace-AGENTS wird
+als `storage-and-delivery/templates/AGENTS.workspace.current.md` versioniert und
+im Handoff gehasht. Historische Anweisungen/Abnahmen bleiben an ihren Orten.

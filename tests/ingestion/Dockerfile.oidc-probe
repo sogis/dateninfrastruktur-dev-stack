@@ -1,0 +1,4 @@
+# Test-only G0 spike: never selected by the normal compose.yaml.
+FROM dateninfrastruktur-jenkins:local
+RUN jenkins-plugin-cli --latest=false --plugins oic-auth:4.731.v4932b_506e767
+RUN printf '%s\n' 'a288c3fe1f59b4ce2cd9c2db802659d527047464d9e6ca3f6780b848ffbd1ba9  /usr/share/jenkins/ref/plugins/oic-auth.jpi' | sha256sum -c -

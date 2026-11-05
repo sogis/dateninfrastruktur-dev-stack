@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create an immutable isolated candidate, invoke OpenCode2, validate its gate."""
 import argparse, datetime, hashlib, json, os, pathlib, re, shutil, subprocess, sys
-from review_gate import PHASE_CHECKS, sha, validate
+from review_gate import PHASE_CHECKS, sha, validate, phase_paths
 STACK=pathlib.Path(__file__).resolve().parents[2]
 PLAN=pathlib.Path('docs/implementation/management-and-access')
 WORKSPACE=STACK.parent
@@ -17,11 +17,20 @@ def binary():
     raise RuntimeError('NICHT_PRUEFBAR: no installed OpenCode2 CLI; no implicit global upgrade')
 def snapshot(repo):
     files=git(repo,'ls-files','-z').split('\0')
-    return {f:sha(repo/f) for f in files if f}
+    return {f:{'sha256':sha(repo/f),'executable':bool((repo/f).stat().st_mode & 0o111)} for f in files if f}
+def specification_files(sp,phase,workspace_agents):
+    specs={str(f):sha(f) for f in sorted(sp.glob('*.md')) if f.name != 'WORK_QUEUE.md'}
+    if phase.startswith(('MA-F','MA-G')):
+        current=sp/'templates/AGENTS.workspace.current.md'
+        if sha(current)!=sha(workspace_agents):raise RuntimeError('Active workspace AGENTS differs from versioned current snapshot')
+        specs[str(current)]=sha(current)
+    if phase.startswith('MA-G'):
+        for contract in sorted((sp/'contracts').glob('*.json')):specs[str(contract)]=sha(contract)
+    return specs
 def prepare(phase,prior_run=None,execute_checks=None):
     runid=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    plan=pathlib.Path('docs/implementation/compose-consolidation') if phase.startswith('MA-F') else PLAN
-    run=STACK/('.runtime/compose-review' if phase.startswith('MA-F') else '.runtime/management-review')/phase/runid
+    plan,runtime_root=phase_paths(phase)
+    run=STACK/runtime_root/phase/runid
     run.mkdir(parents=True,exist_ok=False)
     workspace=run/'workspace';workspace.mkdir()
     (run/'output').mkdir()
@@ -29,7 +38,7 @@ def prepare(phase,prior_run=None,execute_checks=None):
     request_text=(STACK/plan/'review'/f'{phase}-request.md').read_text()
     short_names={'dateninfrastruktur-dev-stack':'STACK','dateninfrastruktur-admin':'ADMIN','dateninfrastruktur-sodata':'PUBLIC','dateninfrastruktur-jenkins-dev':'JENKINS','dateninfrastruktur-jenkins-gretl-plugin':'PLUGIN','dateninfrastruktur-themenrepo':'TOPICS'}
     names=['dateninfrastruktur-dev-stack','dateninfrastruktur-admin','dateninfrastruktur-sodata']
-    if phase.startswith('MA-F'):names+=['dateninfrastruktur-jenkins-dev','dateninfrastruktur-jenkins-gretl-plugin','dateninfrastruktur-themenrepo']
+    if phase.startswith(('MA-F','MA-G')):names+=['dateninfrastruktur-jenkins-dev','dateninfrastruktur-jenkins-gretl-plugin','dateninfrastruktur-themenrepo']
     for name in names:
         source=WORKSPACE/name
         if git(source,'diff','HEAD','--name-only'):raise RuntimeError('Uncommitted product changes: '+name)
@@ -47,11 +56,7 @@ def prepare(phase,prior_run=None,execute_checks=None):
     shutil.copyfile(STACK/'scripts/management/reviewer-agent.md',agent/'management-review.md')
     (workspace/'.gitignore').write_text('.runtime/\n')
     sp=workspace/'dateninfrastruktur-dev-stack'/plan
-    specs={str(f):sha(f) for f in sorted(sp.glob('*.md')) if f.name not in ('WORK_QUEUE.md',)}
-    if phase.startswith('MA-F'):
-        current=sp/'templates/AGENTS.workspace.current.md'
-        if sha(current)!=sha(workspace/'AGENTS.md'):raise RuntimeError('Active workspace AGENTS differs from versioned current snapshot')
-        specs[str(current)]=sha(current)
+    specs=specification_files(sp,phase,workspace/'AGENTS.md')
     spec_digest=hashlib.sha256(json.dumps(specs,sort_keys=True).encode()).hexdigest()
     request=sp/'review'/f'{phase}-request.md'
     h={'schema_version':1,'phase':phase,'candidate_id':runid,'created_at_utc':runid,
@@ -60,12 +65,12 @@ def prepare(phase,prior_run=None,execute_checks=None):
        'workspace_agents':{'path':str(workspace/'AGENTS.md'),'sha256':sha(workspace/'AGENTS.md')},
        'reviewer':{'requested':'OpenCode2; DeepSeek Flash1017 via existing DeepSeek account','actual_provider_model':MODEL},
        'test_selection':{'required_checks':PHASE_CHECKS[phase],'execute_checks':PHASE_CHECKS[phase]},
-       'isolation':{'workspace':str(workspace),'runtime_directory':str(workspace/'.runtime'),'output_directory':str(run/'output'),'ports':'isolated Compose project, ports, named volumes and private test-only credentials' if phase.startswith('MA-F') else 'random loopback, new PG container per compatibility.py invocation','env_file_path_only':None,'compose_project':None},
+       'isolation':{'workspace':str(workspace),'runtime_directory':str(workspace/'.runtime'),'output_directory':str(run/'output'),'ports':'isolated Compose project, ports, named volumes and private test-only credentials' if phase.startswith(('MA-F','MA-G')) else 'random loopback, new PG container per compatibility.py invocation','env_file_path_only':None,'compose_project':None},
        'notes':['No original .env copied. No user service may be changed. Only own labeled resources. No phase beyond this gate.']}
     if prior_run:
         from review_gate import carried_check
         prior_run=pathlib.Path(prior_run).resolve()
-        if not prior_run.is_relative_to((STACK/'.runtime/compose-review').resolve()):raise RuntimeError('Prior evidence must be an existing isolated Compose review')
+        if not prior_run.is_relative_to((STACK/runtime_root).resolve()):raise RuntimeError('Prior evidence must be an existing isolated review of this specification')
         old=json.loads((prior_run/'output/review.json').read_text())
         if old['phase']!=phase:raise RuntimeError('Prior phase differs')
         fresh=set(execute_checks or [])
@@ -105,7 +110,7 @@ def execute(phase,prior_run=None,execute_checks=None):
     agents=json.loads(call([executable,'debug','agents','--standalone'],cwd=workspace,env=env))
     if not any(x.get('id')=='management-review' and x.get('mode')=='primary' for x in agents):
         raise RuntimeError('NICHT_PRUEFBAR: project review agent not discovered')
-    prompt=f'''You are the independent reviewer for {phase}. Read {hp} first, then the COMPLETE EXECUTION_PLAN, SPECs, TEST_PLAN, OPENCODE_REVIEW_PROMPT and workspace/repo AGENTS in the isolated workspace. Verify all hashes and exact HEADs yourself. Read source and diffs. The request lists base SHAs. Execute the selected fresh checks from test_selection.execute_checks yourself; report every phase-required ID and carry only explicitly bound unaffected prior observations when listed; write stdout/stderr evidence under {out}. Invent and EXECUTE at least one relevant counterexample outside product trees. Never change product code/tests/specs/AGENTS/configuration, and never touch the original workspace or user services. Use the phase request and TEST_PLAN to select tests. MA-F uses the canonical Compose topology, unique test projects/ports/volumes/private paths, and NO original user credentials or dumps. F0 uses only a temporary one-service PG compatibility probe. No docker-run copy of the application topology. Never mutate tracked files through setup/generation. Use the existing management review-result.example.json schema (binding/reviewer/integrity), extended with phase/check IDs from this handoff; the new consolidation template is illustrative. Phase required IDs are {h['test_selection']['required_checks']}. Report any failure; do not repair it. Write review.md AND review.json under {out}, using the versioned templates/review-result.example.json structure without example_only. Full binding: handoff hash {sha(hp)}, specification hash {h['specification']['aggregate_sha256']}, request hash {h['request']['sha256']}; repositories must be a list of name/head_sha exactly from handoff. Model {MODEL}, CLI version exactly {version}. Determine your own session ID from session context if available; otherwise use SESSION_FROM_RUNNER and the orchestrator will substitute only this transport metadata after completion. Fresh checks must use execution EXECUTED; explicitly listed carried_checks may use execution CARRIED with source_report_sha256 and a concrete non-impact reason after you independently verify their bound prior evidence and new diff. Copy carried command/cwd/exit fields exactly and use the copied evidence_path from the handoff. A prior NACHARBEIT verdict is never carried, only unaffected successfully executed observations. Required fresh checks are {h['test_selection']['execute_checks']}; do not repeat unaffected suites. Prior evidence is copied into this run, no original user files are needed; include command,cwd,expected_exit,observed_exit,observation and actual evidence_path. Own counterexample must include command/hypothesis/expected/observed/executed/evidence_path. Include code_review.goal_reached and integrity.product_unchanged. No acceptance without real tests and unchanged product. NICHT_PRUEFBAR if requirements cannot be tested, NACHARBEIT for implementation defects. End after writing both files.'''
+    prompt=f'''You are the independent reviewer for {phase}. Read {hp} first, then the COMPLETE EXECUTION_PLAN, SPECs, TEST_PLAN, OPENCODE_REVIEW_PROMPT and workspace/repo AGENTS in the isolated workspace. Verify all hashes and exact HEADs yourself. Read source and diffs. The request lists base SHAs. Execute the selected fresh checks from test_selection.execute_checks yourself; report every phase-required ID and carry only explicitly bound unaffected prior observations when listed; write stdout/stderr evidence under {out}. Invent and EXECUTE at least one relevant counterexample outside product trees. Never change product code/tests/specs/AGENTS/configuration, and never touch the original workspace or user services. Use the phase request and TEST_PLAN to select tests. MA-F and MA-G use the canonical Compose topology, unique test projects/ports/volumes/private paths, and NO original user credentials or dumps. MA-F0 uses only a temporary one-service PG compatibility probe. MA-G0 requires real isolated OIDC/CSV spikes G00–G04; no user services or credentials. Read the storage-and-delivery request and contracts, never historical MA-F requirements for MA-G. No docker-run copy of the application topology. Never mutate tracked files through setup/generation. Use the existing management review-result.example.json schema (binding/reviewer/integrity), extended with phase/check IDs from this handoff; the new consolidation template is illustrative. Phase required IDs are {h['test_selection']['required_checks']}. Report any failure; do not repair it. Write review.md AND review.json under {out}, using the versioned templates/review-result.example.json structure without example_only. Full binding: handoff hash {sha(hp)}, specification hash {h['specification']['aggregate_sha256']}, request hash {h['request']['sha256']}; repositories must be a list of name/head_sha exactly from handoff. Model {MODEL}, CLI version exactly {version}. Determine your own session ID from session context if available; otherwise use SESSION_FROM_RUNNER and the orchestrator will substitute only this transport metadata after completion. Fresh checks must use execution EXECUTED; explicitly listed carried_checks may use execution CARRIED with source_report_sha256 and a concrete non-impact reason after you independently verify their bound prior evidence and new diff. Copy carried command/cwd/exit fields exactly and use the copied evidence_path from the handoff. A prior NACHARBEIT verdict is never carried, only unaffected successfully executed observations. Required fresh checks are {h['test_selection']['execute_checks']}; do not repeat unaffected suites. Prior evidence is copied into this run, no original user files are needed; include command,cwd,expected_exit,observed_exit,observation and actual evidence_path. Own counterexample must include command/hypothesis/expected/observed/executed/evidence_path. Include code_review.goal_reached and integrity.product_unchanged. No acceptance without real tests and unchanged product. NICHT_PRUEFBAR if requirements cannot be tested, NACHARBEIT for implementation defects. End after writing both files.'''
     with (run/'events.jsonl').open('w') as events,(run/'stderr.log').open('w') as stderr:
         # One fresh phase session, bounded continuations if the reviewer ends with
         # an interim status. No report or failed transport ever opens the gate.

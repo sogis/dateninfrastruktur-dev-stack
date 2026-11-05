@@ -3,6 +3,17 @@
 import hashlib, json, pathlib, re, subprocess, sys
 PHASE_CHECKS={'MA-0':['M00','M01','M02'],'MA-A':['M03','M04','M05','M06'],'MA-B':['M%02d'%i for i in range(7,14)],'MA-C':['M%02d'%i for i in range(14,21)],'MA-D':['M%02d'%i for i in range(21,26)],'MA-E':['M%02d'%i for i in range(26,34)]}
 PHASE_CHECKS.update({'MA-F0':['F01','F02','F03'],'MA-F1':['F%02d'%i for i in range(4,9)],'MA-F2':['F%02d'%i for i in range(9,14)],'MA-F3':['F14','F15','F16'],'MA-F4':['F17','F18','F19','F20']})
+# MA-G owns its phase contract; never route unknown phases to historical MA-A–F.
+G_PLAN=pathlib.Path(__file__).resolve().parents[2]/'docs/implementation/storage-and-delivery'
+G_CONTRACT=json.loads((G_PLAN/'contracts/phase-checks.json').read_text())
+if G_CONTRACT['schema_version']!=1 or G_CONTRACT['specification']!='MA-G':
+    raise ValueError('Unsupported MA-G phase contract')
+PHASE_CHECKS.update(G_CONTRACT['phases'])
+def phase_paths(phase):
+    if phase not in PHASE_CHECKS:raise ValueError('Unknown review phase: '+phase)
+    if phase.startswith('MA-G'):return pathlib.Path('docs/implementation/storage-and-delivery'),'.runtime/ingestion-review'
+    if phase.startswith('MA-F'):return pathlib.Path('docs/implementation/compose-consolidation'),'.runtime/compose-review'
+    return pathlib.Path('docs/implementation/management-and-access'),'.runtime/management-review'
 def sha(path): return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 def require(ok,message):
     if not ok: raise ValueError(message)

@@ -1,0 +1,46 @@
+# G0 risk spike only: not an application stack or an operational entry point.
+services:
+  postgres:
+    image: ${G0_POSTGRES_IMAGE:?verified pinned PG16 PostGIS image}
+    environment:
+      POSTGRES_PASSWORD: ${G0_DB_PASSWORD}
+      POSTGRES_DB: keycloak
+    volumes: ["probe-pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d keycloak"]
+      interval: 2s
+      timeout: 2s
+      retries: 40
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: [start-dev, --import-realm]
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: ${G0_DB_PASSWORD}
+      KC_HOSTNAME: http://localhost:${G0_KC_PORT}
+      KC_HTTP_ENABLED: "true"
+    ports: ["127.0.0.1:${G0_KC_PORT}:8080"]
+    volumes: ["${G0_RUNTIME}/realm.json:/opt/keycloak/data/import/realm.json:ro"]
+  jenkins:
+    image: dateninfrastruktur-g0-oidc:probe
+    environment:
+      CASC_JENKINS_CONFIG: /probe/jenkins.yaml
+      JENKINS_RUNTIME_MODE: dev
+      JENKINS_URL: http://localhost:${G0_JENKINS_PORT}/jenkins/
+      JENKINS_OPTS: --prefix=/jenkins
+      G0_CLIENT_SECRET: ${G0_CLIENT_SECRET}
+      G0_ISSUER: http://localhost:${G0_KC_PORT}/realms/g0
+      G0_RECEIVER: http://host.docker.internal:${G0_VERIFIER_PORT}
+      G0_AUTHORIZATION_URL: http://localhost:${G0_KC_PORT}/realms/g0/protocol/openid-connect/auth
+    ports: ["127.0.0.1:${G0_JENKINS_PORT}:8080"]
+    volumes:
+      - probe-jenkins:/var/jenkins_home
+      - ${G0_RUNTIME}/jenkins.yaml:/probe/jenkins.yaml:ro
+      - ./oidc-probe.groovy:/usr/share/jenkins/ref/init.groovy.d/g0-token-probe.groovy:ro
+volumes:
+  probe-pg: {}
+  probe-jenkins: {}

@@ -35,5 +35,945 @@
     "isolated_negative_test_fixture",
     "temporarily_required_one_shot_upgrade_before_cutover"
   ],
-  "rule": "Ausnahme braucht exakten Pfad/Grund; niemals ein pauschales docs/** oder tests/**. Nach Livecutover keine One-shot-Upgradefunktion im normalen Produktimage/CLI."
+  "rule": "Ausnahme braucht exakten Pfad/Grund; niemals ein pauschales docs/** oder tests/**. Nach Livecutover keine One-shot-Upgradefunktion im normalen Produktimage/CLI.",
+  "g0_path_inventory": [
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "compose.yaml",
+      "terms": [
+        "di-managed-private",
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "GARAGE_MANAGED_ACCESS_KEY",
+        "DI_MIGRATION_IMPORT_KEYS",
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/compose-consolidation/EXECUTION_PLAN.md",
+      "terms": [
+        "di-managed-private",
+        "current.json"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/compose-consolidation/SPEC_MIGRATION.md",
+      "terms": [
+        "di-managed-private"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/compose-consolidation/review/MA-F1-accepted.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/grundinstallation/AENDERUNGEN.md",
+      "terms": [
+        "prepareDatenportalWorkspace"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/grundinstallation/AUFTRAG_GRUNDINSTALLATION.md",
+      "terms": [
+        "current.json",
+        "prepareDatenportalWorkspace",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/grundinstallation/reports/P1.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/management-and-access/EXECUTION_PLAN.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/management-and-access/SPEC_APPLICATIONS_GATEWAY.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/management-and-access/SPEC_MODELS.md",
+      "terms": [
+        "storageProfile",
+        "legacyAccessUrl"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/management-and-access/review/MA-D-accepted.md",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/management-and-access/review/MA-D-request.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/management-and-access/review/MA-D-review-01.md",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "historical_evidence_preserve"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/CODEX_STARTPROMPT.md",
+      "terms": [
+        "di-managed-private"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/EXECUTION_PLAN.md",
+      "terms": [
+        "storageProfile",
+        "legacyAccessUrl"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/OPENCODE_REVIEW_PROMPT.md",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/README.md",
+      "terms": [
+        "di-managed-private"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/SOURCES.md",
+      "terms": [
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/SPEC_CLEANUP_CUTOVER.md",
+      "terms": [
+        "di-managed-private",
+        "storageProfile",
+        "legacyAccessUrl",
+        "current.json",
+        "prepareDatenportalWorkspace",
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/SPEC_CSV_PIPELINE.md",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/SPEC_JENKINS_PLUGIN.md",
+      "terms": [
+        "prepareDatenportalWorkspace",
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/SPEC_MODELS_ACCESS.md",
+      "terms": [
+        "storageProfile",
+        "legacyAccessUrl"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/SPEC_STORAGE.md",
+      "terms": [
+        "di-managed-private",
+        "DI_MIGRATION_IMPORT_KEYS",
+        "storageProfile",
+        "legacyAccessUrl",
+        "current.json"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/implementation/storage-and-delivery/contracts/retirement-rules.json",
+      "terms": [
+        "di-managed-private",
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "GARAGE_MANAGED_ACCESS_KEY",
+        "DI_MIGRATION_IMPORT_KEYS",
+        "storageProfile",
+        "legacyAccessUrl",
+        "current.json",
+        "publishToDatenportal",
+        "prepareDatenportalWorkspace",
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "current_specification_describing_removal"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/legacy-names.md",
+      "terms": [
+        "prepareDatenportalWorkspace",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "docs/migration-ma-f.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/compose_runtime.py",
+      "terms": [
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "GARAGE_MANAGED_ACCESS_KEY"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/migration_coordinator.py",
+      "terms": [
+        "di-managed-private",
+        "GARAGE_MANAGED_ACCESS_KEY"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/migration_prepare.py",
+      "terms": [
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "GARAGE_MANAGED_ACCESS_KEY",
+        "DI_MIGRATION_IMPORT_KEYS"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/test_consolidation_f1.py",
+      "terms": [
+        "di-managed-private",
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/test_consolidation_f2.py",
+      "terms": [
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "GARAGE_MANAGED_ACCESS_KEY",
+        "DI_MIGRATION_IMPORT_KEYS",
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/test_consolidation_f3.py",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/test_consolidation_f4.py",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/test_garage_migration_delta.py",
+      "terms": [
+        "di-managed-private",
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "GARAGE_MANAGED_ACCESS_KEY",
+        "DI_MIGRATION_IMPORT_KEYS"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "scripts/testing/check-publication-manifest.py",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "services/apisix/routes.template.json",
+      "terms": [
+        "di-managed-private"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "services/garage/setup-compose.py",
+      "terms": [
+        "di-managed-private",
+        "GARAGE_DEFAULT_ACCESS_KEY",
+        "GARAGE_MANAGED_ACCESS_KEY",
+        "DI_MIGRATION_IMPORT_KEYS"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "services/migration/storage.py",
+      "terms": [
+        "di-managed-private"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-dev-stack",
+      "path": "tests/consolidation/storage_probe.py",
+      "terms": [
+        "di-managed-private"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "db/model-mapping.json",
+      "terms": [
+        "storageProfile",
+        "legacyAccessUrl"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "docs/legacy-import.md",
+      "terms": [
+        "legacyAccessUrl"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "docs/managed-downloads.md",
+      "terms": [
+        "di-managed-private"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/SO_AGI_DataInfrastructure_Catalog_20261104.ili",
+      "terms": [
+        "storageProfile",
+        "legacyAccessUrl"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/constraints.md",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/fixtures/duplicate-identifier.xtf",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/fixtures/invalid-available.xtf",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/fixtures/invalid-interval.xtf",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/fixtures/invalid-principal-kind.xtf",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/fixtures/invalid-scope.xtf",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "models/fixtures/valid-workflows.xtf",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "scripts/model_fixtures.py",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-admin",
+      "path": "src/main/java/ch/so/agi/dateninfrastruktur/admin/catalog/DeliveryRegistrationService.java",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "README.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "dev/stack/compose.yaml",
+      "terms": [
+        "GARAGE_DEFAULT_ACCESS_KEY"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "docs/architecture.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "docs/configuration.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "docs/container-deployment.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "docs/database-catalog.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "docs/operations.md",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "src/test/java/ch/so/agi/datenportal/catalog/database/CatalogDisclosureIT.java",
+      "terms": [
+        "storageProfile"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "src/test/java/ch/so/agi/datenportal/catalog/importxtf/ManifestCatalogSourceTest.java",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-sodata",
+      "path": "src/test/java/ch/so/agi/datenportal/config/CatalogInputsConfigurationTest.java",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "AGENTS.md",
+      "terms": [
+        "prepareDatenportalWorkspace"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "README.md",
+      "terms": [
+        "prepareDatenportalWorkspace",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "docs/biblios/entwicklung/checkout-und-konfiguration.adoc",
+      "terms": [
+        "current.json",
+        "prepareDatenportalWorkspace",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "docs/biblios/entwicklung/scan-und-validierung.adoc",
+      "terms": [
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "docs/biblios/entwicklung/seed-und-job-generierung.adoc",
+      "terms": [
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "docs/biblios/entwicklung/startformular-und-berechtigungen.adoc",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/java/ch/so/agi/jenkins/gretldatenportal/DefaultGuiDefinitionFactory.java",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/java/ch/so/agi/jenkins/gretldatenportal/GretlDatenportalJobGenerator.java",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/java/ch/so/agi/jenkins/gretldatenportal/GretlDatenportalRootAction.java",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/java/ch/so/agi/jenkins/gretldatenportal/JobDefinition.java",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/java/ch/so/agi/jenkins/gretldatenportal/PrepareDatenportalWorkspaceStep.java",
+      "terms": [
+        "prepareDatenportalWorkspace"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/java/ch/so/agi/jenkins/gretldatenportal/StartFormValidator.java",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/java/ch/so/agi/jenkins/gretldatenportal/TopicRepositoryScanner.java",
+      "terms": [
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/resources/ch/so/agi/jenkins/gretldatenportal/GretlDatenportalRootAction/start.jelly",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/main/webapp/js/gretl-datenportal.js",
+      "terms": [
+        "PUBLICATION_MODE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/DefaultGuiDefinitionFactoryTest.java",
+      "terms": [
+        "METADATA_FILE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/JobDefinitionParserTest.java",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/PipelineJobRendererTest.java",
+      "terms": [
+        "publishToDatenportal",
+        "METADATA_FILE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/PipelineScriptResolverTest.java",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/PrepareDatenportalWorkspaceStepTest.java",
+      "terms": [
+        "prepareDatenportalWorkspace"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/RunDetailsTest.java",
+      "terms": [
+        "METADATA_FILE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/StartFormValidatorTest.java",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-gretl-plugin",
+      "path": "src/test/java/ch/so/agi/jenkins/gretldatenportal/TopicRepositoryScannerTest.java",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-dev",
+      "path": "README.md",
+      "terms": [
+        "current.json",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-dev",
+      "path": "docs/biblios/entwicklung/lokaler-jenkins-start.adoc",
+      "terms": [
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-dev",
+      "path": "docs/biblios/entwicklung/referenz-konfiguration.adoc",
+      "terms": [
+        "current.json",
+        "publishToDatenportal",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-jenkins-dev",
+      "path": "tests/publication/test_delivery.py",
+      "terms": [
+        "current.json",
+        "publishToDatenportal",
+        "METADATA_FILE"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "README.md",
+      "terms": [
+        "current.json",
+        "publishToDatenportal",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "build.gradle",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/gradle-build-vertrag.adoc",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/gretl-datenportal-job-yaml.adoc",
+      "terms": [
+        "publishToDatenportal",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/index.adoc",
+      "terms": [
+        "current.json"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/jenkinsfile-aufloesung.adoc",
+      "terms": [
+        "publishToDatenportal",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/lieferverarbeitung.adoc",
+      "terms": [
+        "current.json",
+        "publishToDatenportal",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/lokaler-ablauf-integrieren-und-testen.adoc",
+      "terms": [
+        "current.json",
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/organisationen.adoc",
+      "terms": [
+        "publishToDatenportal",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/seed-und-bootstrap.adoc",
+      "terms": [
+        "current.json",
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/shared-defaults.adoc",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/startformular.adoc",
+      "terms": [
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "docs/biblios/struktur.adoc",
+      "terms": [
+        "gretl-datenportal-teams.yaml"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "shared/Jenkinsfile",
+      "terms": [
+        "prepareDatenportalWorkspace",
+        "METADATA_FILE",
+        "PUBLICATION_MODE",
+        "RELOAD_PORTAL"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "shared/gradle/datenportal-publication.gradle",
+      "terms": [
+        "current.json",
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    },
+    {
+      "repository": "dateninfrastruktur-themenrepo",
+      "path": "shared/gretl-datenportal-defaults.yaml",
+      "terms": [
+        "publishToDatenportal"
+      ],
+      "classification": "inspect_active_callers_before_retirement"
+    }
+  ]
 }
