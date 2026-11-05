@@ -5,7 +5,7 @@ Never used by normal setup, upgrade or application startup.
 """
 import json,secrets
 from compose_runtime import ROOT,init_context,write_private
-from test_consolidation_f1 import reserve_ports
+from ingestion_test_runtime import reserve_ports
 
 def create():
     c=init_context('mag-g2-reference-'+secrets.token_hex(5),reserve_ports(),True)

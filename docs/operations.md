@@ -1,107 +1,80 @@
-# Gemeinsamer Composebetrieb
+# Lokaler Betrieb der Dateninfrastruktur
 
-Der reguläre Verbund hat zehn Dienste: postgres, keycloak, garage, origin,
-gateway, sodata, admin, jenkins, clickhouse und superset. Ein PostgreSQL16.10/
-PostGIS3.5.2-Server enthält die getrennten Datenbanken keycloak, superset und
-dateninfrastruktur_management. Keine HA- oder zweite Managementinstanz.
+Die sechs Schwesterrepositories liegen im selben Arbeitsverzeichnis. Der
+Compose-Stack führt PostgreSQL 16/PostGIS, Garage, ClickHouse, Keycloak,
+Superset, Admin, Sodata, Origin, APISIX und Jenkins je einmal aus. Die
+PostgreSQL-Datenbanken und der private Bucket `ch.so.daten` werden durch
+explizites Setup eingerichtet. Normalstart und Recreate verwenden die
+bestehenden Volumes. Der aktive Kontext und alle Secrets liegen privat unter
+`.runtime/`. Ports für Gateway, Keycloak, Superset und ClickHouse sind nur
+an Loopback gebunden. Admin, PostgreSQL, Jenkins, Sodata und Origin haben
+keinen eigenen Hostport.
 
-Alle Rootskripte und die Managementaliases verwenden `compose_operations.py`:
-dieselbe compose.yaml, explizite private ENV-Datei, Projekt-/Instanzkennung und
-Runtime. Die aktive Zuordnung steht geschützt unter `.runtime/active-compose.json`;
-die Konfiguration selbst unter `.runtime/<project>/runtime.env`. Alte `.env` und
-ADMIN/.runtime sind ausschliesslich Migrationsquellen, kein zweiter Normalstart.
+## Frische Installation und Normalstart
 
-## Bestehender Bestand
-
-Kein `init` über eine bestehende Foundation ausführen. Die kontrollierte Übernahme
-steht in [migration-ma-f.md](migration-ma-f.md). Ein vorhandenes anderes Projekt
-oder unbekannter Runtimebereich wird weder adoptiert noch zurückgesetzt.
-Nach erfolgreicher Umschaltung verwenden normale Skripte automatisch den aktiven
-Zielkontext; der migrationsbedingt gewählte Projektname darf vom Freshdefault
-`dateninfrastruktur-dev-stack` abweichen.
-
-## Frische leere Installation
-
-Docker/Compose und die sechs Geschwistercheckouts sind erforderlich. Die vorhandene
-Jenkins-/Plugin-Buildkette bleibt erhalten (`build-jenkins-local.sh`, JDK21/Maven);
-der Stack verwendet das bereits lokal gebaute Jenkinsimage über seine Image-ID.
-Admin, Sodata, PostgreSQL und die Schema-/Operatorwerkzeuge werden in Docker gebaut;
-Host-Java25, Host-pg_dump und Host-rclone sind für den Betrieb nicht erforderlich.
+Benötigt werden Docker mit Compose/Buildx, Python 3, Java 21 und Maven. Der
+Jenkinsbuild verwendet das lokal vorhandene, in
+[MA-G0 gebundene Toolchain-Image](implementation/storage-and-delivery/contracts/g0-toolchain.json).
+Ohne dessen exakten Image- und JAR-Nachweis bricht der Build ab. Aus
+`dateninfrastruktur-dev-stack`:
 
 ```sh
 ./scripts/init.sh
+IMAGE_NAME=dateninfrastruktur-jenkins:local ./scripts/build-jenkins-local.sh "$PWD/.runtime/jenkins-build-first"
+python3 scripts/bind_jenkins_image.py dateninfrastruktur-jenkins:local
 ./scripts/setup.sh
 ./scripts/up.sh --skip-build
+python3 scripts/provision_ingestion_oidc.py --register-pg
 ./scripts/status.sh
-./scripts/smoke-test.sh
 ```
 
-`setup` ist ausdrücklich erforderlich. Der erste Lauf legt nur leere technische
-Strukturen an, keine fachlichen Datensätze, Authorities oder Grants. Ein bekannter
-Bestand wird ausschliesslich verifiziert; fehlende bekannte Datenbanken/Schemas
-werden nicht durch einen leeren Neuaufbau verdeckt. Native Buildoptionen der
-Anwendungen bleiben in deren Gradleprojekten bestehen; JVM ist der geprüfte Betrieb.
+Das Setup legt nur technische Rollen, SQL-Sichten, den Bucket mit separatem
+Reader/Writer und leere Anwendungsschemas an. Es erstellt keine Personen,
+Datensätze, Grants oder Demodateien. Für bestehende Daten mit abweichendem
+Schema stoppt es. [Lokaler Cutover](implementation/storage-and-delivery/LOCAL_CUTOVER.md)
+dokumentiert die gesonderte, einmalige Übernahme. Die Bedienbefehle
+`up.sh --skip-build`, `stop.sh`, `restart.sh`, `down.sh`, `status.sh` und
+`logs.sh` verwenden denselben gebundenen Kontext. `down.sh` erhält Volumes.
+Für einen bewusst separaten Kontext dienen `--project` und `--env`;
+keine Dateien zwischen Instanzen kopieren.
 
-## Tagesbetrieb
+## Einen Datensatz für CSV-Anlieferung öffnen
 
-```sh
-./scripts/up.sh                 # benötigte kanonische Images bauen, starten
-./scripts/up.sh --skip-build    # vorhandene Images verwenden
-./scripts/up.sh --build-only    # nur bauen
-./scripts/stop.sh               # Container stoppen, alle Daten behalten
-./scripts/restart.sh            # geordnet stoppen/starten, kein Seed
-./scripts/down.sh               # eigene Container/Netz entfernen; KEINE Volumes
-./scripts/logs.sh --tail 100
-```
+1. Die berechtigte Person in Keycloak eindeutig anhand Issuer und Subject
+   zuordnen. Mit dem Betreiberkommando
+   `python3 scripts/compose_operator.py bootstrap-submitters <private-anfrage.json>`
+   die erste Verwaltung von Lieferrechten auf den vorgesehenen Datensatz
+   oder das vorgesehene Amt beschränken. Die Datei gehört in den ausgewählten
+   Runtimeordner und muss Modus 0600 haben. Das genaue Format steht in
+   [MA-G2 Backend](implementation/storage-and-delivery/MA-G2_BACKEND.md).
+2. Im Admin einen publizierten Datensatz und seine Ausgabe wählen. Unter
+   `/management/delivery` einen genehmigten CSV-Vertrag aus dem Themenrepo
+   auswählen, zulässige Liefermodi festlegen und automatische Veröffentlichung
+   bewusst bestätigen. Ein neuer Vertrag benötigt ein fest gepinntes
+   INTERLIS-Modell, die validierte Definition samt Schema/Hashes, einen
+   Runnerbuild sowie Testdaten. Die Vorgaben stehen in
+   [CSV-Verarbeitung](implementation/storage-and-delivery/MA-G4_PROCESSING.md).
+3. Auf derselben Verwaltungsseite der geprüften Identität ein Lieferrecht
+   erteilen. Der Dateizugang für geschützte Daten wird separat unter
+   `/management/datasets/<uuid>/grants` vergeben und entzogen.
 
-Mit `--env /absoluter/pfad/.runtime/<projekt>/runtime.env` ist dieselbe Bedienung
-für einen ausdrücklich gewählten Kontext möglich. Ein falsches Instance-Label
-oder eine geänderte bekannte Volumenzuordnung wird vor Start/Stop abgewiesen.
-Neue Datenablagen verlangen eine explizite Migration. Keine `--volumes`, kein
-`--remove-orphans` und kein Prune in diesen Betriebsbefehlen.
+## Liefern, prüfen, erneut versuchen
 
-Nach explizitem Setup funktioniert auch das reine Compose-Up mit demselben File:
+Über das Gateway `/anlieferung` öffnen und sich mit Keycloak anmelden.
+Datensatz, Ausgabe und erlaubten Modus wählen, Kommentar eingeben und CSV
+hochladen. Die Anlieferungsseite zeigt Status, Laufhistorie und eine bereinigte
+Prüfmeldung. Erneut versuchen steht nur bei einem behebbaren Fehler und
+wirksamem Lieferrecht zur Verfügung. Eine ungültige Datei korrigieren und neu
+einreichen. Der technische Jenkinsjob wird über die Anlieferung ausgelöst.
 
-```sh
-docker compose --project-name <projekt> --env-file .runtime/<projekt>/runtime.env --file compose.yaml up -d --wait
-```
+Nach erfolgreichem Abschluss zeigt Sodata den neuen Stand unter `/datasets`.
+Historische Downloads bleiben auf ihren eigenen URLs; APISIX prüft jede
+Dateianfrage über Admin. Zwischen Fachcommit und sichtbarer SQL-Projektion
+kann der Status kurz «Angenommen» anzeigen. Bei Störungen
+`./scripts/status.sh` und `./scripts/logs.sh --tail 100 <dienst>` prüfen.
+Bei anhaltender Störung des Projektors zuerst dessen ClickHouse-Berechtigung
+und Verfügbarkeit prüfen; die Wiederholung geschieht auf dem gebundenen
+Ziel. Keine Dateien/Versuche manuell in einen neuen Stand umschreiben.
 
-Standardadressen: Gateway/Portal/Admin/Jenkins `http://localhost:18081/`,
-Anlieferung `/anlieferung`, Jenkins `/jenkins/`, Keycloak `http://localhost:18080/`,
-Superset `http://localhost:18088/`, ClickHouse HTTP/native 18123/19000.
-Admin, Sodata, PostgreSQL, Garage und Origin haben keine direkten Hostports.
-Alte öffentliche Manifest-/Bucketpfade sind gesperrt. Im MA-G-Ziel ist
-`ch.so.daten` der einzige private Anwendungsbucket. Origin liest ausschliesslich
-`downloads/` mit dem Reader; Webdienste erhalten keine Storagecredentials.
-Die tatsächliche lokale Umschaltung ist im aktiven WORK_QUEUE ausgewiesen.
-
-## Operatoren und Tests
-
-Neue CSV-Versionen werden ausschliesslich über den gebundenen, validierten
-Ingestionabschluss angenommen. Die manuelle Versions-/Dateiaktivierung wurde
-entfernt. Der explizite Operator vergibt den ersten `manage_submitters`-Auftrag:
-
-```sh
-python3 scripts/compose_operator.py bootstrap-submitters <private-request.json>
-```
-
-Scope-/Dateivertrag und aktueller Phasenstand:
-[MA-G2 Backend](implementation/storage-and-delivery/MA-G2_BACKEND.md).
-Kein Aufruf beim Normalstart und keine automatische Rechtevergabe.
-
-Der frühere Legacy-Metadatenimport ist entfernt. Ein alter Storagebestand wird
-nicht durch normales Setup oder Start migriert: diese Befehle verlangen die
-geprüfte explizite MA-G1-Umstellung. Normales Setup erzeugt bei frischen Instanzen
-den privaten Bucket sowie getrennte Writer-/Readerkeys. Wiederholtes Setup
-behält vorhandene Keys, Secrets, Objekte und Fachdaten; unbekannte Zuordnungen
-oder fehlende bekannte Ressourcen verursachen einen geschlossenen Fehler.
-
-Normalstart führt keine Schemaänderung, Seeds, Purges oder Portalreloads aus.
-Der CSV-Verarbeitungsweg wird erst nach den jeweils unabhängigen MA-G2–G4-
-Abnahmen freigeschaltet. Historische Ladebelege bleiben an ihren bisherigen Orten.
-
-`smoke-test.sh` liest nur den gewählten aktiven Kontext. Phasentests entstehen
-explizit isoliert über `test-consolidation.sh --phase MA-F1/MA-F2/MA-F3/MA-F4`.
-Historische Grundinstallations-/Zweiinstanz-Testlauncher sind retired und melden
-keinen irreführenden PASS. Ihre Implementierung/Nachweise bleiben in der Git-
-und Dokumentationshistorie; Modelle, Fach-/Auditverträge und Javafachtests bleiben.
+Die Bedienwege und Abnahmen stehen im
+[MA-G-Arbeitsstand](implementation/storage-and-delivery/WORK_QUEUE.md).

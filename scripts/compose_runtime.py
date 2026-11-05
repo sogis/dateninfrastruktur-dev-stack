@@ -1,5 +1,5 @@
 """One explicit Compose context. No secondary container lifecycle."""
-import hashlib,json,os,pathlib,re,secrets,shlex,subprocess
+import json,os,pathlib,re,secrets,subprocess
 from ingestion_clients import extend_fresh
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 def encode_env(value):
@@ -50,7 +50,7 @@ def init_context(project,ports=None,test_fixture=False):
     # Fresh mode never adopts an existing running foundation under its default name.
     existing=subprocess.check_output(['docker','ps','-aq','--filter','label=com.docker.compose.project='+project],text=True).strip()
     if existing:raise RuntimeError('Existing project requires explicit planned migration, never fresh init')
-    values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres-ma-f','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader','THEMEN_REPO_DIR':str(ROOT.parent/'dateninfrastruktur-themenrepo')}
+    values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader','THEMEN_REPO_DIR':str(ROOT.parent/'dateninfrastruktur-themenrepo')}
     if ports:values.update({k:str(v) for k,v in ports.items()})
     for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_AUTHZ_PASSWORD','DI_PUBLIC_PASSWORD','DI_AUDIT_READER_PASSWORD','DI_MIGRATOR_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_INGESTION_PLUGIN_SECRET','DI_INGESTION_LEASE_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET','DI_CH_LOADER_PASSWORD','DI_CH_PROJECTOR_PASSWORD','DI_CH_READER_PASSWORD']:values[key]=secrets.token_hex(32)
     values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
@@ -108,12 +108,3 @@ def setup_context(context):
             context.values=read_env(context.env_file)
             render(context)
     print('Explicit setup complete; no application demo seed')
-if __name__=='__main__':
-    import argparse
-    p=argparse.ArgumentParser();p.add_argument('action',choices=['init','build','setup','up','status']);p.add_argument('--project',default='dateninfrastruktur-dev-stack');p.add_argument('--env');p.add_argument('--test-fixture',action='store_true');a=p.parse_args()
-    c=init_context(a.project,test_fixture=a.test_fixture) if a.action=='init' else ComposeContext(a.env or ROOT/'.runtime'/a.project/'runtime.env')
-    if a.action=='build':c.command(['build','admin','sodata','management-tool-build','superset']+(['test-tool-build'] if c.values['DI_TEST_FIXTURE']=='true' else []))
-    elif a.action=='setup':setup_context(c)
-    elif a.action=='up':c.command(['up','-d','--wait','--wait-timeout','300'])
-    elif a.action=='status':print('http://localhost:'+c.values['GATEWAY_PORT'])
-    print('Compose operation completed for '+c.project)

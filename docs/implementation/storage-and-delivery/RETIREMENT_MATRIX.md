@@ -87,3 +87,18 @@ Web-/Toolimages enthalten keinen manuellen Dateianahmepfad. Historische
 unknown/prepared-Fixtures bleiben nur im ausdrücklichen Testprofil; die
 Vorgänger-Upgradetests bauen G1 aus seinen gepinnten Commits. Tatsächliche
 CSV-/Format-/Storage-/CH-Verifikation und die Projektion folgen in G4.
+
+## Abschlusskandidat MA-G5
+
+| Bereich | Ehemals erreichbarer Pfad | Wirksamer Ersatz und Abnahme |
+|---|---|---|
+| PUBLIC | Snapshot-, XTF-/Manifest-/DuckDB-Import, Reload und Artefaktrouten, Lucene; deaktiviertes Explore/WebR; eigene alte Dev-S3-Compose und Buildassets | Ausschliesslich PostgreSQL-Views. G51/G57: echte Portalroute, Details, Struktur, Serien/aktuelle und alte Ausgaben, Suche/Facetten/Pagination und Downloads. Die verbliebenen Rendering-, Asset- und Security-Tests laufen weiter. G56 prüft die alten tatsächlich verwendeten URLs. |
+| ADMIN | Separate Runtime-/Setup-/Control-Wrapper, altes Identitätsoperatorprogramm, breit gepackter Toolkontext und temporäre Ingestion-/Projektionsschalter | Ein Compose-Setup, fester CSV-/Projektionspfad. G50/G56 prüfen normale Images und Abwesenheit der Einmaltools; SQLmigrationen bleiben Modellhistorie. G52 prüft aktuelle Fachrechte an realem Claim und Commit. |
+| JENKINS | Alter Offline-Bundlegenerator, alte Publisher-/Explore-Smokes und früherer automatischer Veröffentlichungsworkflow | Ein lokaler Build aus genau dem versionierten HPI, Runner, Modellen und Verträgen und der geprüften Toolchain. Alter Workflow als historische Quelle abgelegt; keine neue CI. G50/G56. |
+| PLUGIN/JCasC | Früherer Seeder, Organisationsjobs/-ACLs, lokaler Lieferanten-Realm, altes Lock und Cache | Ein fester Job mit OIDC, technischen Berechtigungen und gesondertem Operatorzugang. G53/G56 testen den alten Form- und direkten Jobpfad sowie die Offlinearchivierung markierter Dateien. Tatsächliche Altjobs und lokale Kontodateien werden erst im geprüften lokalen Lauf archiviert. Fremde Dateien bleiben. |
+| TOPICS | Acht Job-YAMLs mit Organisationsrechten, Defaults, Organisations-/Dataset-Gradle, S3-/Manifest-/SQL-/XSL-Publikation | Entfernt; festes Runnerprojekt mit den bestehenden INTERLIS-Modellen und Fachdateien. Historische Metadaten sind keine Discoveryquelle. Der separate ClickHouse-Ladeauftrag wird nicht geändert. |
+| STACK | Früheres MA-F-Migrationsprofil, Recoverygenerator, alte Storageadapter, Bootstrap- und doppelte Betriebswrapper | Ein kanonischer Compose- und Operatorpfad. G50/G54/G55/G56/G58; alte Upgrade- und Storagebelege bleiben an den vorherigen Phasencommits. Die einmalige echte Schemaübernahme bindet ihre Dateien ausdrücklich und liest keine Produkt- oder Fremdinstanz. |
+
+`contracts/retirement-rules.json` und `scripts/retirement_verifier.py` prüfen die
+konkret benannten Produktpfade. Die isolierte Integration ergänzt die statische
+Prüfung um tatsächliche HTTP-, Job-, Toolimage- und Bucketbeobachtungen.

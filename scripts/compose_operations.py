@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Public lifecycle: one explicit Compose context, no legacy runtime or implicit seed."""
 import argparse,json,pathlib,sys,os,subprocess
-from compose_runtime import ROOT,ComposeContext,init_context,setup_context,read_env,render
-from consolidation import private_write
+from compose_runtime import ROOT,ComposeContext,init_context,setup_context,read_env,render,write_private
 ACTIVE=ROOT/'.runtime/active-compose.json'
 
-def activate(context,plan=None):
+def activate(context):
     context.verify_project()
-    private_write(ACTIVE,{'env':str(context.env_file),'instance':context.values['INSTANCE_ID'],'project':context.project,'migration_plan':str(plan) if plan else None})
+    write_private(ACTIVE,json.dumps({'env':str(context.env_file),'instance':context.values['INSTANCE_ID'],'project':context.project},indent=2)+'\n')
 
 def resolve(env=None,project=None,create=False):
     if env:
@@ -52,7 +51,7 @@ def setup(c):
         c.command(['up','--no-build','-d','--wait','--wait-timeout','120','garage'])
         c.command(['--profile','setup','run','--rm','--no-deps','garage-setup'])
         c.values=read_env(c.env_file);render(c)
-    private_write(c.runtime/'setup-complete.json',{'instance':c.values['INSTANCE_ID'],'mode':'explicit-setup','volumes':volume_bindings(c)})
+    write_private(c.runtime/'setup-complete.json',json.dumps({'instance':c.values['INSTANCE_ID'],'mode':'explicit-setup','volumes':volume_bindings(c)},indent=2)+'\n')
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)

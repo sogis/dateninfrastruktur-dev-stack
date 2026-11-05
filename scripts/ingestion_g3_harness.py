@@ -1,13 +1,13 @@
 """Synthetic G3 runtime helpers. Never use an active/user Compose context."""
 import base64,json,os,pathlib,re,shutil,subprocess,time,urllib.parse,urllib.request,uuid
 from compose_runtime import ROOT,ComposeContext,init_context,update_context,write_private
-from test_consolidation_f1 import reserve_ports,cleanup
-from migration_db import target_sql
+from ingestion_test_runtime import reserve_ports,cleanup
+from compose_database import target_sql
 
 ADMIN=ROOT.parent/'dateninfrastruktur-admin'
 JENKINS=ROOT.parent/'dateninfrastruktur-jenkins-dev'
 def owned(c):
-    if not c.project.startswith(('mag-g3-','mag-g4-')) or c.values['DI_TEST_FIXTURE']!='true':raise RuntimeError('Isolated G3 test context required')
+    if not c.project.startswith(('mag-g3-','mag-g4-','mag-g5-')) or c.values['DI_TEST_FIXTURE']!='true':raise RuntimeError('Isolated G3 test context required')
     c.verify_project()
 def compose(c,args,log):
     owned(c);p=c.command(args,check=False);write_private(c.runtime/log,c.redact(p.stdout+p.stderr))

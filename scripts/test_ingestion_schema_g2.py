@@ -2,8 +2,8 @@
 """G20/G21: real fresh target and known, nonempty MA-G1→G2 upgrade; no user dumps."""
 import hashlib,io,json,os,pathlib,secrets,subprocess,tarfile,sys
 from compose_runtime import ROOT,ComposeContext,init_context,update_context,write_private
-from test_consolidation_f1 import reserve_ports,cleanup
-from migration_db import target_sql,row_hash_sql
+from ingestion_test_runtime import reserve_ports,cleanup
+from compose_database import target_sql,row_hash_sql
 
 SOURCE_ADMIN='e338727dcff18f2d1d3a803fc29e31417f99ac08'
 SOURCE_STACK='3fce2fb1360a675a2e966824ec53404f25e0213a'
@@ -23,6 +23,12 @@ def run():
         return p.stdout
     def query(q):return target_sql(c,'dateninfrastruktur_management',q)
     candidate_tool=c.values['TOOL_IMAGE']
+    admin_source=ROOT.parent/'dateninfrastruktur-admin'
+    upgrade_tool=['--profile','setup','run','--rm','--no-deps',
+                  '--volume',str(admin_source/'scripts/upgrade_contract.py')+':/opt/admin/scripts/upgrade_contract.py:ro',
+                  '--volume',str(admin_source/'db/upgrade')+':/opt/admin/db/upgrade:ro',
+                  '--entrypoint','python3','management-setup']
+
     try:
         command(['build','postgres','management-tool-build'])
         if '--fresh-only' in sys.argv:
@@ -59,7 +65,7 @@ def run():
         c=update_context(c,{'TOOL_IMAGE':candidate_tool})
         # Real unknown predecessor must stop before the first DDL, retaining even the unknown fingerprint.
         query("UPDATE di_ops.contract_fingerprint SET fingerprint='"+'0'*64+"' WHERE singleton;")
-        p=c.command(['--profile','migration','run','--rm','--no-deps','management-upgrade'],check=False)
+        p=c.command([*upgrade_tool,'/opt/admin/scripts/upgrade_contract.py'],check=False)
         write_private(c.runtime/'unknown-source.log',c.redact(p.stdout+p.stderr));assert p.returncode!=0
         assert query("SELECT count(*) FROM information_schema.tables WHERE table_schema='di_management' AND table_name='csvdeliveryconfiguration';")=='0'
         assert query(row_hash_sql('SELECT * FROM audit.row_change'))==before
@@ -78,7 +84,7 @@ def execute(query):
 u.sql=execute
 u.apply()
 """)
-        print(command(['--profile','migration','run','--rm','--no-deps','--entrypoint','python3','management-upgrade','/runtime/upgrade-probe.py']).strip())
+        print(command([*upgrade_tool,'/runtime/upgrade-probe.py']).strip())
         assert query('SELECT di_ops.single_storage_contract() AND di_ops.ingestion_contract();')=='t'
         assert query('SELECT count(*) FROM di_management.csvdeliveryconfiguration;')=='0'
         assert query("SELECT count(*) FROM di_management.authorityassignment WHERE capability IN ('submit_data','manage_submitters');")=='0'
@@ -89,7 +95,7 @@ u.apply()
         assert query(row_hash_sql("SELECT t_id,t_ili_tid,objectkey,sha256,bytesize,version,availability FROM di_management.distribution"))==distribution
         print(command(['--profile','setup','run','--rm','--no-deps','management-setup','verify']).strip())
         # Repeating the explicit upgrade is read-only and never clears or seeds data.
-        print(command(['--profile','migration','run','--rm','--no-deps','management-upgrade']).strip())
+        print(command([*upgrade_tool,'/opt/admin/scripts/upgrade_contract.py']).strip())
         write_private(c.runtime/'roundtrip.py',"""import sys,os,pathlib,tempfile,subprocess
 sys.path.insert(0,'/opt/admin/scripts')
 from management_db import R,D

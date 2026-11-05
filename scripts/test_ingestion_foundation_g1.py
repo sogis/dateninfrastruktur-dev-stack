@@ -2,7 +2,7 @@
 """Focused G14/G19 regression; no browser/schema migration or user resources."""
 import secrets
 from compose_runtime import ROOT,init_context,ComposeContext,write_private
-from test_consolidation_f1 import reserve_ports,cleanup
+from ingestion_test_runtime import reserve_ports,cleanup
 def run():
     c=init_context('mag-g1-foundation-'+secrets.token_hex(5),reserve_ports(),True)
     def command(args):

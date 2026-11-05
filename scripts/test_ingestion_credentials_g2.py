@@ -3,7 +3,7 @@
 import secrets,stat
 from compose_runtime import init_context,ComposeContext,write_private
 from prepare_ingestion_g2 import prepare,KEYS
-from test_consolidation_f1 import reserve_ports,cleanup
+from ingestion_test_runtime import reserve_ports,cleanup
 
 def run():
     context=init_context('mag-g2-credentials-'+secrets.token_hex(5),reserve_ports(),True)

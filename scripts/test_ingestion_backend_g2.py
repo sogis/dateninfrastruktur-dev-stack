@@ -2,7 +2,7 @@
 """Real G2 process contracts in a fresh, isolated canonical PG project, synthetic data only."""
 import secrets
 from compose_runtime import init_context,update_context,write_private
-from test_consolidation_f1 import reserve_ports,cleanup
+from ingestion_test_runtime import reserve_ports,cleanup
 
 def run():
     c=init_context('mag-g2-backend-'+secrets.token_hex(5),reserve_ports(),True)

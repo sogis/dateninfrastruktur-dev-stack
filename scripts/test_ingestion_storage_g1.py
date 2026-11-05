@@ -2,7 +2,7 @@
 """G10–G13/G18: real canonical Compose Garage, own synthetic reader/writer state."""
 import json,pathlib,secrets,sys
 from compose_runtime import ROOT,init_context,ComposeContext,write_private
-from test_consolidation_f1 import reserve_ports,cleanup
+from ingestion_test_runtime import reserve_ports,cleanup
 
 def run():
     c=init_context('mag-g1-storage-'+secrets.token_hex(5),reserve_ports(),True)

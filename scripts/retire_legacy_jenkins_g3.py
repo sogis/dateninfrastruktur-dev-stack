@@ -2,6 +2,7 @@
 """Explicit offline retirement using the single owned Compose Jenkins volume."""
 import argparse,json,pathlib,subprocess,uuid
 from compose_operations import ACTIVE,resolve
+from compose_runtime import ROOT
 
 def run(context,action,name):
     context.verify_project();volume=context.values['JENKINS_VOLUME']
@@ -28,7 +29,7 @@ def run(context,action,name):
         if plan.get('target_project')!=context.project or plan.get('target_instance')!=active['instance'] or volume not in plan.get('retained_volumes',[]):
             raise RuntimeError('Jenkins volume was not included in the bound retained set')
     mount=volume+':/jenkins-home'+(':ro' if action=='plan' else '')
-    return context.command(['--profile','setup','run','--rm','--no-deps','--volume',mount,'-e','DI_RETIRE_INSTANCE='+context.values['INSTANCE_ID'],'-e','DI_RETIRE_VOLUME='+volume,'--entrypoint','python3','management-setup','/opt/stack-tools/migration/retire_jenkins_g3.py',action,name]).stdout.strip()
+    return context.command(['--profile','setup','run','--rm','--no-deps','--volume',mount,'--volume',str(ROOT/'tests/ingestion/retired/retire_jenkins_g3.py')+':/opt/retire_jenkins.py:ro','-e','DI_RETIRE_INSTANCE='+context.values['INSTANCE_ID'],'-e','DI_RETIRE_VOLUME='+volume,'--entrypoint','python3','management-setup','/opt/retire_jenkins.py',action,name]).stdout.strip()
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('action',choices=['plan','apply']);p.add_argument('--file');p.add_argument('--env');p.add_argument('--project');a=p.parse_args();c=resolve(a.env,a.project)
