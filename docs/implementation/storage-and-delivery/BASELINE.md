@@ -38,8 +38,10 @@ Namen liegen privat; G3 muss Eigentümerschaft/Marker pro Job belegen. Home und
 fremde Jobs bleiben erhalten. Keycloak-/Jenkinsidentitäten wurden nicht verändert.
 
 Garage: `ch.so.daten` enthält vier alte Entwicklungsobjekte (510021 Bytes).
-`di-managed-private` enthält 35 Objekte (13769 Bytes); PG referenziert insgesamt
-16 Distributionen. Ein weiterer lokal aliasierter Bucket enthält ein Objekt
+`di-managed-private` enthält 17 Dateien (13787 Bytes) und 18 virtuelle
+Verzeichniseinträge; PG referenziert insgesamt
+16 Distributionen. Alle 16 referenzierten Keys sind im Quellbucket vorhanden;
+eine weitere Datei bleibt bis zur Herkunftsprüfung geschützt. Ein weiterer lokal aliasierter Bucket enthält ein Objekt
 (51 Bytes). Dies ist **kein** Beleg, dass unbekannte Objekte gelöscht werden dürfen.
 G1 muss Referenzen, technische Canaries und verbleibende unbekannte Objekte
 konkret zuordnen. Bucket-IDs, Keys, Pfade und Detailinventuren bleiben privat.

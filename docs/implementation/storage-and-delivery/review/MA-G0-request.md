@@ -12,8 +12,8 @@
 G0 ändert Arbeitsanweisungen, Bestands-/Zielzuordnung, zentralen Reviewrunner und
 ausschliesslich isolierte Testspikes. Kein aktiver Storage-/Modell-/Job-/Webpfad
 wurde umgestellt. Es gibt noch keinen neuen Ingestionproduktendpunkt. Keine
-Nutzerdatei/kein Bucket/kein Grant wurde verändert. Alles G00–G04 frisch prüfen;
-keine Übernahme alter Abnahmen.
+Nutzerdatei/kein Bucket/kein Grant wurde verändert. Dokumentationsdelta nach unabhängiger Erstabnahme: G00/G04 frisch;
+G01/G02/G03 einzeln gebunden übernehmen, sofern der Reviewer Nichtbetroffenheit bestätigt.
 
 | Änderung | Gefährdete Verträge | Frische Prüfung |
 |---|---|---|
@@ -64,3 +64,17 @@ G0 soll beweisen, dass die benötigten APIs/Validatorfunktionen wirklich verfüg
 sind und die nächste Phase prüfbar isoliert ist. Kein G1–G5-PASS vorwegnehmen.
 Mindestens eine eigene risikogerechte Gegenprobe ausführen. Der Reviewrequest
 enthält keine selbstreferenzielle Head-ID; der Runner bindet echte Commits danach.
+
+## Aktueller Delta: korrigierte Dateiinventur
+
+BASELINE/RETIREMENT_MATRIX trennen nun 17 private Dateien (13787 Bytes) von
+18 virtuellen rclone-Verzeichnissen. Alle 16 PGreferenzen sind vorhanden; die
+eine zusätzliche Datei bleibt geschützt. Keine Code-/Test-/Modell-/Binäränderung.
+Die anfängliche Zahl 35 enthielt Verzeichnisse mit Size=-1. Lokale Daten wurden
+weder verändert noch dem Reviewer zugänglich gemacht.
+
+Frisch G00/G04: Hash-/Quellenbindung, Dokumentationsgrenzen/aktuelle Pfade und
+eine eigene risikogerechte Gegenprobe. G01/G02/G03 werden aus der eigenen
+unabhängigen Erstabnahme 20261105T140634Z mit den durch --prior-run gebundenen
+Hashes übernommen. Routing/Gate/Tokenadapter/CSVtask/105 JARs/Pilotmodell sind
+bytegleich; keine Wiederholung der unberührten Browser-/Validatorläufe nötig.

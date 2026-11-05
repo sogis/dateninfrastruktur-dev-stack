@@ -36,6 +36,8 @@ nicht verändert. Die Phasenspalte ist ein Umsetzungsauftrag, kein Erledigt-Nach
 
 Nur alter Inhalt des identifizierten lokalen `ch.so.daten` ist zum Purge freigegeben.
 Die 16 PGreferenzierten Distributionen einschliesslich Historie sind zu erhalten.
+Die Inventur trennt Dateien von virtuellen rclone-Verzeichnissen (17 Dateien,
+18 Verzeichniseinträge); die unreferenzierte Datei bleibt bis zur Zuordnung geschützt.
 `di-managed-private` erst nach byte-/metadatengeprüfter Übernahme entfernen.
 Unbekannte zusätzliche Sourceobjekte sind ein enger Cutoverblocker, keine
 Löschfreigabe. Zusätzlicher lokal aliasierter Bucket wird erst nach Nachweis
