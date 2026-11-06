@@ -116,7 +116,7 @@
             "X-Userinfo",
             "X-DI-Gateway-Credential"
           ],
-          "allow_degradation": false,
+          "allow_degradation": true,
           "status_on_error": 503,
           "timeout": 2000,
           "keepalive": true
