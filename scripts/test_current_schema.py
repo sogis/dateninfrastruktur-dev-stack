@@ -76,6 +76,8 @@ def security(c):
     assert sql(c,"SELECT NOT has_table_privilege('di_audit_owner','di_management.csvdeliveryconfiguration','SELECT')")=='t'
     assert sql(c,"SELECT count(*) FROM audit.row_change WHERE table_name='csvdeliveryconfiguration'")!='0'
     for mutation,restore in (
+        ('ALTER TABLE di_management.dataset ADD COLUMN mapping_counterexample bigint',
+         'ALTER TABLE di_management.dataset DROP COLUMN mapping_counterexample'),
         ('ALTER TABLE di_management.dataset DISABLE TRIGGER di_audit_log',
          'ALTER TABLE di_management.dataset ENABLE TRIGGER di_audit_log'),
         ('GRANT SELECT ON audit.row_change TO di_public','REVOKE SELECT ON audit.row_change FROM di_public'),
@@ -91,7 +93,7 @@ def security(c):
             sql(c,restore)
         assert setup_command(c,'verify').returncode==0
     identity_guard(c)
-    return 18
+    return 23
 
 
 def identity_guard(c):
@@ -134,14 +136,18 @@ def packaged_java(c):
     assert 'Packaged Java verifier accepted' in java(c,'SchemaRuntimeProbe').stdout
     assert before==state(c)
     marker=hashlib.sha256(body).hexdigest()
-    sql(c,"UPDATE di_ops.contract_fingerprint SET fingerprint=repeat('0',64)")
+    predecessor='a7beb105097f00a64b8351cd0a8aa8b75a44eceb735767e0aa457a39e7f1e3f4'
+    sql(c,f"UPDATE di_ops.contract_fingerprint SET fingerprint='{predecessor}' WHERE singleton")
+    altered=state(c)
     try:
         assert setup_command(c,'verify',check=False).returncode!=0
+        assert setup_command(c,'setup',check=False).returncode!=0
         assert java(c,'SchemaRuntimeProbe',check=False).returncode!=0
+        assert state(c)==altered and (ADMIN/'db/persistence-contract.properties').read_bytes()==body
     finally:
         sql(c,f"UPDATE di_ops.contract_fingerprint SET fingerprint='{marker}'")
     assert setup_command(c,'verify').returncode==0
-    return 6
+    return 8
 
 
 def retention_boundary(c):
