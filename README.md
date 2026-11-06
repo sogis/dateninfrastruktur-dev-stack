@@ -1,15 +1,21 @@
 # Dateninfrastruktur – lokaler Stack
 
-Ein Docker-Compose-Projekt für PostgreSQL/PostGIS, den privaten Garage-Bucket,
-ClickHouse, Superset, Keycloak, Jenkins mit CSV-Anlieferung, Admin, Sodata
-und das Gateway. Der Stack verwendet die sechs bestehenden
-Dateninfrastruktur-Repositories als Geschwister.
+Der Stack verbindet PostgreSQL/PostGIS, Garage, ClickHouse, Keycloak, Superset,
+Admin, Sodata, Origin, APISIX und Jenkins in einem Compose-Projekt. Der private
+Bucket `ch.so.daten` dient den gebundenen CSV-Lieferungen und Downloads. Der
+Managementkatalog und die Fachrechte liegen in PostgreSQL.
 
-[Installation und Betrieb](docs/operations.md) beschreibt explizites Setup,
-Normalstart, Lieferrechte und CSV-Anlieferung. Der
-[MA-G-Arbeitsstand](docs/implementation/storage-and-delivery/WORK_QUEUE.md)
-trennt unabhängige Codeabnahme und lokale Umstellung. Die separate
-ClickHouse-Ladeimplementierung bleibt in ihrem bestehenden Projektpfad.
+[Lokaler Betrieb](docs/operations.md) beschreibt Erstaufbau, Normalstart,
+Anlieferung, Betrieb und Testgrenzen. Für integrierte Prüfungen die
+Schwesterrepositories im selben Workspace bereitstellen.
 
-Frühere Grundinstallations-, Lade- und Konsolidierungsberichte sind unter
-`docs/implementation/` abgelegt.
+- `python3 scripts/test_submission_backend.py` prüft Lieferrechte, Ausführung
+  und die HTTP-Sicherheitsgrenze in einem eigenen PostgreSQL-Kontext.
+- `python3 scripts/test_single_bucket_storage.py` prüft Reader-/Writer-Grenzen
+  und wiederholbares Storage-Setup im isolierten Garage-Kontext.
+- `python3 scripts/test_csv_delivery.py` prüft den Lieferweg mit dem
+  gebundenen lokalen GRETL-Bundle.
+- `python3 scripts/test_public_catalog.py` prüft in einer eigenen
+  PostgreSQL-Instanz den Sodata-Lesevertrag, eine echte Admin-Mutation
+  und den Ausfallpfad. Der Test benötigt lokal Java 25 und Gradle über die
+  mitgelieferten Wrapper.

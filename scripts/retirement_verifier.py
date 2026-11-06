@@ -7,7 +7,7 @@ import re
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RULES = ROOT/'docs/implementation/storage-and-delivery/contracts/retirement-rules.json'
+RULES = ROOT/'tests/retirement-rules.json'
 
 class RetirementVerifier:
     @staticmethod

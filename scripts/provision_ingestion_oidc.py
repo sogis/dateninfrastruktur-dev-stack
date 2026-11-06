@@ -4,7 +4,7 @@ import argparse,hmac,json,urllib.error,urllib.parse,urllib.request,uuid
 from compose_operations import resolve
 from compose_runtime import ComposeContext,write_private
 from ingestion_clients import clients,executor_subject,EXECUTOR,JENKINS,ROLE_NAMES
-from prepare_ingestion_g2 import prepare,KEYS
+from prepare_ingestion_credentials import prepare,KEYS
 
 CH_KEYS=('DI_CH_LOADER_PASSWORD','DI_CH_PROJECTOR_PASSWORD','DI_CH_READER_PASSWORD')
 OIDC_KEYS=('DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET')

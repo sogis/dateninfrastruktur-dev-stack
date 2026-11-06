@@ -1,2 +1,0 @@
-keycloak|f|f|f
-superset|f|f|f

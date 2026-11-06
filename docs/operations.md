@@ -17,7 +17,7 @@ verwendet Java 21 und Maven auf dem Host; Java 17 für GRETL ist im Image.
 Admin und Sodata bauen mit Java 25 im Container, und lokale Gradle-Tests
 dieser Anwendungen benötigen Java 25 auf dem Host. Der
 Jenkinsbuild verwendet das lokal vorhandene, in
-[MA-G0 gebundene Toolchain-Image](implementation/storage-and-delivery/contracts/g0-toolchain.json).
+[gebundene GRETL-Toolchain-Image](../../dateninfrastruktur-jenkins-dev/toolchain-lock.json).
 Ohne dessen exakten Image- und JAR-Nachweis bricht der Build ab. Aus
 `dateninfrastruktur-dev-stack`:
 
@@ -34,8 +34,7 @@ python3 scripts/provision_ingestion_oidc.py --register-pg
 Das Setup legt nur technische Rollen, SQL-Sichten, den Bucket mit separatem
 Reader/Writer und leere Anwendungsschemas an. Es erstellt keine Personen,
 Datensätze, Grants oder Demodateien. Für bestehende Daten mit abweichendem
-Schema stoppt es. [Lokaler Cutover](implementation/storage-and-delivery/LOCAL_CUTOVER.md)
-dokumentiert die gesonderte, einmalige Übernahme. Die Bedienbefehle
+Schema stoppt es. Die Bedienbefehle
 `up.sh --skip-build`, `stop.sh`, `restart.sh`, `down.sh`, `status.sh` und
 `logs.sh` verwenden denselben gebundenen Kontext. `down.sh` erhält Volumes.
 Für einen bewusst separaten Kontext dienen `--project` und `--env`;
@@ -47,16 +46,16 @@ keine Dateien zwischen Instanzen kopieren.
    zuordnen. Mit dem Betreiberkommando
    `python3 scripts/compose_operator.py bootstrap-submitters <private-anfrage.json>`
    die erste Verwaltung von Lieferrechten auf den vorgesehenen Datensatz
-   oder das vorgesehene Amt beschränken. Die Datei gehört in den ausgewählten
-   Runtimeordner und muss Modus 0600 haben. Das genaue Format steht in
-   [MA-G2 Backend](implementation/storage-and-delivery/MA-G2_BACKEND.md).
+   oder das vorgesehene Amt beschränken. Die Datei gehört in den ausgewählten Runtimeordner und muss Modus 0600
+   haben. Die [Verwaltung der Lieferrechte](../../dateninfrastruktur-admin/docs/delivery-authorization.md)
+   beschreibt Format und Vorbedingungen.
 2. Im Admin einen publizierten Datensatz und seine Ausgabe wählen. Unter
    `/management/delivery` einen genehmigten CSV-Vertrag aus dem Themenrepo
    auswählen, zulässige Liefermodi festlegen und automatische Veröffentlichung
    bewusst bestätigen. Ein neuer Vertrag benötigt ein fest gepinntes
    INTERLIS-Modell, die validierte Definition samt Schema/Hashes, einen
    Runnerbuild sowie Testdaten. Die Vorgaben stehen in
-   [CSV-Verarbeitung](implementation/storage-and-delivery/MA-G4_PROCESSING.md).
+   [Themenrepo](../../dateninfrastruktur-themenrepo/README.md).
 3. Auf derselben Verwaltungsseite der geprüften Identität ein Lieferrecht
    erteilen. Der Dateizugang für geschützte Daten wird separat unter
    `/management/datasets/<uuid>/grants` vergeben und entzogen.
@@ -78,6 +77,3 @@ kann der Status kurz «Angenommen» anzeigen. Bei Störungen
 Bei anhaltender Störung des Projektors zuerst dessen ClickHouse-Berechtigung
 und Verfügbarkeit prüfen; die Wiederholung geschieht auf dem gebundenen
 Ziel. Keine Dateien/Versuche manuell in einen neuen Stand umschreiben.
-
-Die Bedienwege und Abnahmen stehen im
-[MA-G-Arbeitsstand](implementation/storage-and-delivery/WORK_QUEUE.md).

@@ -1,5 +1,0 @@
-built_hpi_sha256=fa5114e673a3000755b05dc4e84451a6b34b83f435e2ba4734d2521d0b481d5a
-installed_jpi_sha256=fa5114e673a3000755b05dc4e84451a6b34b83f435e2ba4734d2521d0b481d5a
-plugin_version=0.1.0-SNAPSHOT (private-d4c7c5bd-stefan)
-jdbc_driver_sha256=aad21a6b9d357d35d846d0c05b97cba6ed93cf9c6530c928ff38e423a26b6157
-jdbc_driver_coordinates=com.clickhouse:clickhouse-jdbc:0.9.0:all
