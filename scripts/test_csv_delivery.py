@@ -272,8 +272,11 @@ def race_and_finish(c,opened,open_path,open_bytes,catalog):
     inventory(c)
     shell(c,[sys.executable,'scripts/retirement_verifier.py'],'retirement.log')
     print('PASS G56 deleted entrypoints, absent retired routes/jobs/buckets, no upgrade code in normal image',flush=True)
-    assert all((ROOT/'docs'/path).is_file() for path in ('operations.md','implementation/storage-and-delivery/LOCAL_CUTOVER.md'))
-    print('PASS G59 review and real cutover documented separately; no operation on original runtime',flush=True)
+    check_operating_guide()
+
+def check_operating_guide():
+    guide=(ROOT/'docs/operations.md').read_text()
+    assert all(topic in guide for topic in ('./scripts/setup.sh','./scripts/up.sh --skip-build','/anlieferung'))
 
 def main():
     import argparse
