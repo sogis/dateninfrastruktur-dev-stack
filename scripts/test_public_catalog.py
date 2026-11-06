@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run the Sodata and Admin catalog mutation contract on one owned PostgreSQL."""
+import argparse
 import os
 import secrets
 import socket
@@ -12,6 +13,9 @@ from ingestion_test_runtime import cleanup, reserve_ports
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--rights-only', action='store_true')
+    options = parser.parse_args()
     ports = reserve_ports()
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0))
@@ -46,13 +50,22 @@ def main():
             DI_PUBLIC_TEST_ADMIN_PASSWORD=context.values['POSTGRES_ADMIN_PASSWORD'],
             DI_PUBLIC_TEST_PASSWORD=context.values['DI_PUBLIC_PASSWORD'])
         run_test(context,admin,env,'integrationTest','ch.so.agi.dateninfrastruktur.admin.DatabaseCatalogFixtureIT')
-        run_test(context,sodata,env,'managementDatabaseTest',
-                 'ch.so.agi.datenportal.catalog.database.DatabaseCatalogModeIT')
+        if options.rights_only:
+            run_test(context,admin,env,'integrationTest',
+                     'ch.so.agi.dateninfrastruktur.admin.AccessWorkflowIT',expected_tests=2)
+        else:
+            run_test(context,sodata,env,'managementDatabaseTest',
+                     'ch.so.agi.datenportal.catalog.database.DatabaseCatalogModeIT')
         run_test(context,sodata,env,'managementDatabaseTest',
                  'ch.so.agi.datenportal.catalog.database.PublicCatalogRoleIT')
-        print('PASS catalog mutation is visible without reload in two live Sodata instances')
-        print('PASS Sodata outage fails closed; public role can only read approved views')
-        print('ASSERTIONS=3 SKIP=0')
+        if options.rights_only:
+            print('FLOW rights dataset_request,decision,grant,revoke,audit and separate submit/manage rights')
+            print('FLOW rights di_public views allowed; base, grants, audit and writes rejected')
+            print('ASSERTIONS=4 SKIP=0')
+        else:
+            print('PASS catalog mutation is visible without reload in two live Sodata instances')
+            print('PASS Sodata outage fails closed; public role can only read approved views')
+            print('ASSERTIONS=3 SKIP=0')
     finally:
         if container:
             context.verify_project()
@@ -60,7 +73,7 @@ def main():
         cleanup(context)
 
 
-def run_test(context, source, env, task, test):
+def run_test(context, source, env, task, test, expected_tests=1):
     process = subprocess.run(['./gradlew','--no-daemon',task,'--tests',test,'--console=plain'],
                              cwd=source,env=env,capture_output=True,text=True)
     path = context.runtime/(test.rsplit('.',1)[-1]+'.log')
@@ -69,9 +82,9 @@ def run_test(context, source, env, task, test):
         raise RuntimeError(f'Catalog test failed; private log {path}')
     report = source/'build/test-results'/task/f'TEST-{test}.xml'
     suite = ET.parse(report).getroot()
-    expected = {'tests':'1','failures':'0','errors':'0','skipped':'0'}
+    expected = {'tests':str(expected_tests),'failures':'0','errors':'0','skipped':'0'}
     if any(suite.get(key)!=value for key,value in expected.items()):
-        raise RuntimeError(f'Expected one executed test with no failures or skips: {test}')
+        raise RuntimeError(f'Unexpected executed tests, failures or skips: {test}')
 
 
 if __name__=='__main__':
