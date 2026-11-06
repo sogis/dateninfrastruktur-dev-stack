@@ -35,12 +35,22 @@ def origin_address(context):
     return next(iter(values.values()))['IPAddress']+':8080'
 
 
-def download(context,path,expected,identity=None,body=None):
+def download(context,path,expected,identity=None,body=None,*,recover=False):
+    if recover:
+        assert expected==200,'Recovery is only valid for an allowed download'
+        # Container health and the gateway route converge independently after
+        # a deliberate outage. Every transient denial must still fail closed.
+        wait_for(context,'authorized download route after recovery',
+                 lambda: download(context,path,(200,503),identity,body),
+                 lambda status: status==200,30)
+        return 200
     probe=str(uuid4())
     url='http://localhost:'+context.values['GATEWAY_PORT']+path
     status,_,data=http(url,identity,headers={'X-DI-Scenario-Probe':probe})
-    assert status==expected,(status,expected)
-    assert (data==body) is (expected==200)
+    allowed=(expected,) if isinstance(expected,int) else expected
+    assert allowed in ((200,),(401,),(403,),(503,),(200,503))
+    assert status in allowed,(status,expected)
+    assert (data==body) is (status==200)
 
     def trace():
         result=context.command(['exec','-T','gateway','cat','/tmp/di-download-probe.log'],check=False)
@@ -48,11 +58,13 @@ def download(context,path,expected,identity=None,body=None):
                 if (row:=json.loads(line)).get('probe')==probe]
 
     found=wait_for(context,'correlated gateway upstream log',trace,bool,15)
-    assert len(found)==1 and int(found[0]['status'])==expected
-    if expected==200:
+    assert len(found)==1 and int(found[0]['status'])==status
+    if status==200:
         assert found[0]['origin']==origin_address(context)
     else:
         assert found[0].get('origin') in (None,'','-'),'Denied request reached the file upstream'
+
+    return status
 
 
 def initial_acceptance(context):
@@ -98,7 +110,7 @@ def download_and_negative(context,open_row,open_body):
     finally:
         compose(context,['up','--no-build','--no-deps','-d','--wait','--wait-timeout','180','admin'],
                 'architecture-authz-restored.log')
-    download(context,open_path,200,body=open_body)
+    download(context,open_path,200,body=open_body,recover=True)
     print('FLOW download.bytes open=200 granted=200 revoked=403 outage=503 denied_origin=0',flush=True)
 
     compose(context,['stop','garage'],'architecture-missing-artifact.log')

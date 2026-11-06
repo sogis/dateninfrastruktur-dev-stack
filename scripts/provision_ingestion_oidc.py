@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Explicit, scoped creation/verification of two clients in the owned local Keycloak realm."""
-import argparse,hmac,json,urllib.error,urllib.parse,urllib.request,uuid
+import argparse,hmac,json,time,urllib.error,urllib.parse,urllib.request,uuid
 from compose_operations import resolve
 from compose_runtime import ComposeContext,write_private
 from ingestion_clients import clients,executor_subject,EXECUTOR,JENKINS,ROLE_NAMES
@@ -14,13 +14,24 @@ def call(base,path,method='GET',token=None,data=None,expected=(200,)):
     if token:headers['Authorization']='Bearer '+token
     if isinstance(data,bytes):headers['Content-Type']='application/x-www-form-urlencoded'
     elif data is not None:headers['Content-Type']='application/json';data=json.dumps(data).encode()
-    try:
-        with urllib.request.urlopen(urllib.request.Request(base+path,data=data,headers=headers,method=method),timeout=20) as response:
-            if response.status not in expected:raise RuntimeError('Unexpected Keycloak operator HTTP status')
-            raw=response.read(524289)
-            if len(raw)>524288:raise RuntimeError('Keycloak operator response too large')
-            return json.loads(raw) if raw else None
-    except urllib.error.HTTPError as error:raise RuntimeError('Explicit Keycloak client operation rejected (HTTP '+str(error.code)+')') from None
+    # Readiness of Keycloak's management port does not guarantee that every
+    # first admin API read completes within one request timeout. Retry only
+    # reads after transport failure; never replay a possibly committed write.
+    attempts=3 if method=='GET' and data is None else 1
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(base+path,data=data,headers=headers,method=method),timeout=20) as response:
+                if response.status not in expected:raise RuntimeError('Unexpected Keycloak operator HTTP status')
+                raw=response.read(524289)
+                if len(raw)>524288:raise RuntimeError('Keycloak operator response too large')
+                return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as error:
+            raise RuntimeError('Explicit Keycloak client operation rejected (HTTP '+str(error.code)+')') from None
+        except (TimeoutError,urllib.error.URLError,ConnectionError) as error:
+            if attempt+1==attempts:
+                raise RuntimeError('Keycloak operator transport failed after '+str(attempts)+' attempt(s): '+type(error).__name__) from None
+            print('Keycloak admin read transport retry '+str(attempt+1)+'/'+str(attempts-1)+' ('+type(error).__name__+')',flush=True)
+            time.sleep(1)
 
 def provision(context):
     context.verify_project()
