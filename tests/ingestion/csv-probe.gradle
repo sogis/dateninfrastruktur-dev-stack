@@ -1,5 +1,5 @@
 // Test-only risk probe. Uses the actual bundled GRETL implementation.
-buildscript { dependencies { classpath fileTree('/opt/datenportal/offline-bundle/jars') { include '*.jar' } } }
+buildscript { dependencies { classpath fileTree('/opt/dateninfrastruktur/offline-bundle/jars') { include '*.jar' } } }
 import ch.so.agi.gretl.tasks.CsvValidator
 import groovy.json.JsonOutput
 
@@ -20,7 +20,7 @@ tasks.register('validateCsv', CsvValidator) {
     }
     doLast {
         if (!validationOk) throw new GradleException('Validator did not confirm validation')
-        def jars=fileTree('/opt/datenportal/offline-bundle/jars').matching { include '*.jar' }.files.sort { it.name }.collectEntries { f ->
+        def jars=fileTree('/opt/dateninfrastruktur/offline-bundle/jars').matching { include '*.jar' }.files.sort { it.name }.collectEntries { f ->
             [(f.name):java.security.MessageDigest.getInstance('SHA-256').digest(f.bytes).encodeHex().toString()]
         }
         file('/work/validated.json').text = JsonOutput.toJson([validator:CsvValidator.name,executed:true,validationOk:validationOk,jars:jars])

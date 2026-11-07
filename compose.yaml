@@ -2,7 +2,7 @@
   "name": "${COMPOSE_PROJECT_NAME:-dateninfrastruktur-dev-stack}",
   "services": {
     "postgres": {
-      "image": "${POSTGRES_IMAGE:?explicit image tag}",
+      "image": "${POSTGRES_IMAGE:-ghcr.io/sogis/dateninfrastruktur-postgres:0.2.1}",
       "build": {
         "context": ".",
         "dockerfile": "services/postgres/Dockerfile"
@@ -100,7 +100,7 @@
       }
     },
     "jenkins": {
-      "image": "${JENKINS_IMAGE:?existing verified image}",
+      "image": "${JENKINS_IMAGE:-ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.1}",
       "restart": "unless-stopped",
       "depends_on": {
         "keycloak": {
@@ -197,7 +197,7 @@
       }
     },
     "superset": {
-      "image": "${SUPERSET_IMAGE:?explicit image tag}",
+      "image": "${SUPERSET_IMAGE:-ghcr.io/sogis/dateninfrastruktur-superset:0.2.1}",
       "build": {
         "context": "./services/superset",
         "args": {
@@ -252,7 +252,7 @@
       }
     },
     "admin": {
-      "image": "${ADMIN_IMAGE:?explicit image tag}",
+      "image": "${ADMIN_IMAGE:-ghcr.io/sogis/dateninfrastruktur-admin:0.2.1}",
       "build": {
         "context": "../dateninfrastruktur-admin",
         "target": "jvm-runtime",
@@ -302,7 +302,7 @@
       }
     },
     "sodata": {
-      "image": "${SODATA_IMAGE:?explicit image tag}",
+      "image": "${SODATA_IMAGE:-ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.8}",
       "build": {
         "context": "${SODATA_REPO_DIR:-../dateninfrastruktur-sodata}",
         "dockerfile": "Dockerfile",
@@ -435,7 +435,7 @@
       }
     },
     "management-setup": {
-      "image": "${TOOL_IMAGE}",
+      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.1}",
       "profiles": [
         "setup"
       ],
@@ -469,7 +469,7 @@
       }
     },
     "postgres-init": {
-      "image": "${TOOL_IMAGE}",
+      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.1}",
       "profiles": [
         "setup"
       ],
@@ -506,7 +506,7 @@
       }
     },
     "garage-setup": {
-      "image": "${TOOL_IMAGE}",
+      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.1}",
       "profiles": [
         "setup"
       ],
@@ -591,7 +591,7 @@
       }
     },
     "management-operator": {
-      "image": "${TOOL_IMAGE}",
+      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.1}",
       "profiles": [
         "tools"
       ],
@@ -620,7 +620,7 @@
       }
     },
     "test-fixture": {
-      "image": "${TEST_TOOL_IMAGE}",
+      "image": "${TEST_TOOL_IMAGE:-dateninfrastruktur-test-tools:local}",
       "profiles": [
         "test"
       ],
@@ -661,7 +661,7 @@
       }
     },
     "management-tool-build": {
-      "image": "${TOOL_IMAGE}",
+      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.1}",
       "build": {
         "context": "../dateninfrastruktur-admin",
         "target": "tooling",
@@ -680,7 +680,7 @@
       }
     },
     "test-tool-build": {
-      "image": "${TEST_TOOL_IMAGE}",
+      "image": "${TEST_TOOL_IMAGE:-dateninfrastruktur-test-tools:local}",
       "build": {
         "context": "../dateninfrastruktur-admin",
         "target": "test-tools",
@@ -699,7 +699,7 @@
       }
     },
     "storage-verify": {
-      "image": "${TOOL_IMAGE}",
+      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.1}",
       "profiles": [
         "tools"
       ],

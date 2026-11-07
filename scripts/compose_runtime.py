@@ -27,6 +27,7 @@ class ComposeContext:
         if not self.env_file.is_relative_to((ROOT/'.runtime').resolve()):raise RuntimeError('Compose environment must be inside this checkout runtime')
         self.values=read_env(self.env_file);self.project=self.values['COMPOSE_PROJECT_NAME'];self.runtime=pathlib.Path(self.values['RUNTIME_DIR']).resolve()
         if not re.fullmatch('[a-z][a-z0-9-]{3,62}',self.project) or not self.runtime.is_relative_to((ROOT/'.runtime').resolve()) or self.env_file.parent!=self.runtime:raise RuntimeError('Compose project/runtime binding mismatch')
+        self.command_overrides={}
         self.base=['docker','compose','--project-name',self.project,'--env-file',str(self.env_file),'--file',str(ROOT/'compose.yaml')]
     def redact(self,value):
         for k,v in self.values.items():
@@ -39,7 +40,7 @@ class ComposeContext:
             if labels.get('di.instance')!=self.values['INSTANCE_ID'] or labels.get('com.docker.compose.project.config_files')!=str(ROOT/'compose.yaml') or labels.get('com.docker.compose.project.working_dir')!=str(ROOT):raise RuntimeError('OWNERSHIP_MISMATCH: existing project requires planned migration')
     def command(self,args,input=None,check=True):
         if any(arg in ['up','down','stop','restart','run','exec','rm'] for arg in args):self.verify_project()
-        env={k:os.environ[k] for k in ['PATH','HOME','DOCKER_HOST','DOCKER_CONTEXT','DOCKER_CONFIG','TMPDIR','SSH_AUTH_SOCK'] if k in os.environ};env.update(self.values)
+        env={k:os.environ[k] for k in ['PATH','HOME','DOCKER_HOST','DOCKER_CONTEXT','DOCKER_CONFIG','TMPDIR','SSH_AUTH_SOCK'] if k in os.environ};env.update(self.values);env.update(self.command_overrides)
         p=subprocess.run(self.base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
         if p.returncode and check:raise RuntimeError(self.redact((p.stdout+p.stderr)[-8000:]))
         return p
@@ -101,7 +102,7 @@ def update_context(context,updates):
     return ComposeContext(context.env_file)
 
 def setup_context(context):
-    context.command(['up','-d','--wait','--wait-timeout','240','postgres','garage','clickhouse'])
+    context.command(['up','--no-build','-d','--wait','--wait-timeout','240','postgres','garage','clickhouse'])
     for service in ['postgres-init','management-setup','garage-setup','clickhouse-init','clickhouse-ingestion-setup']:
         context.command(['--profile','setup','run','--rm','--no-deps',service])
         if service=='garage-setup':

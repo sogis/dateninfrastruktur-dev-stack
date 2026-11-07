@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """G50–G59 on the complete canonical Compose topology with real OIDC and GRETL."""
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib, json, os, pathlib, select, subprocess, sys, uuid
 import xml.etree.ElementTree as ET
 
 from bind_jenkins_image import bind
 from compose_database import row_hash_sql, target_sql
-from compose_operations import setup
+from compose_operations import build, select_images, setup, start
 from compose_runtime import ComposeContext, init_context, render, write_private
-from delivery_queue_harness import ADMIN, JENKINS, ROOT, compose, shell, subject, verify_run_hygiene, wait_for
+from delivery_queue_harness import ADMIN, ROOT, compose, shell, subject, verify_run_hygiene, wait_for
 from delivery_processing_harness import TOPICS, browser as retry_browser, ch, complete_again, delivery, get, storage, wait_delivery
 from ingestion_test_runtime import cleanup, http, reserve_ports, token
 from provision_ingestion_oidc import provision
@@ -21,19 +20,14 @@ def query(c, statement, db=DB):
     return target_sql(c, db, statement)
 
 def boot(c):
-    tag = c.values['JENKINS_IMAGE']
-    def jenkins_build():
-        env = {**os.environ, 'IMAGE_NAME': tag}
-        shell(c, [str(JENKINS/'bin/build-image.sh'),str(c.runtime/'jenkins-context')],
-              'jenkins-build.log', JENKINS, env)
-    with ThreadPoolExecutor() as pool:
-        image = pool.submit(jenkins_build)
-        compose(c, ['build','postgres','admin','sodata','management-tool-build','test-tool-build','superset'], 'images.log')
-        image.result()
+    select_images(c, 'local')
+    tag = c.command_overrides['JENKINS_IMAGE']
+    build(c)
     c = bind(ComposeContext(c.env_file), tag)
+    select_images(c, 'local')
     setup(c)
-    c = ComposeContext(c.env_file)
-    compose(c, ['up','--no-build','-d','--wait','--wait-timeout','240'], 'normal-start.log')
+    start(c, 'local')
+    assert (c.runtime/'startup-image-mode').read_text() == 'local\n'
     return c
 
 def states(c):
@@ -281,13 +275,20 @@ def check_operating_guide():
 def main():
     import argparse
     parser=argparse.ArgumentParser()
+    parser.add_argument('--release-staging-tag', help='Tag the exact tested images for the CI staging step')
     parser.add_argument('--keep-on-failure',action='store_true',help='Keep only the owned test project for diagnosis')
     options=parser.parse_args()
     c=init_context('mag-g5-review-'+uuid.uuid4().hex[:10],reserve_ports(),True)
     print('Isolated G5 evidence: '+str(c.runtime),flush=True)
     success=False
     try:
-        c=boot(c);run(c);success=True
+        c=boot(c);run(c)
+        if options.release_staging_tag:
+            for name in ('admin', 'jenkins', 'postgres', 'superset', 'tools'):
+                key = ('TOOL' if name == 'tools' else name.upper()) + '_IMAGE'
+                destination = f'dateninfrastruktur-{name}:{options.release_staging_tag}'
+                subprocess.run(['docker', 'tag', c.values[key], destination], check=True)
+        success=True
     finally:
         if success or not options.keep_on_failure:cleanup(c)
     assert not c.command(['ps','-aq']).stdout.strip()
