@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Storage identity preflight and atomic secret encoding; real policy tested separately."""
-import importlib.util,pathlib,tempfile,unittest,json,os
+import importlib.util,pathlib,tempfile,types,unittest,json,os
 from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('garage_setup',ROOT/'services/garage/setup-compose.py');module=importlib.util.module_from_spec(spec)
@@ -32,4 +32,17 @@ class StoragePreflightTest(unittest.TestCase):
             self.assertEqual(json.loads(encoded.replace('$$','$')),secret)
             module.write_secrets_atomically(p,encoded);self.assertEqual(p.stat().st_mode&0o777,0o600)
             self.assertEqual([x.name for x in p.parent.iterdir()],['secret'])
+    def test_atomic_replacement_uses_runtime_directory_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target=pathlib.Path(directory)/'runtime.env'
+            target.write_text('old')
+            owner=target.parent.stat()
+            other=types.SimpleNamespace(st_uid=owner.st_uid+1,st_gid=owner.st_gid+1)
+            with patch.object(module.os,'fstat',return_value=other), \
+                    patch.object(module.os,'fchown') as chown:
+                module.write_secrets_atomically(target,'new')
+            chown.assert_called_once()
+            self.assertEqual(chown.call_args.args[1:],(owner.st_uid,owner.st_gid))
+            self.assertEqual(target.read_text(),'new')
+            self.assertEqual(target.stat().st_mode&0o777,0o600)
 if __name__=='__main__':unittest.main()

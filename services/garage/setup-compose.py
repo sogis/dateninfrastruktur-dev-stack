@@ -7,11 +7,16 @@ class ApiError(StorageError):
 
 def write_secrets_atomically(path,content):
     path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.parent.chmod(0o700)
+    owner=path.parent.stat()
     fd,name=tempfile.mkstemp(prefix='.'+path.name+'-',dir=path.parent)
     try:
         with os.fdopen(fd,'w') as stream:
+            current=os.fstat(stream.fileno())
+            if (current.st_uid,current.st_gid)!=(owner.st_uid,owner.st_gid):
+                os.fchown(stream.fileno(),owner.st_uid,owner.st_gid)
+            os.fchmod(stream.fileno(),0o600)
             stream.write(content);stream.flush();os.fsync(stream.fileno())
-        os.chmod(name,0o600);os.replace(name,path)
+        os.replace(name,path)
         directory=os.open(path.parent,os.O_RDONLY)
         try:os.fsync(directory)
         finally:os.close(directory)
