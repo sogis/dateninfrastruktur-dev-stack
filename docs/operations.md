@@ -12,24 +12,26 @@ keinen eigenen Hostport.
 
 ## Frische Installation und Normalstart
 
-Benötigt werden Docker mit Compose/Buildx und Python 3. Der Jenkins-/HPI-Build
-verwendet Java 21 und Maven auf dem Host; Java 17 für GRETL ist im Image.
-Admin und Sodata bauen mit Java 25 im Container, und lokale Gradle-Tests
-dieser Anwendungen benötigen Java 25 auf dem Host. Der
-Jenkinsbuild verwendet das lokal vorhandene, in
-[gebundene GRETL-Toolchain-Image](../../dateninfrastruktur-jenkins-dev/toolchain-lock.json).
-Ohne dessen exakten Image- und JAR-Nachweis bricht der Build ab. Aus
-`dateninfrastruktur-dev-stack`:
+Für den Betrieb werden Docker mit Compose/Buildx und Python 3.10 oder neuer
+benötigt. Der erste Start aus der Registry verwendet die Versionstags aus
+`compose.yaml`:
 
 ```sh
 ./scripts/init.sh
-IMAGE_NAME=dateninfrastruktur-jenkins:local ./scripts/build-jenkins-local.sh "$PWD/.runtime/jenkins-build-first"
-python3 scripts/bind_jenkins_image.py dateninfrastruktur-jenkins:local
-./scripts/setup.sh
+./scripts/setup.sh --skip-build
 ./scripts/up.sh --skip-build
 python3 scripts/provision_ingestion_oidc.py --register-pg
 ./scripts/status.sh
 ```
+
+`./scripts/up.sh` baut die eigenen Images aus den Schwestercheckouts und
+verwendet beim Standardprojekt `:local`. Benannte Instanzen und Tests
+verwenden den Projektnamen als Tag. Für diesen Build werden zusätzlich
+Java 21 und Maven für das Jenkins-HPI benötigt. Admin und Sodata bauen mit
+Java 25 im Container. Jenkins bezieht das aktuelle GRETL-5-Snapshot und
+nimmt das geprüfte Offline-Bundle ins Image auf. `./scripts/build.sh` baut
+dieselben lokalen Images. `restart.sh` verwendet den zuletzt erfolgreich
+gestarteten Modus.
 
 Das Setup legt nur technische Rollen, SQL-Sichten, den Bucket mit separatem
 Reader/Writer und leere Anwendungsschemas an. Es erstellt keine Personen,

@@ -3,13 +3,17 @@
 import argparse,json,re,subprocess
 from compose_runtime import update_context
 
-def bind(context,reference):
-    context.verify_project()
+def verified_image_id(reference):
     records=json.loads(subprocess.check_output(['docker','image','inspect',reference],text=True))
     if len(records)!=1:raise RuntimeError('An exact local Jenkins candidate image is required')
     image=records[0];image_id=image['Id'];labels=image.get('Config',{}).get('Labels') or {}
     if not re.fullmatch(r'sha256:[0-9a-f]{64}',image_id) or labels.get('io.dateninfrastruktur.delivery.provenance')!='1':
         raise RuntimeError('Build the Jenkins CSV candidate from the sibling checkouts first')
+    return image_id
+
+def bind(context,reference):
+    context.verify_project()
+    image_id=verified_image_id(reference)
     return update_context(context,{'JENKINS_IMAGE':image_id,'DI_JENKINS_IMAGE_SHA256':image_id.split(':',1)[1]})
 
 if __name__=='__main__':

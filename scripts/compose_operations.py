@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Public lifecycle: one explicit Compose context, no legacy runtime or implicit seed."""
-import argparse,json,pathlib,sys,os,subprocess
+import argparse,json,pathlib,sys,os,subprocess,tempfile
 from compose_runtime import ROOT,ComposeContext,init_context,setup_context,read_env,render,write_private
 ACTIVE=ROOT/'.runtime/active-compose.json'
 
@@ -26,10 +26,86 @@ def resolve(env=None,project=None,create=False):
     elif create:c=init_context('dateninfrastruktur-dev-stack')
     else:raise RuntimeError('No active Compose context. Use init/setup for a fresh instance or the explicit migration plan for existing data.')
     if project and project!=c.project:raise RuntimeError('OWNERSHIP_MISMATCH: project/environment differ')
-    c.verify_project();return c
+    c.verify_project()
+    if (c.runtime/'startup-image-mode').exists():
+        select_images(c, saved_mode(c))
+    return c
+
+LOCAL_IMAGES = {
+    'ADMIN_IMAGE': 'admin',
+    'SODATA_IMAGE': 'sodata',
+    'JENKINS_IMAGE': 'jenkins',
+    'POSTGRES_IMAGE': 'postgres',
+    'SUPERSET_IMAGE': 'superset',
+    'TOOL_IMAGE': 'tools',
+    'TEST_TOOL_IMAGE': 'test-tools',
+}
+
+def select_images(c, mode):
+    c.command_overrides = dict.fromkeys((*LOCAL_IMAGES, 'DI_JENKINS_IMAGE_SHA256'), '')
+    if mode == 'local':
+        tag = 'local' if c.project in {'dateninfrastruktur', 'dateninfrastruktur-dev-stack'} and c.values['DI_TEST_FIXTURE'] != 'true' else c.project
+        c.command_overrides.update({key: f'dateninfrastruktur-{name}:{tag}' for key, name in LOCAL_IMAGES.items()})
 
 def build(c):
-    c.command(['build','admin','sodata','management-tool-build','superset']+(['test-tool-build'] if c.values['DI_TEST_FIXTURE']=='true' else []))
+    services = ['postgres', 'admin', 'sodata', 'management-tool-build', 'superset']
+    if c.values['DI_TEST_FIXTURE'] == 'true':
+        services.append('test-tool-build')
+    c.command(['build', *services])
+    with tempfile.TemporaryDirectory(prefix='jenkins-build-', dir=c.runtime) as work:
+        result = subprocess.run(
+            [str(ROOT/'scripts/build-jenkins-local.sh'), str(pathlib.Path(work)/'context')],
+            cwd=ROOT, env={**os.environ, 'IMAGE_NAME': c.command_overrides['JENKINS_IMAGE']},
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        if result.returncode:
+            raise RuntimeError(c.redact(result.stdout[-8000:]))
+
+def prepare_images(c, mode, profiles=()):
+    flags = [arg for profile in profiles for arg in ('--profile', profile)]
+    configuration = json.loads(c.command([*flags, 'config', '--format', 'json']).stdout)
+    services = configuration['services']
+    for reference in sorted({service['image'] for service in services.values()}):
+        present = subprocess.run(['docker', 'image', 'inspect', reference], capture_output=True).returncode == 0
+        if present:
+            continue
+        if mode == 'local' and reference in c.command_overrides.values():
+            raise RuntimeError(f'Expected local build image is missing: {reference}')
+        result = subprocess.run(['docker', 'pull', reference], capture_output=True, text=True)
+        if result.returncode:
+            raise RuntimeError(f'Image unavailable: {reference}\n' + c.redact(result.stderr[-2000:]))
+    return services['jenkins']['image']
+
+def prepare_start(c, mode):
+    reference = prepare_images(c, mode)
+    from bind_jenkins_image import verified_image_id
+    image_id = verified_image_id(reference)
+    c.command_overrides['DI_JENKINS_IMAGE_SHA256'] = image_id.split(':', 1)[1]
+    return image_id
+
+def saved_mode(c):
+    marker = c.runtime/'startup-image-mode'
+    mode = marker.read_text().strip() if marker.exists() else 'registry'
+    if mode not in {'registry', 'local'}:
+        raise RuntimeError('Invalid saved Compose image mode')
+    return mode
+
+def start(c, mode, restart=False):
+    jenkins_id = prepare_start(c, mode)
+    if restart:
+        c.command(['stop', '--timeout', '60'])
+    c.command(['up', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '300'])
+    container = c.command(['ps', '-q', 'jenkins']).stdout.strip()
+    actual_id = subprocess.check_output(['docker', 'inspect', '--format', '{{.Image}}', container], text=True).strip()
+    if actual_id != jenkins_id:
+        raise RuntimeError('Jenkins container image differs from its verified build provenance')
+    marker = c.runtime/'startup-image-mode'
+    with tempfile.NamedTemporaryFile(mode='w', dir=c.runtime, delete=False) as pending:
+        pending.write(mode + '\n')
+    try:
+        pathlib.Path(pending.name).replace(marker)
+    finally:
+        pathlib.Path(pending.name).unlink(missing_ok=True)
 
 def volume_bindings(c):
     return {k:c.values[k] for k in ['POSTGRES_VOLUME','GARAGE_META_VOLUME','GARAGE_DATA_VOLUME','JENKINS_VOLUME','CLICKHOUSE_DATA_VOLUME','CLICKHOUSE_LOG_VOLUME','SUPERSET_VOLUME']}
@@ -60,6 +136,8 @@ def main():
     p.add_argument('--follow',action='store_true');p.add_argument('--tail',type=int,default=100);p.add_argument('services',nargs='*');a=p.parse_args()
     if a.services and a.action!='logs':p.error('Service selection is supported only for logs')
     if a.build_only and a.action!='up':p.error('--build-only requires up')
+    if a.skip_build and a.action not in {'up','setup'}:p.error('--skip-build requires up or setup')
+    if a.build_only and a.skip_build:p.error('--build-only requires a local build')
     if a.action in ['init','setup','up','restart'] and (ROOT/'.runtime/active-recovery.json').exists():raise RuntimeError('An explicit rollback is active; target startup requires source/target reconciliation')
     c=resolve(a.env,a.project,a.action=='init')
     if a.action in ['setup','up','restart'] and c.values.get('DI_STORAGE_BUCKET')!='ch.so.daten':raise RuntimeError('Explicit reviewed MA-G storage cutover required; no legacy startup fallback')
@@ -72,18 +150,23 @@ def main():
         expected=json.loads(marker.read_text()).get('volumes')
         if expected and expected!=volume_bindings(c):raise RuntimeError('OWNERSHIP_MISMATCH: persistent volume mapping changed; explicit migration required')
     if (a.action=='restart' or (a.action=='up' and not a.build_only)) and not marker.exists():raise RuntimeError('Explicit setup or verified migration is required; normal start never seeds an empty replacement')
-    if a.action=='restart' or (a.action=='up' and not a.build_only):
-        if c.values.get('JENKINS_IMAGE')!='sha256:'+c.values.get('DI_JENKINS_IMAGE_SHA256','') or len(c.values.get('DI_JENKINS_IMAGE_SHA256',''))!=64:
-            raise RuntimeError('Bind the locally built CSV candidate with scripts/bind_jenkins_image.py before starting the stack')
-    if a.action in ['build','setup'] or (a.action=='up' and not a.skip_build):build(c)
+    if a.action == 'restart':
+        mode = saved_mode(c)
+    else:
+        mode = 'registry' if a.action in {'up', 'setup'} and a.skip_build else 'local'
+    if a.action in {'build', 'setup', 'up', 'restart'}:
+        select_images(c, mode)
+    if a.action in {'build', 'setup', 'up'} and mode == 'local':
+        build(c)
     if a.build_only:
         return
-    if a.action=='setup':setup(c)
-    elif a.action=='up':c.command(['up','--no-build','-d','--wait','--wait-timeout','300'])
+    if a.action=='setup':
+        prepare_images(c, mode, profiles=('setup',))
+        setup(c)
+    elif a.action=='up':start(c, mode)
     elif a.action=='stop':c.command(['stop','--timeout','60'])
     elif a.action=='down':c.command(['down','--timeout','60'])
-    elif a.action=='restart':
-        c.command(['stop','--timeout','60']);c.command(['up','--no-build','-d','--wait','--wait-timeout','300'])
+    elif a.action=='restart':start(c, mode, restart=True)
     elif a.action=='status':
         rows=[json.loads(line) for line in c.command(['ps','--format','json']).stdout.splitlines()]
         for row in rows:print(row['Service']+' '+row['State']+' '+row.get('Health',''))

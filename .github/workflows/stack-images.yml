@@ -1,0 +1,141 @@
+name: Build and publish stack images
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stack-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sources:
+    runs-on: ubuntu-24.04
+    outputs:
+      revisions: ${{ steps.freeze.outputs.revisions }}
+      gretl: ${{ steps.freeze.outputs.gretl }}
+      gretl_sha256: ${{ steps.freeze.outputs.gretl_sha256 }}
+    steps:
+      - name: Freeze sibling commits and GRETL snapshot
+        id: freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+          revisions='{}'
+          for repo in admin sodata jenkins-dev jenkins-gretl-plugin themenrepo; do
+            sha=$(git ls-remote --exit-code "https://github.com/sogis/dateninfrastruktur-${repo}.git" refs/heads/main | cut -f1)
+            [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+            revisions=$(jq -c --arg repo "$repo" --arg sha "$sha" '. + {($repo): $sha}' <<< "$revisions")
+          done
+          jenkins=$(jq -r '."jenkins-dev"' <<< "$revisions")
+          resolver="https://raw.githubusercontent.com/sogis/dateninfrastruktur-jenkins-dev/$jenkins/bin/resolve-gretl.py"
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/resolve-gretl.py" "$resolver"
+          snapshot=$(python3 "$RUNNER_TEMP/resolve-gretl.py")
+          read -r version checksum <<< "$snapshot"
+          [[ "$version" =~ ^5\.0\.0-[0-9]{8}\.[0-9]{6}-[0-9]+$ && "$checksum" =~ ^[a-f0-9]{64}$ ]]
+          printf 'revisions=%s\ngretl=%s\ngretl_sha256=%s\n' "$revisions" "$version" "$checksum" >> "$GITHUB_OUTPUT"
+          printf 'Stack %s\nSiblings %s\nGRETL %s\n' "$GITHUB_SHA" "$revisions" "$snapshot"
+
+  build:
+    needs: sources
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 85
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REVISIONS: ${{ needs.sources.outputs.revisions }}
+      DI_GRETL_SNAPSHOT_VERSION: ${{ needs.sources.outputs.gretl }}
+      DI_GRETL_SNAPSHOT_SHA256: ${{ needs.sources.outputs.gretl_sha256 }}
+      ARCH: ${{ matrix.arch }}
+      STAGING_TAG: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          path: dateninfrastruktur-dev-stack
+          persist-credentials: false
+      - name: Check out frozen siblings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in admin sodata jenkins-dev jenkins-gretl-plugin themenrepo; do
+            dir="dateninfrastruktur-$repo"
+            sha=$(jq -er --arg repo "$repo" '.[$repo]' <<< "$REVISIONS")
+            [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+            git init --quiet "$dir"
+            git -C "$dir" remote add origin "https://github.com/sogis/$dir.git"
+            git -C "$dir" fetch --depth 1 origin "$sha"
+            git -C "$dir" checkout --detach FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$sha"
+          done
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        id: java21
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build and test the actual release images
+        working-directory: dateninfrastruktur-dev-stack
+        env:
+          JAVA21_HOME: ${{ steps.java21.outputs.path }}
+        run: |
+          set -euo pipefail
+          python3 scripts/test_csv_delivery.py --release-staging-tag "$STAGING_TAG"
+          python3 scripts/test_runner_toolchain.py "dateninfrastruktur-jenkins:$STAGING_TAG"
+      - name: Push tested platform images to GHCR
+        if: github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for name in admin jenkins postgres superset tools; do
+            source="dateninfrastruktur-$name:$STAGING_TAG"
+            target="ghcr.io/sogis/$source"
+            docker tag "$source" "$target"
+            docker push --platform "linux/$ARCH" "$target"
+          done
+
+  publish:
+    needs: [sources, build]
+    if: github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    env:
+      REVISIONS: ${{ needs.sources.outputs.revisions }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Publish the verified multiarch version tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          jenkins=$(jq -r '."jenkins-dev"' <<< "$REVISIONS")
+          helper="https://raw.githubusercontent.com/sogis/dateninfrastruktur-jenkins-dev/$jenkins/bin/publish_multiarch.py"
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/publish_multiarch.py" "$helper"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          args=()
+          for name in admin jenkins postgres superset tools; do
+            args+=(--image "ghcr.io/sogis/dateninfrastruktur-$name")
+          done
+          version="0.2.$GITHUB_RUN_NUMBER"
+          if [[ "$GITHUB_RUN_ATTEMPT" != 1 ]]; then
+            version="$version-r$GITHUB_RUN_ATTEMPT"
+          fi
+          python3 "$RUNNER_TEMP/publish_multiarch.py" "${args[@]}" \
+            --version "$version" --staging-prefix "ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --version-only
