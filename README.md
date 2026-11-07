@@ -7,7 +7,8 @@ Managementkatalog und die Fachrechte liegen in PostgreSQL.
 
 [Lokaler Betrieb](docs/operations.md) beschreibt Erstaufbau, Normalstart,
 Anlieferung, Betrieb und Testgrenzen. Für integrierte Prüfungen die
-Schwesterrepositories im selben Workspace bereitstellen.
+Schwesterrepositories im selben Workspace bereitstellen. Für CSS, JTE
+und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/operations.md#admin-aus-lokalen-quellen-entwickeln).
 
 - `python3 scripts/test_submission_backend.py` prüft Lieferrechte, Ausführung
   und die HTTP-Sicherheitsgrenze in einem eigenen PostgreSQL-Kontext.

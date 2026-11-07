@@ -42,6 +42,40 @@ Schema stoppt es. Die Bedienbefehle
 Für einen bewusst separaten Kontext dienen `--project` und `--env`;
 keine Dateien zwischen Instanzen kopieren.
 
+## Admin aus lokalen Quellen entwickeln
+
+Im laufenden und eingerichteten Stack den Admin-Dienst umschalten:
+
+```sh
+./scripts/dev.sh admin on
+./scripts/logs.sh --follow admin
+./scripts/dev.sh admin off
+```
+
+Bei einer benannten Instanz jedem Befehl `--project <name>` oder
+`--env <runtime.env>` mitgeben. Admin bleibt über das Gateway unter
+`http://localhost:<Gateway-Port>/management` erreichbar. Für eine
+Farbänderung `src/main/resources/static/assets/management.css` im
+Admin-Checkout bearbeiten, speichern und die Seite neu laden. Dasselbe
+gilt für Templates unter `src/main/jte`. Java-Änderungen werden
+automatisch kompiliert. Nach erfolgreicher Kompilierung startet Spring
+den Anwendungskontext neu. Bei einem Kompilierfehler die Admin-Logs
+prüfen und die korrigierte Datei erneut speichern.
+
+Der erste Wechsel baut ein Werkzeugimage mit JDK und Python. Gradle lädt
+beim ersten Start seine Abhängigkeiten. Die lokalen Quellen werden
+schreibgeschützt eingebunden. Gradle-Cache und Buildausgaben liegen unter
+`.runtime/<instanz>/admin-dev/`. Änderungen am Gradle-Build oder an
+seinen Vertragsressourcen werden nach erneutem `off` und `on` geladen.
+
+`status.sh`, `logs.sh`, `stop.sh` und `down.sh` funktionieren auch
+im Entwicklungsmodus. Vor `up.sh`, `restart.sh` oder `setup.sh` mit
+`dev.sh admin off` zum bisherigen Admin-Image zurückkehren. Nach
+`stop.sh` stellt `off` den normalen Admin-Container im gestoppten
+Zustand bereit. `down.sh` beendet den Entwicklungsmodus. Beim normalen
+Wechsel prüft der Stack die Bereitschaft von Admin und stellt bei einem
+Fehlstart die vorherige Variante wieder her.
+
 ## Einen Datensatz für CSV-Anlieferung öffnen
 
 1. Die berechtigte Person in Keycloak eindeutig anhand Issuer und Subject

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Public lifecycle: one explicit Compose context, no legacy runtime or implicit seed."""
-import argparse,json,pathlib,sys,os,subprocess,tempfile
-from compose_runtime import ROOT,ComposeContext,init_context,setup_context,read_env,render,write_private
+import argparse,fcntl,json,pathlib,sys,os,subprocess,tempfile
+from compose_runtime import ADMIN_DEV_MARKER,ROOT,ComposeContext,init_context,setup_context,read_env,render,write_private
 ACTIVE=ROOT/'.runtime/active-compose.json'
 
 def activate(context):
@@ -129,17 +129,47 @@ def setup(c):
         c.values=read_env(c.env_file);render(c)
     write_private(c.runtime/'setup-complete.json',json.dumps({'instance':c.values['INSTANCE_ID'],'mode':'explicit-setup','volumes':volume_bindings(c)},indent=2)+'\n')
 
+def require_dev_setup(c):
+    marker = c.runtime / 'setup-complete.json'
+    if (ROOT / '.runtime/active-recovery.json').exists() or (c.runtime / 'rollback-active.json').exists():
+        raise RuntimeError('An explicit rollback is active; Admin development is blocked')
+    if c.values.get('DI_STORAGE_BUCKET') != 'ch.so.daten' or not marker.is_file():
+        raise RuntimeError('Explicit setup or verified migration is required for Admin development')
+    setup_state = json.loads(marker.read_text())
+    if setup_state.get('instance') != c.values['INSTANCE_ID'] or setup_state.get('volumes') != volume_bindings(c):
+        raise RuntimeError('OWNERSHIP_MISMATCH: Admin development requires the configured instance and volumes')
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action',choices=['init','build','setup','up','stop','down','restart','status','logs'])
+    p.add_argument('action',choices=['init','build','setup','up','stop','down','restart','status','logs','dev'])
     p.add_argument('--env');p.add_argument('--project');p.add_argument('--skip-build',action='store_true');p.add_argument('--build-only',action='store_true')
-    p.add_argument('--follow',action='store_true');p.add_argument('--tail',type=int,default=100);p.add_argument('services',nargs='*');a=p.parse_args()
-    if a.services and a.action!='logs':p.error('Service selection is supported only for logs')
+    p.add_argument('--follow',action='store_true');p.add_argument('--tail',type=int,default=100);p.add_argument('services',nargs='*');a=p.parse_intermixed_args()
+    if a.action == 'dev':
+        if len(a.services) != 2 or a.services[0] != 'admin' or a.services[1] not in {'on', 'off'}:
+            p.error('Usage: dev.sh admin on|off [--project PROJECT | --env ENV]')
+    elif a.services and a.action != 'logs':
+        p.error('Service selection is supported only for logs')
     if a.build_only and a.action!='up':p.error('--build-only requires up')
     if a.skip_build and a.action not in {'up','setup'}:p.error('--skip-build requires up or setup')
     if a.build_only and a.skip_build:p.error('--build-only requires a local build')
     if a.action in ['init','setup','up','restart'] and (ROOT/'.runtime/active-recovery.json').exists():raise RuntimeError('An explicit rollback is active; target startup requires source/target reconciliation')
     c=resolve(a.env,a.project,a.action=='init')
+    if a.action in {'dev', 'up', 'restart', 'setup', 'stop', 'down', 'build'}:
+        with (c.runtime / 'lifecycle.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            return operate(c, a)
+    return operate(c, a)
+
+
+def operate(c, a):
+    dev_marker = c.runtime / ADMIN_DEV_MARKER
+    if a.action == 'dev':
+        from admin_development import switch_admin
+        require_dev_setup(c)
+        return switch_admin(c, a.services[1])
+    if a.action in {'up', 'restart', 'setup'} and dev_marker.exists():
+        raise RuntimeError('Admin development is active. Run dev.sh admin off for this context first.')
     if a.action in ['setup','up','restart'] and c.values.get('DI_STORAGE_BUCKET')!='ch.so.daten':raise RuntimeError('Explicit reviewed MA-G storage cutover required; no legacy startup fallback')
     if a.action in ['init','setup','up','restart'] and (c.runtime/'rollback-active.json').exists():raise RuntimeError('An explicit rollback is active for this target; startup is blocked')
     if a.action=='init':
@@ -165,11 +195,15 @@ def main():
         setup(c)
     elif a.action=='up':start(c, mode)
     elif a.action=='stop':c.command(['stop','--timeout','60'])
-    elif a.action=='down':c.command(['down','--timeout','60'])
+    elif a.action=='down':
+        c.command(['down','--timeout','60'])
+        dev_marker.unlink(missing_ok=True)
     elif a.action=='restart':start(c, mode, restart=True)
     elif a.action=='status':
         rows=[json.loads(line) for line in c.command(['ps','--format','json']).stdout.splitlines()]
         for row in rows:print(row['Service']+' '+row['State']+' '+row.get('Health',''))
+        if dev_marker.exists():
+            print('Admin development: enabled')
         print('Gateway: http://localhost:'+c.values['GATEWAY_PORT']+'/')
         print('Keycloak: http://localhost:'+c.values['KEYCLOAK_PORT']+'/')
         print('Superset: http://localhost:'+c.values['SUPERSET_PORT']+'/')

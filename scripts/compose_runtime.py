@@ -2,6 +2,8 @@
 import json,os,pathlib,re,secrets,subprocess
 from ingestion_clients import extend_fresh
 ROOT=pathlib.Path(__file__).resolve().parents[1]
+ADMIN_DEV_OVERLAY = ROOT / 'compose.admin-dev.yaml'
+ADMIN_DEV_MARKER = 'admin-dev.json'
 def encode_env(value):
     # Docker dotenv double quotes plus escaped dollars; JSON covers quotes,
     # backslashes and line breaks. No shell evaluation is involved.
@@ -34,15 +36,34 @@ class ComposeContext:
             if v and re.search('PASSWORD|SECRET|TOKEN|ACCESS_KEY',k):value=value.replace(v,'[REDACTED]')
         return value
     def verify_project(self):
-        ids=subprocess.check_output(['docker','ps','-aq','--filter','label=com.docker.compose.project='+self.project],text=True).split()
-        for cid in ids:
-            value=json.loads(subprocess.check_output(['docker','inspect',cid],text=True))[0];labels=value['Config'].get('Labels') or {}
-            if labels.get('di.instance')!=self.values['INSTANCE_ID'] or labels.get('com.docker.compose.project.config_files')!=str(ROOT/'compose.yaml') or labels.get('com.docker.compose.project.working_dir')!=str(ROOT):raise RuntimeError('OWNERSHIP_MISMATCH: existing project requires planned migration')
-    def command(self,args,input=None,check=True):
-        if any(arg in ['up','down','stop','restart','run','exec','rm'] for arg in args):self.verify_project()
+        ids = subprocess.check_output(
+            ['docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project=' + self.project],
+            text=True,
+        ).split()
+        containers = json.loads(subprocess.check_output(['docker', 'inspect', *ids], text=True)) if ids else []
+        compose_file = str(ROOT / 'compose.yaml')
+        for container in containers:
+            labels = container['Config'].get('Labels') or {}
+            files = labels.get('com.docker.compose.project.config_files')
+            development_admin = (
+                files == f'{compose_file},{ADMIN_DEV_OVERLAY}'
+                and labels.get('com.docker.compose.service') == 'admin'
+                and (self.runtime / ADMIN_DEV_MARKER).is_file()
+            )
+            if (labels.get('di.instance') != self.values['INSTANCE_ID']
+                    or labels.get('com.docker.compose.project.working_dir') != str(ROOT)
+                    or (files != compose_file and not development_admin)):
+                raise RuntimeError('OWNERSHIP_MISMATCH: existing project requires planned migration')
+        return containers
+
+    def command(self,args,input=None,check=True,*,admin_dev=False,overrides=None):
+        if any(arg in ['up','down','stop','restart','run','exec','rm'] for arg in args):
+            self.verify_project()
+        base = self.base + (['--file', str(ADMIN_DEV_OVERLAY)] if admin_dev else [])
         env={k:os.environ[k] for k in ['PATH','HOME','DOCKER_HOST','DOCKER_CONTEXT','DOCKER_CONFIG','TMPDIR','SSH_AUTH_SOCK'] if k in os.environ};env.update(self.values);env.update(self.command_overrides)
         env.update(DI_TEST_HOST_UID=str(os.getuid()),DI_TEST_HOST_GID=str(os.getgid()))
-        p=subprocess.run(self.base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
+        env.update(overrides or {})
+        p=subprocess.run(base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
         if p.returncode and check:raise RuntimeError(self.redact((p.stdout+p.stderr)[-8000:]))
         return p
 def init_context(project,ports=None,test_fixture=False):
