@@ -41,6 +41,7 @@ class ComposeContext:
     def command(self,args,input=None,check=True):
         if any(arg in ['up','down','stop','restart','run','exec','rm'] for arg in args):self.verify_project()
         env={k:os.environ[k] for k in ['PATH','HOME','DOCKER_HOST','DOCKER_CONTEXT','DOCKER_CONFIG','TMPDIR','SSH_AUTH_SOCK'] if k in os.environ};env.update(self.values);env.update(self.command_overrides)
+        env.update(DI_TEST_HOST_UID=str(os.getuid()),DI_TEST_HOST_GID=str(os.getgid()))
         p=subprocess.run(self.base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
         if p.returncode and check:raise RuntimeError(self.redact((p.stdout+p.stderr)[-8000:]))
         return p

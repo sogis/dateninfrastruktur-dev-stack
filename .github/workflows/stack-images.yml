@@ -105,9 +105,14 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          logs=(.runtime/mag-g5-review-*/g5-browser-*.log)
-          if (( ${#logs[@]} )); then
-            tail -n 50 -- "${logs[-1]}"
+          latest=
+          for log in .runtime/mag-g5-review-*/*browser-*.log; do
+            if [[ -z "$latest" || "$log" -nt "$latest" ]]; then
+              latest=$log
+            fi
+          done
+          if [[ -n "$latest" ]]; then
+            tail -n 50 -- "$latest"
           fi
       - name: Push tested platform images to GHCR
         if: github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
