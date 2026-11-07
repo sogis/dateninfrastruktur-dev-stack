@@ -147,6 +147,8 @@ def run(c):
     compose(c,['--profile','test','run','--rm','--no-deps','--entrypoint','java','test-fixture',
                '-cp','/opt/compose-test/classes:/opt/compose-test/lib/*',
                'ch.so.agi.dateninfrastruktur.admin.DeliveryProcessingFixtureCommand',subject(c),'--without-grants'],'g5-fixtures.log')
+    fixture = (c.runtime/'g4-fixture.json').stat()
+    assert (fixture.st_uid, fixture.st_gid, fixture.st_mode & 0o777) == (os.getuid(), os.getgid(), 0o600)
     browser(c,'no-grants')
     browser(c,'grant-submit',('population','municipality','types'))
     opened_id,restricted_id=upload(c,('population','population-initial.csv'),('municipality','municipality-initial.csv'))
