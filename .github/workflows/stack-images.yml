@@ -88,6 +88,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Install Chromium and its Linux runtime dependencies
+        run: npx --yes playwright@1.60.0 install --with-deps chromium
       - name: Build and test the actual release images
         working-directory: dateninfrastruktur-dev-stack
         env:
@@ -96,6 +98,17 @@ jobs:
           set -euo pipefail
           python3 scripts/test_csv_delivery.py --release-staging-tag "$STAGING_TAG"
           python3 scripts/test_runner_toolchain.py "dateninfrastruktur-jenkins:$STAGING_TAG"
+      - name: Show the last failed synthetic browser test
+        if: failure()
+        working-directory: dateninfrastruktur-dev-stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          logs=(.runtime/mag-g5-review-*/g5-browser-*.log)
+          if (( ${#logs[@]} )); then
+            tail -n 50 -- "${logs[-1]}"
+          fi
       - name: Push tested platform images to GHCR
         if: github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
         env:
