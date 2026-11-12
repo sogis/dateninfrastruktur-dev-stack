@@ -270,19 +270,11 @@
         "DI_MANAGEMENT_WRITER_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
         "DI_MANAGEMENT_WRITER_USERNAME": "di_writer",
         "DI_MANAGEMENT_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
-        "DI_MANAGEMENT_AUDIT_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
-        "DI_MANAGEMENT_AUDIT_USERNAME": "di_audit_reader",
-        "DI_MANAGEMENT_AUDIT_PASSWORD": "${DI_AUDIT_READER_PASSWORD}",
         "DI_WEB_ISSUER": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur",
         "DI_WEB_JWKSURI": "http://keycloak:8080/realms/dateninfrastruktur/protocol/openid-connect/certs",
         "DI_WEB_AUDIENCE": "management-api",
         "DI_WEB_PUBLICORIGIN": "http://localhost:${GATEWAY_PORT}",
-        "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}",
-        "DI_CH_PROJECTOR_PASSWORD": "${DI_CH_PROJECTOR_PASSWORD:-}",
-        "DI_INGESTION_PLUGINSECRET": "${DI_INGESTION_PLUGIN_SECRET:-}",
-        "DI_INGESTION_LEASESECRET": "${DI_INGESTION_LEASE_SECRET:-}",
-        "DI_INGESTION_JENKINSINSTANCE": "${INSTANCE_ID}",
-        "DI_INGESTION_MAXUPLOADBYTES": "${DI_INGESTION_MAX_UPLOAD_BYTES:-104857600}"
+        "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}"
       },
       "healthcheck": {
         "test": [
@@ -558,58 +550,6 @@
         "di.instance": "${INSTANCE_ID}"
       }
     },
-    "clickhouse-ingestion-setup": {
-      "image": "clickhouse/clickhouse-server:26.8",
-      "restart": "no",
-      "profiles": [
-        "setup"
-      ],
-      "environment": {
-        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD}",
-        "DI_CH_LOADER_PASSWORD": "${DI_CH_LOADER_PASSWORD:-}",
-        "DI_CH_PROJECTOR_PASSWORD": "${DI_CH_PROJECTOR_PASSWORD:-}",
-        "DI_CH_READER_PASSWORD": "${DI_CH_READER_PASSWORD:-}"
-      },
-      "volumes": [
-        "./services/clickhouse/init:/init:ro"
-      ],
-      "entrypoint": [
-        "/bin/sh",
-        "/init/ingestion.sh"
-      ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
-    },
-    "management-operator": {
-      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.7}",
-      "profiles": [
-        "tools"
-      ],
-      "restart": "no",
-      "environment": {
-        "DI_DATABASE_TARGET": "postgresql",
-        "DI_TOOL_RUNTIME": "/runtime/tools",
-        "DI_MANAGEMENT_WRITER_JDBCURL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
-        "DI_MANAGEMENT_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}",
-        "DI_OPERATOR_ISSUER": "urn:di:operator",
-        "DI_OPERATOR_SUBJECT": "managed-delivery",
-        "DI_INGESTION_ISSUER": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur"
-      },
-      "entrypoint": [
-        "java",
-        "-Dloader.main=ch.so.agi.dateninfrastruktur.admin.operator.DeliveryAuthorityBootstrapCommand",
-        "-cp",
-        "/opt/admin/app.jar",
-        "org.springframework.boot.loader.launch.PropertiesLauncher"
-      ],
-      "volumes": [
-        "${RUNTIME_DIR}:/runtime:ro"
-      ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
-    },
     "test-fixture": {
       "image": "${TEST_TOOL_IMAGE:-dateninfrastruktur-test-tools:local}",
       "profiles": [
@@ -659,8 +599,7 @@
         "target": "tooling",
         "additional_contexts": {
           "postgres_tools": "service:postgres",
-          "stack_source": ".",
-          "topics_source": "${THEMEN_REPO_DIR:-../dateninfrastruktur-themenrepo}"
+          "stack_source": "."
         }
       },
       "profiles": [
@@ -678,8 +617,7 @@
         "target": "test-tools",
         "additional_contexts": {
           "postgres_tools": "service:postgres",
-          "stack_source": ".",
-          "topics_source": "${THEMEN_REPO_DIR:-../dateninfrastruktur-themenrepo}"
+          "stack_source": "."
         }
       },
       "profiles": [

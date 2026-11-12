@@ -125,7 +125,7 @@ def update_context(context,updates):
 
 def setup_context(context):
     context.command(['up','--no-build','-d','--wait','--wait-timeout','240','postgres','garage','clickhouse'])
-    for service in ['postgres-init','management-setup','garage-setup','clickhouse-init','clickhouse-ingestion-setup']:
+    for service in ['postgres-init','management-setup','garage-setup','clickhouse-init']:
         context.command(['--profile','setup','run','--rm','--no-deps',service])
         if service=='garage-setup':
             context.values=read_env(context.env_file)
