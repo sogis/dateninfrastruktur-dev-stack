@@ -78,13 +78,9 @@ Fehlstart die vorherige Variante wieder her.
 
 ## Einen Datensatz für CSV-Anlieferung öffnen
 
-1. Die berechtigte Person in Keycloak eindeutig anhand Issuer und Subject
-   zuordnen. Mit dem Betreiberkommando
-   `python3 scripts/compose_operator.py bootstrap-submitters <private-anfrage.json>`
-   die erste Verwaltung von Lieferrechten auf den vorgesehenen Datensatz
-   oder das vorgesehene Amt beschränken. Die Datei gehört in den ausgewählten Runtimeordner und muss Modus 0600
-   haben. Die [Verwaltung der Lieferrechte](../../dateninfrastruktur-admin/docs/delivery-authorization.md)
-   beschreibt Format und Vorbedingungen.
+1. Die berechtigte Person anhand von Issuer und Subject eindeutig zuordnen.
+   Erste Principals und eine fachlich begrenzte `manage_submitters`-Zuweisung
+   stammen aus dem [Management-XTF-Bootstrap](../../dateninfrastruktur-admin/docs/schema-lifecycle.md).
 2. Im Admin einen publizierten Datensatz und seine Ausgabe wählen. Unter
    `/management/delivery` einen genehmigten CSV-Vertrag aus dem Themenrepo
    auswählen, zulässige Liefermodi festlegen und automatische Veröffentlichung
