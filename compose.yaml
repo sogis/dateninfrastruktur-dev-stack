@@ -558,6 +558,7 @@
       "restart": "no",
       "user": "${DI_TEST_HOST_UID:-0}:${DI_TEST_HOST_GID:-0}",
       "environment": {
+        "DI_COMPOSE_TEST_FIXTURE": "${DI_TEST_FIXTURE}",
         "DI_TEST_URL": "jdbc:postgresql://postgres:5432/dateninfrastruktur_management",
         "DI_TEST_ADMIN_PASSWORD": "${POSTGRES_ADMIN_PASSWORD}",
         "DI_TEST_WRITER_PASSWORD": "${DI_WRITER_PASSWORD}"
