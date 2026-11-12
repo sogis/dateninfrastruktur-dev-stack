@@ -16,7 +16,6 @@ und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/op
   und wiederholbares Storage-Setup im isolierten Garage-Kontext.
 - `python3 scripts/test_csv_delivery.py` prüft den Lieferweg mit dem
   gebundenen lokalen GRETL-Bundle.
-- `python3 scripts/test_public_catalog.py` prüft in einer eigenen
-  PostgreSQL-Instanz den Sodata-Lesevertrag, eine echte Admin-Mutation
-  und den Ausfallpfad. Der Test benötigt lokal Java 25 und Gradle über die
-  mitgelieferten Wrapper.
+- `python3 scripts/test_public_catalog.py` baut eine isolierte Rancher-Desktop-Instanz
+  auf und prüft die öffentlichen ili2pg-Sichten, die Leserolle `di_public`,
+  Sodata und geschützte Downloads über APISIX und den privaten Garage-Bucket.
