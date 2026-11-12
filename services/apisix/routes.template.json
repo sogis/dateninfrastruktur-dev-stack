@@ -44,6 +44,10 @@
       "id": "internal-deny",
       "priority": 200,
       "uris": [
+        "/anlieferung",
+        "/anlieferung/",
+        "/jenkins/data-delivery",
+        "/jenkins/data-delivery/*",
         "/internal",
         "/internal/*",
         "/actuator/*",
@@ -221,20 +225,6 @@
         "redirect": {
           "uri": "/jenkins/",
           "ret_code": 308
-        }
-      }
-    },
-    {
-      "id": "delivery-entry",
-      "priority": 200,
-      "uris": [
-        "/anlieferung",
-        "/anlieferung/"
-      ],
-      "plugins": {
-        "redirect": {
-          "uri": "/jenkins/data-delivery/",
-          "ret_code": 302
         }
       }
     },

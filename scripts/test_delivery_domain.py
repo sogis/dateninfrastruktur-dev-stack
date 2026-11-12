@@ -11,7 +11,7 @@ from test_management_bootstrap import FIXTURE, operator, put
 def main():
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
-    os.environ['DOCKER_CONTEXT'] = 'rancher-desktop'
+    os.environ.setdefault('DOCKER_CONTEXT', 'rancher-desktop')
     context = init_context('mag-s1d-delivery-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:

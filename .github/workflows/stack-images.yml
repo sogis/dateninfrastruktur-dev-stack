@@ -17,8 +17,6 @@ jobs:
     outputs:
       release: ${{ steps.changes.outputs.release }}
       revisions: ${{ steps.freeze.outputs.revisions }}
-      gretl: ${{ steps.freeze.outputs.gretl }}
-      gretl_sha256: ${{ steps.freeze.outputs.gretl_sha256 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -29,7 +27,7 @@ jobs:
         env:
           PUSH_BEFORE: ${{ github.event.before }}
         run: python3 scripts/check_stack_release_changes.py
-      - name: Freeze sibling commits and GRETL snapshot
+      - name: Freeze sibling commits
         id: freeze
         if: steps.changes.outputs.release == 'true'
         shell: bash
@@ -41,18 +39,47 @@ jobs:
             [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
             revisions=$(jq -c --arg repo "$repo" --arg sha "$sha" '. + {($repo): $sha}' <<< "$revisions")
           done
-          jenkins=$(jq -r '."jenkins-dev"' <<< "$revisions")
-          resolver="https://raw.githubusercontent.com/sogis/dateninfrastruktur-jenkins-dev/$jenkins/bin/resolve-gretl.py"
-          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/resolve-gretl.py" "$resolver"
-          snapshot=$(python3 "$RUNNER_TEMP/resolve-gretl.py")
-          read -r version checksum <<< "$snapshot"
-          [[ "$version" =~ ^5\.0\.0-[0-9]{8}\.[0-9]{6}-[0-9]+$ && "$checksum" =~ ^[a-f0-9]{64}$ ]]
-          printf 'revisions=%s\ngretl=%s\ngretl_sha256=%s\n' "$revisions" "$version" "$checksum" >> "$GITHUB_OUTPUT"
-          printf 'Stack %s\nSiblings %s\nGRETL %s\n' "$GITHUB_SHA" "$revisions" "$snapshot"
+          printf 'revisions=%s\n' "$revisions" >> "$GITHUB_OUTPUT"
+          printf 'Stack %s\nSiblings %s\n' "$GITHUB_SHA" "$revisions"
 
-  build:
+  management:
     needs: sources
     if: needs.sources.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      REVISIONS: ${{ needs.sources.outputs.revisions }}
+      DOCKER_CONTEXT: default
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          path: dateninfrastruktur-dev-stack
+          persist-credentials: false
+      - name: Check out frozen management sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in admin sodata themenrepo; do
+            dir="dateninfrastruktur-$repo"
+            sha=$(jq -er --arg repo "$repo" '.[$repo]' <<< "$REVISIONS")
+            [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+            git init --quiet "$dir"
+            git -C "$dir" remote add origin "https://github.com/sogis/$dir.git"
+            git -C "$dir" fetch --depth 1 origin "$sha"
+            git -C "$dir" checkout --detach FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$sha"
+          done
+      - name: Test management and public catalog
+        working-directory: dateninfrastruktur-dev-stack
+        run: |
+          set -euo pipefail
+          python3 scripts/test_management_bootstrap.py
+          python3 scripts/test_delivery_domain.py
+          python3 scripts/test_public_catalog.py
+
+  build:
+    needs: [sources, management]
+    if: needs.sources.outputs.release == 'true' && github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -68,9 +95,8 @@ jobs:
       packages: write
     env:
       REVISIONS: ${{ needs.sources.outputs.revisions }}
-      DI_GRETL_SNAPSHOT_VERSION: ${{ needs.sources.outputs.gretl }}
-      DI_GRETL_SNAPSHOT_SHA256: ${{ needs.sources.outputs.gretl_sha256 }}
       ARCH: ${{ matrix.arch }}
+      DOCKER_CONTEXT: default
       STAGING_TAG: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -102,30 +128,18 @@ jobs:
           java-version: '25'
       - name: Install Chromium and its Linux runtime dependencies
         run: npx --yes playwright@1.60.0 install --with-deps chromium
-      - name: Build and test the actual release images
-        working-directory: dateninfrastruktur-dev-stack
-        env:
-          JAVA21_HOME: ${{ steps.java21.outputs.path }}
-        run: |
-          set -euo pipefail
-          python3 scripts/test_csv_delivery.py --release-staging-tag "$STAGING_TAG"
-          python3 scripts/test_runner_toolchain.py "dateninfrastruktur-jenkins:$STAGING_TAG"
-      - name: Show the last failed synthetic browser test
-        if: failure()
-        working-directory: dateninfrastruktur-dev-stack
+      - name: Check the pinned Jenkins build dependency
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          latest=
-          for log in .runtime/mag-g5-review-*/*browser-*.log; do
-            if [[ -z "$latest" || "$log" -nt "$latest" ]]; then
-              latest=$log
-            fi
-          done
-          if [[ -n "$latest" ]]; then
-            tail -n 50 -- "$latest"
-          fi
+          image=$(jq -er '.jenkins_base_image_id' dateninfrastruktur-jenkins-dev/toolchain-lock.json)
+          test "$(docker image inspect --format '{{.Id}}' "$image")" = "$image"
+          test "$(docker image inspect --format '{{.Architecture}}' "$image")" = "$ARCH"
+      - name: Build and qualify the actual release images
+        working-directory: dateninfrastruktur-dev-stack
+        env:
+          JAVA21_HOME: ${{ steps.java21.outputs.path }}
+        run: python3 scripts/test_stack_management.py --release-staging-tag "$STAGING_TAG"
       - name: Push tested platform images to GHCR
         if: github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
         env:

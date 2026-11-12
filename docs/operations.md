@@ -20,7 +20,6 @@ benötigt. Der erste Start aus der Registry verwendet die Versionstags aus
 ./scripts/init.sh
 ./scripts/setup.sh --skip-build
 ./scripts/up.sh --skip-build
-python3 scripts/provision_ingestion_oidc.py --register-pg
 ./scripts/status.sh
 ```
 
@@ -28,8 +27,8 @@ python3 scripts/provision_ingestion_oidc.py --register-pg
 verwendet beim Standardprojekt `:local`. Benannte Instanzen und Tests
 verwenden den Projektnamen als Tag. Für diesen Build werden zusätzlich
 Java 21 und Maven für das Jenkins-HPI benötigt. Admin und Sodata bauen mit
-Java 25 im Container. Jenkins bezieht das aktuelle GRETL-5-Snapshot und
-nimmt das geprüfte Offline-Bundle ins Image auf. `./scripts/build.sh` baut
+Java 25 im Container. Jenkins verwendet das lokal vorhandene, im Jenkins-Toolchain-Lock
+gebundene GRETL-Image und nimmt das geprüfte Offline-Bundle ins Image auf. `./scripts/build.sh` baut
 dieselben lokalen Images. `restart.sh` verwendet den zuletzt erfolgreich
 gestarteten Modus.
 
@@ -76,36 +75,26 @@ Zustand bereit. `down.sh` beendet den Entwicklungsmodus. Beim normalen
 Wechsel prüft der Stack die Bereitschaft von Admin und stellt bei einem
 Fehlstart die vorherige Variante wieder her.
 
-## Einen Datensatz für CSV-Anlieferung öffnen
+## Katalog und Lieferung
 
-1. Die berechtigte Person anhand von Issuer und Subject eindeutig zuordnen.
-   Erste Principals und eine fachlich begrenzte `manage_submitters`-Zuweisung
-   stammen aus dem [Management-XTF-Bootstrap](../../dateninfrastruktur-admin/docs/schema-lifecycle.md).
-2. Im Admin einen publizierten Datensatz und seine Ausgabe wählen. Unter
-   `/management/delivery` einen genehmigten CSV-Vertrag aus dem Themenrepo
-   auswählen, zulässige Liefermodi festlegen und automatische Veröffentlichung
-   bewusst bestätigen. Ein neuer Vertrag benötigt ein fest gepinntes
-   INTERLIS-Modell, die validierte Definition samt Schema/Hashes, einen
-   Runnerbuild sowie Testdaten. Die Vorgaben stehen in
-   [Themenrepo](../../dateninfrastruktur-themenrepo/README.md).
-3. Auf derselben Verwaltungsseite der geprüften Identität ein Lieferrecht
-   erteilen. Der Dateizugang für geschützte Daten wird separat unter
-   `/management/datasets/<uuid>/grants` vergeben und entzogen.
+Das explizite Management-Setup legt die vier INTERLIS-Modelle an.
+Die erste fachliche Belegung kommt aus einem geprüften
+[XTF-Transfer](../../dateninfrastruktur-admin/docs/schema-lifecycle.md).
+Dort werden auch die ersten Principals und deren Rechte angelegt.
 
-## Liefern, prüfen, erneut versuchen
+Unter `/management` werden Datensätze, Ausgaben und ihre Publikation
+verwaltet. Unter `/management/delivery` werden CSV-Schema,
+Lieferkonfiguration, Lieferrechte und Submissions verwaltet.
+Sodata liest die veröffentlichten Katalogdaten direkt aus PostgreSQL.
+APISIX prüft jede Dateianfrage beim Admin und liefert freigegebene
+Dateien aus dem privaten Bucket.
 
-Über das Gateway `/anlieferung` öffnen und sich mit Keycloak anmelden.
-Datensatz, Ausgabe und erlaubten Modus wählen, Kommentar eingeben und CSV
-hochladen. Die Anlieferungsseite zeigt Status, Laufhistorie und eine bereinigte
-Prüfmeldung. Erneut versuchen steht nur bei einem behebbaren Fehler und
-wirksamem Lieferrecht zur Verfügung. Eine ungültige Datei korrigieren und neu
-einreichen. Der technische Jenkinsjob wird über die Anlieferung ausgelöst.
+Die GRETL-/Jenkins-Anlieferung benötigt die Portierung auf
+`/internal/deliveries`. Der laufende Jenkins-Dienst wird auf
+Bereitschaft geprüft. Die alten öffentlichen Uploadpfade sind gesperrt.
 
-Nach erfolgreichem Abschluss zeigt Sodata den neuen Stand unter `/datasets`.
-Historische Downloads bleiben auf ihren eigenen URLs; APISIX prüft jede
-Dateianfrage über Admin. Zwischen Fachcommit und sichtbarer SQL-Projektion
-kann der Status kurz «Angenommen» anzeigen. Bei Störungen
-`./scripts/status.sh` und `./scripts/logs.sh --tail 100 <dienst>` prüfen.
-Bei anhaltender Störung des Projektors zuerst dessen ClickHouse-Berechtigung
-und Verfügbarkeit prüfen; die Wiederholung geschieht auf dem gebundenen
-Ziel. Keine Dateien/Versuche manuell in einen neuen Stand umschreiben.
+Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt.
+Für eine Veröffentlichung muss auf jedem Plattform-Runner das Image
+mit der im Jenkins-Checkout gebundenen Toolchain-ID und der
+passenden Architektur bereits vorliegen. Der Build veröffentlicht
+erst nach erfolgreicher Qualifikation der Plattformimages.
