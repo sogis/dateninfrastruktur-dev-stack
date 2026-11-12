@@ -131,8 +131,8 @@ def main():
                 office=(SELECT owneroffice FROM di_management.dataset WHERE identifier='test-open')
             WHERE capability IN ('publish','manage_submitters');
         """)
-        admin = integration(context, 'admin', 'integrationTest', 'StackManagementIT', 'ManagementBrowserIT')
-        admin += http_security_integration(context)
+        admin = http_security_integration(context)
+        admin += integration(context, 'admin', 'integrationTest', 'StackManagementIT', 'ManagementBrowserIT')
         portal = integration(context, 'sodata', 'managementDatabaseTest', 'StackCatalogIT')
         assert admin >= 4 and portal >= 1
         assert sql(context, """
