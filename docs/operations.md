@@ -94,7 +94,6 @@ Die GRETL-/Jenkins-Anlieferung benötigt die Portierung auf
 Bereitschaft geprüft. Die alten öffentlichen Uploadpfade sind gesperrt.
 
 Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt.
-Für eine Veröffentlichung muss auf jedem Plattform-Runner das Image
-mit der im Jenkins-Checkout gebundenen Toolchain-ID und der
-passenden Architektur bereits vorliegen. Der Build veröffentlicht
+Der Registry-Build bindet den Jenkins-Quellcommit und denselben
+GRETL-Snapshot mit SHA-256 für beide Plattformen. Er veröffentlicht
 erst nach erfolgreicher Qualifikation der Plattformimages.
