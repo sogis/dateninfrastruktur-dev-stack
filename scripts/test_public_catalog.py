@@ -205,6 +205,17 @@ def gateway_checks(context):
     sql(context, "UPDATE di_management.dataversion SET availability='available' WHERE versionkey='one';")
     context.command(['stop', 'admin'])
     request(OPEN, 503)
+    context.command(['up', '--no-build', '--no-deps', '-d', '--wait', '--wait-timeout', '150', 'admin'])
+    deadline = time.monotonic() + 20
+    while True:
+        probe = str(uuid4())
+        status, _, body = http(base + OPEN, headers={'X-DI-Scenario-Probe': probe})
+        traced[probe] = status
+        if status == 200:
+            assert body == DATA
+            break
+        assert status == 503 and body != DATA and time.monotonic() < deadline
+        time.sleep(0.5)
     verify_download_traces(context, traced)
     sql(context, """
         ALTER ROLE di_public NOLOGIN;
@@ -215,7 +226,7 @@ def gateway_checks(context):
         assert status == 503
     finally:
         sql(context, 'ALTER ROLE di_public LOGIN;')
-    print('PUBLIC_GATEWAY_CASES=25 SKIP=0', flush=True)
+    print('PUBLIC_GATEWAY_CASES=26 SKIP=0', flush=True)
 
 
 def main():
@@ -242,7 +253,7 @@ def main():
     finally:
         cleanup(context)
     assert not context.command(['ps', '-aq']).stdout.strip()
-    print('ASSERTIONS=46 SKIP=0')
+    print('ASSERTIONS=47 SKIP=0')
 
 
 if __name__ == '__main__':
