@@ -17,6 +17,7 @@ und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/op
 - `python3 scripts/test_public_catalog.py` prüft ili2pg-Sichten, die
   Leserolle `di_public`, Sodata und geschützte Downloads über APISIX.
 - `python3 scripts/test_stack_management.py` prüft die zehn Compose-Dienste,
-  die Admin- und Sodata-Formulare in Chromium sowie den XTF-Export.
-  Lokal mit `DOCKER_CONTEXT=rancher-desktop`, Java 25, Java 21 und
-  dem im Jenkins-Toolchain-Lock gebundenen lokalen Image ausführen.
+  die Admin- und Sodata-Formulare in Chromium, die HTTP-Sicherheit des Admin
+  mit Keycloak und APISIX sowie den XTF-Export.
+  Lokal mit `DOCKER_CONTEXT=rancher-desktop`, Java 25 und Java 21 ausführen.
+  Der Test baut das Jenkins-Image aus den benachbarten Jenkins- und Plugin-Quellen.

@@ -72,6 +72,26 @@ def run_smoke(context):
     assert result.returncode == 0 and 'ten services, three DBs' in result.stdout
 
 
+def http_security_integration(context):
+    test_class = 'ch.so.agi.dateninfrastruktur.admin.ManagementHttpSecurityIT'
+    result = context.command([
+        '--profile', 'test', 'run', '--rm', '--no-deps', 'test-fixture',
+        'org.junit.platform.console.ConsoleLauncher', 'execute',
+        '--select-class', test_class, '--fail-if-no-tests',
+        '--reports-dir', '/runtime/http-security',
+    ], check=False)
+    path = context.runtime / 'http-security.log'
+    write_private(path, context.redact(result.stdout + result.stderr))
+    if result.returncode:
+        raise RuntimeError(f'Management HTTP security integration failed. Redacted evidence: {path}')
+    report = ElementTree.parse(context.runtime / 'http-security' / 'TEST-junit-jupiter.xml').getroot()
+    cases = report.findall('testcase')
+    assert cases and {case.attrib['classname'] for case in cases} == {test_class}
+    assert all(report.get(key) == '0' for key in ('skipped', 'failures', 'errors'))
+    print(f'MANAGEMENT_HTTP_SECURITY={len(cases)} SKIP=0', flush=True)
+    return len(cases)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--release-staging-tag')
@@ -111,7 +131,8 @@ def main():
                 office=(SELECT owneroffice FROM di_management.dataset WHERE identifier='test-open')
             WHERE capability IN ('publish','manage_submitters');
         """)
-        admin = integration(context, 'admin', 'integrationTest', 'StackManagementIT', 'ManagementBrowserIT')
+        admin = http_security_integration(context)
+        admin += integration(context, 'admin', 'integrationTest', 'StackManagementIT', 'ManagementBrowserIT')
         portal = integration(context, 'sodata', 'managementDatabaseTest', 'StackCatalogIT')
         assert admin >= 4 and portal >= 1
         assert sql(context, """
