@@ -274,7 +274,8 @@
         "DI_WEB_JWKSURI": "http://keycloak:8080/realms/dateninfrastruktur/protocol/openid-connect/certs",
         "DI_WEB_AUDIENCE": "management-api",
         "DI_WEB_PUBLICORIGIN": "http://localhost:${GATEWAY_PORT}",
-        "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}"
+        "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}",
+        "DI_DELIVERY_ORIGIN_URL": "http://origin:8080/downloads/"
       },
       "healthcheck": {
         "test": [
