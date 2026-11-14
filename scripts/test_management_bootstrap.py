@@ -172,6 +172,8 @@ def exercise(context):
     assert snapshot(context) == initial
     target = context.runtime / 'management-export.xtf'
     operator(context, 'export', target)
+    assert target.stat().st_uid == os.getuid(), 'Export must belong to the calling user'
+    assert target.stat().st_mode & 0o777 == 0o600, 'Export must remain private'
     assert transfer_ids(target) == (baskets, objects), 'Export changed basket or object identities'
     assert target.stat().st_mode & 0o777 == 0o600
     context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
@@ -194,7 +196,7 @@ def main():
     assert not context.command(['ps', '-aq']).stdout.strip()
     assert not subprocess.check_output(['docker', 'volume', 'ls', '-q', '--filter',
         'label=com.docker.compose.project=' + context.project], text=True).strip()
-    print('ASSERTIONS=26 SKIP=0')
+    print('ASSERTIONS=28 SKIP=0')
 
 
 if __name__ == '__main__':
