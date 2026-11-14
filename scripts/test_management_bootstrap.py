@@ -127,9 +127,12 @@ def exercise(context):
         SELECT count(*) FROM information_schema.views WHERE table_schema='di_api_public';
     """) == '10'
     assert sql(context, """
-        SELECT data_type||':'||character_maximum_length FROM information_schema.columns
-        WHERE table_schema='di_management' AND table_name='office' AND column_name='t_ili_tid';
-    """) == 'character varying:1024'
+        SELECT table_name||':'||data_type||':'||character_maximum_length
+        FROM information_schema.columns
+        WHERE table_schema='di_management' AND table_name IN ('office','contactpoint')
+          AND column_name='t_ili_tid'
+        ORDER BY table_name;
+    """) == 'contactpoint:character varying:200\noffice:character varying:200'
     assert sql(context, """
         SELECT data_type FROM information_schema.columns WHERE table_schema='di_management'
         AND table_name='principal' AND column_name='t_ili_tid';
@@ -137,7 +140,7 @@ def exercise(context):
     source = put(context, 'management-bootstrap.xtf', FIXTURE.read_bytes())
     document = ET.parse(source)
     baskets, objects = transfer_ids(source)
-    assert len(baskets) == 4 and max(map(len, objects)) > 255
+    assert len(baskets) == 4 and max(map(len, objects)) == 200
     datasection = document.getroot().find(TRANSFER + 'datasection')
     reference = next(node for node in datasection.iter()
                      if node.get(TRANSFER + 'ref') and node.get(TRANSFER + 'bid'))
@@ -157,7 +160,7 @@ def exercise(context):
     assert set(sql(context, 'SELECT t_ili_tid FROM di_management.t_ili2db_basket;').splitlines()) == set(baskets)
     assert sql(context, """
         SELECT count(*) FROM di_management.dataset d JOIN di_management.office o ON o.t_id=d.owneroffice
-        WHERE length(o.t_ili_tid)>255;
+        WHERE length(o.t_ili_tid)=200;
     """) == '1'
     assert sql(context, 'SET ROLE di_public; SELECT count(*) FROM di_api_public.datasets;') == '2'
     sql(context, 'SET ROLE di_public; SELECT * FROM di_management.principal;', failure='permission denied')
