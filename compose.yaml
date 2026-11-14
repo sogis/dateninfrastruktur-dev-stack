@@ -409,6 +409,7 @@
       },
       "volumes": [
         "./services/apisix/config.single.yaml:/usr/local/apisix/conf/config.yaml:ro",
+        "./services/apisix/dns-cache.lua:/usr/local/apisix/deps/share/lua/5.1/di-dns-cache.lua:ro",
         "${RUNTIME_DIR}/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro"
       ],
       "healthcheck": {

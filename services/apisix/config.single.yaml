@@ -3,6 +3,7 @@
     "node_listen": 9080,
     "enable_ipv6": false,
     "dns_resolver_valid": 2,
+    "lua_module_hook": "di-dns-cache",
     "ssl": {
       "enable": false
     }

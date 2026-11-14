@@ -204,6 +204,8 @@ def gateway_checks(context):
     assert status == 200 and OPEN.encode() not in page
     sql(context, "UPDATE di_management.dataversion SET availability='available' WHERE versionkey='one';")
     context.command(['stop', 'admin'])
+    # Let the positive DNS answer expire so the outage also exercises NXDOMAIN.
+    time.sleep(3)
     request(OPEN, 503)
     context.command(['up', '--no-build', '--no-deps', '-d', '--wait', '--wait-timeout', '150', 'admin'])
     deadline = time.monotonic() + 20
@@ -211,10 +213,11 @@ def gateway_checks(context):
         probe = str(uuid4())
         status, _, body = http(base + OPEN, headers={'X-DI-Scenario-Probe': probe})
         traced[probe] = status
+        assert time.monotonic() < deadline, 'Download still unavailable 20 seconds after Admin became healthy'
         if status == 200:
             assert body == DATA
             break
-        assert status == 503 and body != DATA and time.monotonic() < deadline
+        assert status == 503 and body != DATA, ('Admin restart', status)
         time.sleep(0.5)
     verify_download_traces(context, traced)
     sql(context, """
