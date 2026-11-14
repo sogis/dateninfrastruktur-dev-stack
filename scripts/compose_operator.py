@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Import a bootstrap XTF or export the selected management database."""
 import argparse
+import os
 from pathlib import Path
 import sys
 
@@ -22,6 +23,8 @@ def main():
         raise RuntimeError('Import requires a private regular XTF file')
     inside = '/runtime/' + path.relative_to(context.runtime).as_posix()
     result = context.command(['--profile', 'setup', 'run', '--rm', '--no-deps',
+                              '--user', f'{os.getuid()}:{os.getgid()}',
+                              '-e', 'DI_TOOL_RUNTIME=/tmp/di-management-transfer',
                               'management-setup', args.action, inside])
     print(context.redact(result.stdout), end='')
 
