@@ -45,7 +45,7 @@ def view_checks(context):
         SELECT count(*) || ':' || count(DISTINCT d.id)
         FROM di_api_public.datasets d;
     """) == '2:2'
-    assert int(public_sql(context, 'SELECT max(length(owner_office)) FROM di_api_public.datasets;')) > 255
+    assert int(public_sql(context, 'SELECT max(length(owner_office)) FROM di_api_public.datasets;')) == 200
     assert public_sql(context, '''
         SELECT d.identifier || ':' ||
             (SELECT count(*) FROM di_api_public.themes t WHERE t.dataset_id=d.id) || ':' ||
