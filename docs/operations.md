@@ -97,3 +97,36 @@ Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt.
 Der Registry-Build bindet den Jenkins-Quellcommit und denselben
 GRETL-Snapshot mit SHA-256 für beide Plattformen. Er veröffentlicht
 erst nach erfolgreicher Qualifikation der Plattformimages.
+
+## CSV-Anlieferung mit GRETL 6
+
+Für eine lokale CSV-Anlieferung genügen PostgreSQL, Keycloak, Garage,
+Origin, Admin und ClickHouse. Sodata und Gateway zeigen die publizierte
+Version. Verwende eine isolierte lokale Instanz mit separaten Ports.
+Der Integrationstest `scripts/test_delivery_domain.py` zeigt, wie
+`ComposeContext` diese Instanz einrichtet und die vier Modelle per
+`management-setup` initialisiert. Er importiert das synthetische
+`tests/fixtures/management-bootstrap.xtf` aus dem Admin-Repo mit
+`python3 scripts/compose_operator.py import /pfad/zur/fixture.xtf --env /pfad/runtime.env`.
+Der Test führt den Ablauf bis zur Annahme mit eigenen Testzugängen aus.
+
+Für einen manuellen Lauf verbinde den Benutzer und den technischen
+Principal mit den tatsächlichen `iss`- und `sub`-Werten der Keycloak-Instanz.
+Eine frische Realm-Konfiguration enthält den Client `gretl-delivery`
+mit dem Audience-Wert `management-api`. Das explizite ClickHouse-Setup
+richtet `ch_delivery` mit Zugriff auf `default.snapshot_*` ein.
+
+1. Frage als Benutzer mit `submit_data` die berechtigten Ausgaben mit
+   `GET /internal/deliveries/eligible` am internen Admin-Endpunkt ab.
+2. Lege eine Submission mit `PUT /internal/deliveries/{uuid}` und dem
+   Benutzer-Token an. Übergib `datasetId`, `issueId`, `mode` sowie
+   `originalFileName`, `inputSize` in Bytes und `inputSha256`.
+3. Starte den GRETL-6-Job `jobs/csv-delivery/job.groovy` aus dem Themenrepo
+   mit denselben Dateibytes und den dort dokumentierten Parametern und
+   Secret-Aliassen. Der Prozess muss den internen Admin-Endpunkt, Garage,
+   Keycloak und ClickHouse erreichen können.
+4. Prüfe den Status der Submission per `GET /internal/deliveries/{uuid}`.
+   Nach `accepted` zeigt Sodata die neue Version einer veröffentlichten
+   Ausgabe. Der Download liegt unter `/downloads/<distribution-id>/snapshot.csv`.
+   Die entsprechende ClickHouse-Tabelle heisst
+   `default.snapshot_<submission-uuid-ohne-bindestriche>`.

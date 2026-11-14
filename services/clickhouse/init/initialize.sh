@@ -83,6 +83,13 @@ ALTER USER ch_test_reader ADD PROFILES 'foundation_reader_profile';
 ALTER USER superset_reader ADD PROFILES 'foundation_reader_profile';
 CREATE QUOTA IF NOT EXISTS foundation_reader_quota FOR INTERVAL 1 hour MAX queries = 1000, errors = 100, result_rows = 1000000, read_rows = 100000000, execution_time = 3600 TO ch_test_reader, superset_reader;
 SQL
+if [ -n "${DI_CH_LOADER_PASSWORD:-}" ]; then
+  cat >> /tmp/clickhouse-init-users.sql <<SQL
+CREATE USER IF NOT EXISTS ch_delivery;
+ALTER USER ch_delivery IDENTIFIED WITH sha256_password BY '${DI_CH_LOADER_PASSWORD}';
+GRANT CREATE TABLE, INSERT, SELECT ON default.snapshot_* TO ch_delivery;
+SQL
+fi
 client --multiquery < /tmp/clickhouse-init-users.sql
 rm -f /tmp/clickhouse-init-users.sql
 

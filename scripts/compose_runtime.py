@@ -75,7 +75,7 @@ def init_context(project,ports=None,test_fixture=False):
     if existing:raise RuntimeError('Existing project requires explicit planned migration, never fresh init')
     values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader','THEMEN_REPO_DIR':str(ROOT.parent/'dateninfrastruktur-themenrepo')}
     if ports:values.update({k:str(v) for k,v in ports.items()})
-    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_PUBLIC_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_INGESTION_PLUGIN_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET','DI_CH_LOADER_PASSWORD']:values[key]=secrets.token_hex(32)
+    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_PUBLIC_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_INGESTION_PLUGIN_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET','DI_GRETL_DELIVERY_CLIENT_SECRET','DI_CH_LOADER_PASSWORD']:values[key]=secrets.token_hex(32)
     values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
     for kind in ['WRITER','READER']:
         values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
@@ -103,6 +103,13 @@ def render(context):
     for user in realm['users']:user['credentials'][0]['value']=v['KEYCLOAK_DEMO_PASSWORD']
     audience={'name':'management-api audience','protocol':'openid-connect','protocolMapper':'oidc-audience-mapper','config':{'included.custom.audience':'management-api','access.token.claim':'true','id.token.claim':'false'}}
     realm['clients']=[{'clientId':'management-gateway','enabled':True,'protocol':'openid-connect','publicClient':False,'secret':v['DI_OIDC_CLIENT_SECRET'],'standardFlowEnabled':True,'directAccessGrantsEnabled':False,'redirectUris':['http://localhost:'+v['GATEWAY_PORT']+'/oidc/callback'],'webOrigins':['http://localhost:'+v['GATEWAY_PORT']],'protocolMappers':[audience]}]
+    if v.get('DI_GRETL_DELIVERY_CLIENT_SECRET'):
+        realm['clients'].append({
+            'clientId': 'gretl-delivery', 'enabled': True, 'protocol': 'openid-connect',
+            'publicClient': False, 'secret': v['DI_GRETL_DELIVERY_CLIENT_SECRET'],
+            'standardFlowEnabled': False, 'directAccessGrantsEnabled': False,
+            'serviceAccountsEnabled': True, 'protocolMappers': [audience],
+        })
     if v['DI_TEST_FIXTURE']=='true':realm['clients'].append({'clientId':'management-test','enabled':True,'protocol':'openid-connect','publicClient':True,'standardFlowEnabled':False,'directAccessGrantsEnabled':True,'protocolMappers':[audience]})
     if not (r/'realm-initial.json').exists():
         extend_fresh(realm,v)

@@ -274,7 +274,8 @@
         "DI_WEB_JWKSURI": "http://keycloak:8080/realms/dateninfrastruktur/protocol/openid-connect/certs",
         "DI_WEB_AUDIENCE": "management-api",
         "DI_WEB_PUBLICORIGIN": "http://localhost:${GATEWAY_PORT}",
-        "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}"
+        "DI_WEB_GATEWAYSECRET": "${DI_GATEWAY_SECRET}",
+        "DI_DELIVERY_ORIGIN_URL": "http://origin:8080/downloads/"
       },
       "healthcheck": {
         "test": [
@@ -531,6 +532,7 @@
       "environment": {
         "CLICKHOUSE_HOST": "clickhouse",
         "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}",
+        "DI_CH_LOADER_PASSWORD": "${DI_CH_LOADER_PASSWORD}",
         "CLICKHOUSE_ADMIN_USER": "${CLICKHOUSE_ADMIN_USER:-ch_admin}",
         "CLICKHOUSE_ADMIN_PASSWORD": "${CLICKHOUSE_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
         "CLICKHOUSE_TEST_READER_PASSWORD": "${CLICKHOUSE_TEST_READER_PASSWORD:?Run ./scripts/init.sh first}",
