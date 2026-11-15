@@ -128,7 +128,7 @@ def main():
             '--no-auto', '/runtime/DI_ExampleCsv.ili'])
         operator(context, 'export', context.runtime / 'delivery-export.xtf')
         context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
-            'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.0.jar',
+            'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
             '--modeldir', '/opt/admin/models', '/runtime/delivery-export.xtf'])
         context.command(['build', 'admin'])
         context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '240', 'garage'])

@@ -17,11 +17,10 @@ def image_available(reference):
 
 def development_overrides(context, *, require_sources):
     source = ROOT.parent / 'dateninfrastruktur-admin'
-    topics = (ROOT / context.values.get('THEMEN_REPO_DIR', '../dateninfrastruktur-themenrepo')).resolve()
     state = context.runtime / 'admin-dev'
     if require_sources:
-        if not (source / 'scripts/dev_reload.py').is_file() or not (topics / 'contracts').is_dir():
-            raise RuntimeError('Admin development requires the Admin and Topics source checkouts')
+        if not (source / 'scripts/dev_reload.py').is_file():
+            raise RuntimeError('Admin development requires the Admin source checkout')
         if state.is_symlink():
             raise RuntimeError('OWNERSHIP_MISMATCH: Admin development directory is a symlink')
         state.mkdir(mode=0o700, exist_ok=True)
@@ -30,7 +29,6 @@ def development_overrides(context, *, require_sources):
     return {
         'DI_ADMIN_DEV_IMAGE': f'dateninfrastruktur-admin-dev:{context.values["INSTANCE_ID"]}-{revision}',
         'DI_ADMIN_DEV_SOURCE': str(source),
-        'DI_ADMIN_DEV_TOPICS': str(topics),
         'DI_ADMIN_DEV_STATE': str(state),
     }
 

@@ -9,19 +9,12 @@ services:
     working_dir: /sources/admin
     entrypoint: ["python3", "-u", "scripts/dev_reload.py"]
     environment:
-      DI_CSV_BUNDLE_ROOT: /sources/topics
       GRADLE_USER_HOME: /dev-state/gradle
       JDK_JAVA_OPTIONS: "-XX:ActiveProcessorCount=4"
     volumes:
       - type: bind
         source: ${DI_ADMIN_DEV_SOURCE:?}
         target: /sources/admin
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${DI_ADMIN_DEV_TOPICS:?}
-        target: /sources/topics
         read_only: true
         bind:
           create_host_path: false

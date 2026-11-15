@@ -150,7 +150,7 @@ def main():
         transfer = context.runtime / 'browser-export.xtf'
         operator(context, 'export', transfer)
         context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
-            'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.0.jar',
+            'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
             '--modeldir', '/opt/admin/models', '/runtime/browser-export.xtf'])
         before_restart = snapshot(context)
         start(context, 'local', restart=True)

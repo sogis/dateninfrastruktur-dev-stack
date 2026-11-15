@@ -7,9 +7,12 @@ Managementkatalog und die Fachrechte liegen in PostgreSQL.
 
 [Lokaler Betrieb](docs/operations.md) beschreibt Erstaufbau, Normalstart,
 Anlieferung, Betrieb und Testgrenzen. Für integrierte Prüfungen die
-Schwesterrepositories im selben Workspace bereitstellen. Für CSS, JTE
+jeweils benötigten Schwesterrepositories im selben Workspace bereitstellen.
+Der Admin-Image-Build benötigt nur den Admin-Checkout. Für CSS, JTE
 und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/operations.md#admin-aus-lokalen-quellen-entwickeln).
 
+- `python3 scripts/test_management_bootstrap.py` prüft Schema, Rollen und XTF-Import/-Export.
+- `python3 scripts/test_cayenne_mapping.py` prüft Mapping-Generierung und echte Cayenne-Schreibvorgänge.
 - `python3 scripts/test_delivery_domain.py` prüft Lieferrechte, Submission
   und konkurrierende Abschlüsse auf PostgreSQL.
 - `python3 scripts/test_single_bucket_storage.py` prüft Reader-/Writer-Grenzen

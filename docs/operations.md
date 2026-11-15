@@ -12,7 +12,7 @@ keinen eigenen Hostport.
 
 ## Frische Installation und Normalstart
 
-Für den Betrieb werden Docker mit Compose/Buildx und Python 3.10 oder neuer
+Für den Betrieb werden Docker mit Compose/Buildx und Python 3.9 oder neuer
 benötigt. Der erste Start aus der Registry verwendet die Versionstags aus
 `compose.yaml`:
 
@@ -62,10 +62,8 @@ den Anwendungskontext neu. Bei einem Kompilierfehler die Admin-Logs
 prüfen und die korrigierte Datei erneut speichern.
 
 Der erste Wechsel baut ein Werkzeugimage mit JDK und Python. Gradle lädt
-beim ersten Start seine Abhängigkeiten. Die lokalen Quellen werden
-schreibgeschützt eingebunden. Gradle-Cache und Buildausgaben liegen unter
-`.runtime/<instanz>/admin-dev/`. Änderungen am Gradle-Build oder an
-seinen Vertragsressourcen werden nach erneutem `off` und `on` geladen.
+beim ersten Start seine Abhängigkeiten. Der Admin-Checkout wird schreibgeschützt eingebunden. Gradle-Cache und Buildausgaben liegen unter
+`.runtime/<instanz>/admin-dev/`. Änderungen am Gradle-Build werden nach erneutem `off` und `on` geladen.
 
 `status.sh`, `logs.sh`, `stop.sh` und `down.sh` funktionieren auch
 im Entwicklungsmodus. Vor `up.sh`, `restart.sh` oder `setup.sh` mit
@@ -77,7 +75,10 @@ Fehlstart die vorherige Variante wieder her.
 
 ## Katalog und Lieferung
 
-Das explizite Management-Setup legt die vier INTERLIS-Modelle an.
+Das explizite Management-Setup legt das Schema aus den vier
+INTERLIS-Modellen im Admin-Repo an. Das lokale Tooling-Image enthält
+ili2pg 5.5.2 und ilivalidator 1.15.1. Beim Tooling-Build liefert der
+Stack-Kontext die PostgreSQL- und Garage-Setup-Skripte.
 Die erste fachliche Belegung kommt aus einem geprüften
 [XTF-Transfer](../../dateninfrastruktur-admin/docs/schema-lifecycle.md).
 Dort werden auch die ersten Principals und deren Rechte angelegt.
@@ -93,7 +94,9 @@ Die GRETL-/Jenkins-Anlieferung benötigt die Portierung auf
 `/internal/deliveries`. Der laufende Jenkins-Dienst wird auf
 Bereitschaft geprüft. Die alten öffentlichen Uploadpfade sind gesperrt.
 
-Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt.
+Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt. Die
+Testbereinigung entfernt die projektspezifischen lokalen Image-Tags
+nach dem Compose-Down. Release-Staging-Tags bleiben erhalten.
 Der Registry-Build bindet den Jenkins-Quellcommit und denselben
 GRETL-Snapshot mit SHA-256 für beide Plattformen. Er veröffentlicht
 erst nach erfolgreicher Qualifikation der Plattformimages.

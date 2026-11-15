@@ -1,6 +1,9 @@
 """Shared isolated MA-G test transport and resource teardown."""
 import json,re,socket,subprocess,urllib.error,urllib.parse,urllib.request
 
+from compose_operations import LOCAL_IMAGES
+
+
 def reserve_ports():
     sockets=[]
     try:
@@ -39,3 +42,18 @@ def cleanup(c):
         current=json.loads(subprocess.check_output(['docker','volume','inspect',name],text=True))[0]
         assert current==expected_objects[name] and current['Labels']['com.docker.compose.project']==c.project
         subprocess.run(['docker','volume','rm',name],check=True,capture_output=True)
+    # A configured shared or release tag is outside the fixture's ownership.
+    images = []
+    for key, name in LOCAL_IMAGES.items():
+        reference = f'dateninfrastruktur-{name}:{c.project}'
+        if reference not in (c.values.get(key), c.command_overrides.get(key)):
+            continue
+        tags = subprocess.check_output(
+            ['docker', 'image', 'ls', '--filter', f'reference={reference}',
+             '--format', '{{.Repository}}:{{.Tag}}'],
+            text=True,
+        ).splitlines()
+        if reference in tags:
+            images.append(reference)
+    if images:
+        subprocess.run(['docker', 'image', 'rm', '--no-prune', *images], check=True, capture_output=True)
