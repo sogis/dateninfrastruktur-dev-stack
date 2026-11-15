@@ -17,8 +17,6 @@ jobs:
     outputs:
       release: ${{ steps.changes.outputs.release }}
       revisions: ${{ steps.freeze.outputs.revisions }}
-      gretl: ${{ steps.snapshot.outputs.version }}
-      gretl_sha256: ${{ steps.snapshot.outputs.sha256 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -36,29 +34,13 @@ jobs:
         run: |
           set -euo pipefail
           revisions='{}'
-          for repo in admin sodata jenkins-dev jenkins-gretl-plugin themenrepo; do
+          for repo in admin sodata jenkins-dev jenkins-gretl-plugin; do
             sha=$(git ls-remote --exit-code "https://github.com/sogis/dateninfrastruktur-${repo}.git" refs/heads/main | cut -f1)
             [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
             revisions=$(jq -c --arg repo "$repo" --arg sha "$sha" '. + {($repo): $sha}' <<< "$revisions")
           done
           printf 'revisions=%s\n' "$revisions" >> "$GITHUB_OUTPUT"
           printf 'Stack %s\nSiblings %s\n' "$GITHUB_SHA" "$revisions"
-
-      - name: Freeze GRETL artifact for both release architectures
-        id: snapshot
-        if: steps.changes.outputs.release == 'true' && github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
-        env:
-          REVISIONS: ${{ steps.freeze.outputs.revisions }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          jenkins=$(jq -er '."jenkins-dev"' <<< "$REVISIONS")
-          resolver="https://raw.githubusercontent.com/sogis/dateninfrastruktur-jenkins-dev/$jenkins/bin/resolve-gretl.py"
-          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/resolve-gretl.py" "$resolver"
-          snapshot=$(python3 "$RUNNER_TEMP/resolve-gretl.py")
-          read -r version checksum <<< "$snapshot"
-          [[ "$version" =~ ^5\.0\.0-[0-9]{8}\.[0-9]{6}-[0-9]+$ && "$checksum" =~ ^[a-f0-9]{64}$ ]]
-          printf 'version=%s\nsha256=%s\n' "$version" "$checksum" >> "$GITHUB_OUTPUT"
 
   management:
     needs: sources
@@ -77,7 +59,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for repo in admin sodata themenrepo; do
+          for repo in admin sodata; do
             dir="dateninfrastruktur-$repo"
             sha=$(jq -er --arg repo "$repo" '.[$repo]' <<< "$REVISIONS")
             [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
@@ -114,8 +96,6 @@ jobs:
     env:
       REVISIONS: ${{ needs.sources.outputs.revisions }}
       ARCH: ${{ matrix.arch }}
-      DI_GRETL_SNAPSHOT_VERSION: ${{ needs.sources.outputs.gretl }}
-      DI_GRETL_SNAPSHOT_SHA256: ${{ needs.sources.outputs.gretl_sha256 }}
       DOCKER_CONTEXT: default
       STAGING_TAG: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
     steps:
@@ -127,7 +107,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for repo in admin sodata jenkins-dev jenkins-gretl-plugin themenrepo; do
+          for repo in admin sodata jenkins-dev jenkins-gretl-plugin; do
             dir="dateninfrastruktur-$repo"
             sha=$(jq -er --arg repo "$repo" '.[$repo]' <<< "$REVISIONS")
             [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
@@ -152,7 +132,10 @@ jobs:
         working-directory: dateninfrastruktur-dev-stack
         env:
           JAVA21_HOME: ${{ steps.java21.outputs.path }}
-        run: python3 scripts/test_stack_management.py --release-staging-tag "$STAGING_TAG"
+        run: |
+          set -euo pipefail
+          python3 scripts/test_stack_management.py --release-staging-tag "$STAGING_TAG"
+          python3 scripts/test_delivery_domain.py --jenkins-image "dateninfrastruktur-jenkins:$STAGING_TAG"
       - name: Push tested platform images to GHCR
         if: github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
         env:

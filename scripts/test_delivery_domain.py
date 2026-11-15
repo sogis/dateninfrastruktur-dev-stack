@@ -133,15 +133,19 @@ def verify_jenkins_delivery(context):
     try:
         with browser.open(base + '/anlieferung', timeout=30) as response:
             page = response.read().decode()
+            page_url = response.url
     except urllib.error.HTTPError as error:
         assert error.code in (401, 403), error.code
         page = ''
+        page_url = base
     if 'di-upload' not in page:
-        login_url = base + '/jenkins/securityRealm/commenceLogin?from=/jenkins/anlieferung/'
-        with browser.open(login_url, timeout=30) as response:
-            login = next(form['action'] for form in Forms(response.read().decode()).forms
-                         if form.get('id') == 'kc-form-login')
-            login = urllib.parse.urljoin(response.url, login)
+        if 'kc-form-login' not in page:
+            login_url = base + '/jenkins/securityRealm/commenceLogin?from=/jenkins/anlieferung/'
+            with browser.open(login_url, timeout=30) as response:
+                page = response.read().decode()
+                page_url = response.url
+        action = next(form['action'] for form in Forms(page).forms if form.get('id') == 'kc-form-login')
+        login = urllib.parse.urljoin(page_url, action)
         issuer = 'http://localhost:' + context.values['KEYCLOAK_PORT']
         assert login.startswith(issuer + '/realms/dateninfrastruktur/')
         credentials = urllib.parse.urlencode({
@@ -163,6 +167,9 @@ def verify_jenkins_delivery(context):
     forms = [form for form in Forms(page).forms if 'di-upload' in form.get('class', '').split()]
     assert len(forms) == 1, 'Expected one authorised CSV upload form'
     form = forms[0]
+    # The preceding domain probe tests access changes on this synthetic dataset.
+    dataset = UUID(form['data-dataset'])
+    sql(context, f"UPDATE di_management.dataset SET accesslevel='open' WHERE t_ili_tid='{dataset}'")
 
     def upload(csv, mode='replace'):
         boundary = uuid4().hex
@@ -187,6 +194,8 @@ def verify_jenkins_delivery(context):
         assert recorded == f'{len(csv)}:{hashlib.sha256(csv).hexdigest()}'
         return id_, status_url
 
+    status_errors = []
+
     def await_result(submission, expected):
         id_, status_url = submission
         for _ in range(60):
@@ -202,9 +211,15 @@ def verify_jenkins_delivery(context):
             raise AssertionError((record, expected))
         with browser.open(status_url, timeout=20) as response:
             page = response.read().decode()
+            page_path = urllib.parse.urlsplit(response.url).path
         label = {'accepted': 'Angenommen', 'rejected': 'CSV abgelehnt', 'failed': 'Technischer Fehler'}[expected]
         rendered = re.search(r"""id=['" ]*di-delivery-state['" ]*[^>]*>([^<]*)</p>""", page)
-        assert rendered and rendered[1].strip() == label, (rendered[1].strip() if rendered else 'missing status element', label)
+        if not rendered or rendered[1].strip() != label:
+            title = re.search(r'<title>([^<]*)</title>', page, re.IGNORECASE)
+            diagnostic = (page_path, title[1].strip() if title else '', label,
+                          rendered[1].strip() if rendered else 'missing status element')
+            status_errors.append(diagnostic)
+            print('Jenkins status view mismatch', diagnostic, flush=True)
         return id_
 
     def accepted(submission, expected_rows):
@@ -242,6 +257,7 @@ def verify_jenkins_delivery(context):
     context.command(['stop', 'clickhouse'])
     await_result(upload(b'zone,code\nA,1\n'), 'failed')
     assert current == sql(context, f"SELECT currentversion FROM di_management.datasetissue WHERE t_ili_tid='{UUID(form['data-issue'])}'")
+    assert not status_errors, status_errors
     print('JENKINS_DELIVERY_CASES=5 SKIP=0', flush=True)
 
 
