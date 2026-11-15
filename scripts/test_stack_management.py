@@ -114,8 +114,7 @@ def main():
         run_smoke(context)
         assert snapshot(context) == before
         base = 'http://localhost:' + context.values['GATEWAY_PORT']
-        for path in ('/anlieferung', '/jenkins/data-delivery/'):
-            assert http(base + path)[0] == 403
+        assert http(base + '/jenkins/data-delivery/')[0] == 403
 
         source = put(context, 'management-bootstrap.xtf', FIXTURE.read_bytes())
         operator(context, 'import', source)

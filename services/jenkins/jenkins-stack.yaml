@@ -47,14 +47,9 @@ credentials:
       - credentials:
           - string:
               scope: SYSTEM
-              id: di-ingestion-plugin
-              description: 'Internal delivery plugin proof'
-              secret: '${DI_INGESTION_PLUGIN_SECRET}'
-          - string:
-              scope: SYSTEM
-              id: di-ingestion-executor-client
-              description: 'Dedicated Keycloak ingestion executor client'
-              secret: '${DI_INGESTION_EXECUTOR_CLIENT_SECRET}'
+              id: di-gretl-delivery
+              description: 'Technical Admin delivery identity'
+              secret: '${DI_GRETL_DELIVERY_CLIENT_SECRET}'
           - string:
               scope: SYSTEM
               id: di-csv-storage-id
@@ -74,8 +69,7 @@ unclassified:
   location:
     url: '${JENKINS_URL}'
   diDelivery:
-    backendBaseUri: 'http://admin:8080/internal/ingestion/'
+    backendBaseUri: 'http://admin:8080/internal/deliveries/'
     issuer: '${DI_JENKINS_ISSUER}'
     publicOrigin: '${DI_JENKINS_PUBLIC_ORIGIN}'
-    instance: '${DI_JENKINS_INSTANCE}'
-    maxUploadBytes: '${DI_INGESTION_MAX_UPLOAD_BYTES}'
+    maxUploadBytes: '${DI_DELIVERY_MAX_UPLOAD_BYTES}'

@@ -113,23 +113,30 @@ Der Integrationstest `scripts/test_delivery_domain.py` zeigt, wie
 `python3 scripts/compose_operator.py import /pfad/zur/fixture.xtf --env /pfad/runtime.env`.
 Der Test führt den Ablauf bis zur Annahme mit eigenen Testzugängen aus.
 
-Für einen manuellen Lauf verbinde den Benutzer und den technischen
-Principal mit den tatsächlichen `iss`- und `sub`-Werten der Keycloak-Instanz.
-Eine frische Realm-Konfiguration enthält den Client `gretl-delivery`
-mit dem Audience-Wert `management-api`. Das explizite ClickHouse-Setup
-richtet `ch_delivery` mit Zugriff auf `default.snapshot_*` ein.
+Für eine Lieferung müssen die Person und der technische Principal mit den
+`iss`- und `sub`-Werten der Keycloak-Instanz in Admin registriert sein.
+Die Clients `jenkins-delivery` und `gretl-delivery` verwenden die Audience
+`management-api`. Die technische Identität erhält ihren Token per
+Client Credentials. Das ClickHouse-Setup berechtigt `ch_delivery` für
+`default.snapshot_*`.
 
-1. Frage als Benutzer mit `submit_data` die berechtigten Ausgaben mit
-   `GET /internal/deliveries/eligible` am internen Admin-Endpunkt ab.
-2. Lege eine Submission mit `PUT /internal/deliveries/{uuid}` und dem
-   Benutzer-Token an. Übergib `datasetId`, `issueId`, `mode` sowie
-   `originalFileName`, `inputSize` in Bytes und `inputSha256`.
-3. Starte den GRETL-6-Job `jobs/csv-delivery/job.groovy` aus dem Themenrepo
-   mit denselben Dateibytes und den dort dokumentierten Parametern und
-   Secret-Aliassen. Der Prozess muss den internen Admin-Endpunkt, Garage,
-   Keycloak und ClickHouse erreichen können.
-4. Prüfe den Status der Submission per `GET /internal/deliveries/{uuid}`.
-   Nach `accepted` zeigt Sodata die neue Version einer veröffentlichten
-   Ausgabe. Der Download liegt unter `/downloads/<distribution-id>/snapshot.csv`.
-   Die entsprechende ClickHouse-Tabelle heisst
-   `default.snapshot_<submission-uuid-ohne-bindestriche>`.
+Öffne `/anlieferung` am Gateway und lade nach der Keycloak-Anmeldung eine
+CSV für eine berechtigte Ausgabe hoch. Jenkins startet den festen Job.
+GRETL lädt über die interne Delivery-API das gebundene Modell. Bei Append
+lädt GRETL zusätzlich die letzte CSV aus Garage. Admin akzeptiert nur
+einen Stand mit weiterhin gültigen Fachrechten, Schema und Basisversion.
+Die angenommene CSV ist unter `/downloads/<distribution-id>/snapshot.csv`
+verfügbar. Die ClickHouse-Tabelle heisst
+`default.snapshot_<submission-uuid-ohne-bindestriche>`.
+
+Für die Jenkins-Lieferprüfung das lokale Jenkins-Image bauen und angeben:
+
+```sh
+python3 scripts/test_delivery_domain.py --jenkins-image dateninfrastruktur-jenkins:mein-kandidat
+```
+
+Der Test verwendet eine eigene Compose-Instanz und prüft Replace, Append,
+CSV mit ausschliesslich Kopfzeile, Validierungsablehnung und ClickHouse-Ausfall.
+Bleibt eine Submission nach einem Netz- oder Prozessausfall in `processing`,
+kann der registrierte Service-Principal sie über
+`POST /internal/deliveries/{id}/fail` mit einer technischen Begründung beenden.

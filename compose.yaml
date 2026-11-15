@@ -118,15 +118,12 @@
         "DI_JENKINS_AUTHORIZATION_URL": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur/protocol/openid-connect/auth",
         "DI_JENKINS_LOGOUT_URL": "http://localhost:${KEYCLOAK_PORT}/realms/dateninfrastruktur/protocol/openid-connect/logout",
         "DI_JENKINS_PUBLIC_ORIGIN": "http://localhost:${GATEWAY_PORT}",
-        "DI_JENKINS_INSTANCE": "${INSTANCE_ID}",
-        "DI_JENKINS_IMAGE_SHA256": "${DI_JENKINS_IMAGE_SHA256:-}",
-        "DI_INGESTION_MAX_UPLOAD_BYTES": "${DI_INGESTION_MAX_UPLOAD_BYTES:-104857600}"
+        "DI_DELIVERY_MAX_UPLOAD_BYTES": "${DI_DELIVERY_MAX_UPLOAD_BYTES:-104857600}"
       },
       "secrets": [
         "JENKINS_ADMIN_PASSWORD",
         "DI_JENKINS_OIDC_CLIENT_SECRET",
-        "DI_INGESTION_PLUGIN_SECRET",
-        "DI_INGESTION_EXECUTOR_CLIENT_SECRET",
+        "DI_GRETL_DELIVERY_CLIENT_SECRET",
         "DI_STORAGE_WRITER_ACCESS_KEY",
         "DI_STORAGE_WRITER_SECRET_KEY",
         "DI_CH_LOADER_PASSWORD"
@@ -664,11 +661,8 @@
     "DI_JENKINS_OIDC_CLIENT_SECRET": {
       "environment": "DI_JENKINS_OIDC_CLIENT_SECRET"
     },
-    "DI_INGESTION_PLUGIN_SECRET": {
-      "environment": "DI_INGESTION_PLUGIN_SECRET"
-    },
-    "DI_INGESTION_EXECUTOR_CLIENT_SECRET": {
-      "environment": "DI_INGESTION_EXECUTOR_CLIENT_SECRET"
+    "DI_GRETL_DELIVERY_CLIENT_SECRET": {
+      "environment": "DI_GRETL_DELIVERY_CLIENT_SECRET"
     },
     "DI_STORAGE_WRITER_ACCESS_KEY": {
       "environment": "DI_STORAGE_WRITER_ACCESS_KEY"

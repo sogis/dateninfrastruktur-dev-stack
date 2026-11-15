@@ -42,7 +42,7 @@ LOCAL_IMAGES = {
 }
 
 def select_images(c, mode):
-    c.command_overrides = dict.fromkeys((*LOCAL_IMAGES, 'DI_JENKINS_IMAGE_SHA256'), '')
+    c.command_overrides = dict.fromkeys(LOCAL_IMAGES, '')
     if mode == 'local':
         tag = 'local' if c.project in {'dateninfrastruktur', 'dateninfrastruktur-dev-stack'} and c.values['DI_TEST_FIXTURE'] != 'true' else c.project
         c.command_overrides.update({key: f'dateninfrastruktur-{name}:{tag}' for key, name in LOCAL_IMAGES.items()})
@@ -80,7 +80,6 @@ def prepare_start(c, mode):
     reference = prepare_images(c, mode)
     from bind_jenkins_image import verified_image_id
     image_id = verified_image_id(reference)
-    c.command_overrides['DI_JENKINS_IMAGE_SHA256'] = image_id.split(':', 1)[1]
     return image_id
 
 def saved_mode(c):
@@ -98,7 +97,7 @@ def start(c, mode, restart=False):
     container = c.command(['ps', '-q', 'jenkins']).stdout.strip()
     actual_id = subprocess.check_output(['docker', 'inspect', '--format', '{{.Image}}', container], text=True).strip()
     if actual_id != jenkins_id:
-        raise RuntimeError('Jenkins container image differs from its verified build provenance')
+        raise RuntimeError('Jenkins container image differs from the selected image ID')
     marker = c.runtime/'startup-image-mode'
     with tempfile.NamedTemporaryFile(mode='w', dir=c.runtime, delete=False) as pending:
         pending.write(mode + '\n')
