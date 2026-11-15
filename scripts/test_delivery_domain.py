@@ -213,7 +213,7 @@ def verify_jenkins_delivery(context):
             page = response.read().decode()
             page_path = urllib.parse.urlsplit(response.url).path
         label = {'accepted': 'Angenommen', 'rejected': 'CSV abgelehnt', 'failed': 'Technischer Fehler'}[expected]
-        rendered = re.search(r"""id=['" ]*di-delivery-state['" ]*[^>]*>([^<]*)</p>""", page)
+        rendered = re.search(r"""id=['" ]*di-delivery-state['" ]*[^>]*>([^<]*)""", page)
         if not rendered or rendered[1].strip() != label:
             title = re.search(r'<title>([^<]*)</title>', page, re.IGNORECASE)
             diagnostic = (page_path, title[1].strip() if title else '', label,
@@ -242,14 +242,16 @@ def verify_jenkins_delivery(context):
                                  method='POST', headers={'Authorization': auth},
                                  data=('SELECT zone, code FROM ' + table + ' ORDER BY zone FORMAT CSV').encode())
         assert status == 200
-        return list(csv.reader(data.decode().splitlines())), list(csv.reader(actual.decode().splitlines()))
+        return key, list(csv.reader(data.decode().splitlines())), list(csv.reader(actual.decode().splitlines()))
 
     expected = [['zone', 'code'], ['A', '1']]
-    content, rows = accepted(upload(b'zone,code\nA,1\n'), 1)
+    first_key, content, rows = accepted(upload(b'zone,code\nA,1\n'), 1)
     assert content == expected and rows == expected[1:], (content, rows)
-    content, rows = accepted(upload(b'zone,code\nB,2\n', 'append'), 2)
+    _, content, rows = accepted(upload(b'zone,code\nB,2\n', 'append'), 2)
     assert content == expected + [['B', '2']] and rows == content[1:], (content, rows)
-    content, rows = accepted(upload(b'zone,code\n'), 0)
+    old_code, _, old_data = http(base + '/' + first_key)
+    assert old_code == 200 and old_data == b'zone,code\nA,1\n'
+    _, content, rows = accepted(upload(b'zone,code\n'), 0)
     assert content == [['zone', 'code']] and rows == [], (content, rows)
     current = sql(context, f"SELECT currentversion FROM di_management.datasetissue WHERE t_ili_tid='{UUID(form['data-issue'])}'")
     assert current

@@ -16,6 +16,10 @@ Der gemeinsame PostgreSQL/PostGIS-Server bedient getrennte logische Datenbanken.
 APISIX ruft die Admin-Authorization-API über `forward-auth` auf. Aktive
 Gateway-Deny-Regeln, internen Origin und privaten Garage-Bucket erhalten.
 
+Die CSV-Anlieferung startet den festen GRETL-6-Job aus dem Jenkins-Image.
+Die Integration mit der veröffentlichten Maven-Distribution und einer
+eigenen Compose-Instanz prüfen.
+
 Vor grösseren Änderungen `.agents/skills/simplify-change/SKILL.md` anwenden.
 Vor PR-Abschluss unabhängig mit `.agents/skills/review-change/SKILL.md`
 prüfen. Bestehende Integrationstests anhand der betroffenen Verträge auswählen.

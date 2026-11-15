@@ -141,3 +141,6 @@ CSV mit ausschliesslich Kopfzeile, Validierungsablehnung und ClickHouse-Ausfall.
 Bleibt eine Submission nach einem Netz- oder Prozessausfall in `processing`,
 kann der registrierte Service-Principal sie über
 `POST /internal/deliveries/{id}/fail` mit einer technischen Begründung beenden.
+Wird ein Eintrag vor dem Jenkins-Start aus der Warteschlange abgebrochen,
+löscht Jenkins die Upload-Datei. Eine solche Submission kann in `pending`
+stehen bleiben. Ein neuer Upload erzeugt eine neue Submission.
