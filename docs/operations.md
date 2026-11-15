@@ -1,7 +1,7 @@
 # Lokaler Betrieb der Dateninfrastruktur
 
-Die sechs Schwesterrepositories liegen im selben Arbeitsverzeichnis. Der
-Compose-Stack führt PostgreSQL 16/PostGIS, Garage, ClickHouse, Keycloak,
+Admin, Sodata, Jenkins-Image und Jenkins-Plugin liegen in
+Schwestercheckouts. Der Compose-Stack führt PostgreSQL 16/PostGIS, Garage, ClickHouse, Keycloak,
 Superset, Admin, Sodata, Origin, APISIX und Jenkins je einmal aus. Die
 PostgreSQL-Datenbanken und der private Bucket `ch.so.daten` werden durch
 explizites Setup eingerichtet. Normalstart und Recreate verwenden die
@@ -13,13 +13,13 @@ keinen eigenen Hostport.
 ## Frische Installation und Normalstart
 
 Für den Betrieb werden Docker mit Compose/Buildx und Python 3.9 oder neuer
-benötigt. Der erste Start aus der Registry verwendet die Versionstags aus
-`compose.yaml`:
+benötigt. Für den GRETL-6-Lieferweg die eigenen Images aus den
+Schwestercheckouts bauen.
 
 ```sh
 ./scripts/init.sh
-./scripts/setup.sh --skip-build
-./scripts/up.sh --skip-build
+./scripts/setup.sh
+./scripts/up.sh
 ./scripts/status.sh
 ```
 
@@ -27,9 +27,9 @@ benötigt. Der erste Start aus der Registry verwendet die Versionstags aus
 verwendet beim Standardprojekt `:local`. Benannte Instanzen und Tests
 verwenden den Projektnamen als Tag. Für diesen Build werden zusätzlich
 Java 21 und Maven für das Jenkins-HPI benötigt. Admin und Sodata bauen mit
-Java 25 im Container. Jenkins verwendet das lokal vorhandene, im Jenkins-Toolchain-Lock
-gebundene GRETL-Image und nimmt das geprüfte Offline-Bundle ins Image auf. `./scripts/build.sh` baut
-dieselben lokalen Images. `restart.sh` verwendet den zuletzt erfolgreich
+Java 25 im Container. Beim Jenkins-Image-Build löst Gradle die veröffentlichte
+GRETL-6-Distribution aus Maven auf. `./scripts/build.sh` baut dieselben lokalen
+Images. `restart.sh` verwendet den zuletzt erfolgreich
 gestarteten Modus.
 
 Das Setup legt nur technische Rollen, SQL-Sichten, den Bucket mit separatem
@@ -127,7 +127,8 @@ lädt GRETL zusätzlich die letzte CSV aus Garage. Admin akzeptiert nur
 einen Stand mit weiterhin gültigen Fachrechten, Schema und Basisversion.
 Die angenommene CSV ist unter `/downloads/<distribution-id>/snapshot.csv`
 verfügbar. Die ClickHouse-Tabelle heisst
-`default.snapshot_<submission-uuid-ohne-bindestriche>`.
+`default.snapshot_<submission-uuid-ohne-bindestriche>`. Die Submission-ID
+steht als `versionKey` an der fachlichen Version.
 
 Für die Jenkins-Lieferprüfung das lokale Jenkins-Image bauen und angeben:
 

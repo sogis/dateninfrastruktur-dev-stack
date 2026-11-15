@@ -3,7 +3,7 @@
 import argparse
 import base64
 import csv
-from http.cookiejar import CookieJar
+from http.cookiejar import CookieJar, DefaultCookiePolicy
 from html.parser import HTMLParser
 import hashlib
 import json
@@ -127,7 +127,9 @@ class Forms(HTMLParser):
 
 def verify_jenkins_delivery(context):
     base = 'http://localhost:' + context.values['GATEWAY_PORT']
-    browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+    # Browsers send Secure cookies on localhost, including the HTTP test realm.
+    cookies = CookieJar(policy=DefaultCookiePolicy(secure_protocols=('https', 'wss', 'http')))
+    browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
     try:
         with browser.open(base + '/anlieferung', timeout=30) as response:
             page = response.read().decode()
@@ -153,7 +155,9 @@ def verify_jenkins_delivery(context):
             path = urllib.parse.urlsplit(error.url).path
             body = error.read(4096).decode(errors='replace')
             title = re.search(r'<title>([^<]*)</title>', body, re.IGNORECASE)
-            summary = title.group(1) if title else re.sub(r'<[^>]*>', ' ', body).strip()[:180]
+            details = [known for known in ('Cookie not found', 'Invalid username or password',
+                       'Invalid code', 'Invalid request') if known.lower() in body.lower()]
+            summary = ', '.join(details) if details else title.group(1) if title else ''
             raise AssertionError(f'OIDC callback {path} returned HTTP {error.code} {summary}') from None
 
     forms = [form for form in Forms(page).forms if 'di-upload' in form.get('class', '').split()]
@@ -178,7 +182,10 @@ def verify_jenkins_delivery(context):
                 status_url = base + json.load(response)['statusUrl']
         except urllib.error.HTTPError as error:
             raise AssertionError('Jenkins upload returned HTTP ' + str(error.code)) from None
-        return UUID(urllib.parse.parse_qs(urllib.parse.urlsplit(status_url).query)['id'][0]), status_url
+        id_ = UUID(urllib.parse.parse_qs(urllib.parse.urlsplit(status_url).query)['id'][0])
+        recorded = sql(context, f"SELECT concat_ws(':', inputsize, inputsha256) FROM di_management.submission WHERE t_ili_tid='{id_}'")
+        assert recorded == f'{len(csv)}:{hashlib.sha256(csv).hexdigest()}'
+        return id_, status_url
 
     def await_result(submission, expected):
         id_, status_url = submission
@@ -195,7 +202,9 @@ def verify_jenkins_delivery(context):
             raise AssertionError((record, expected))
         with browser.open(status_url, timeout=20) as response:
             page = response.read().decode()
-        assert re.search(r'id="di-delivery-state"[^>]*>', page)
+        label = {'accepted': 'Angenommen', 'rejected': 'CSV abgelehnt', 'failed': 'Technischer Fehler'}[expected]
+        rendered = re.search(r"""id=['" ]*di-delivery-state['" ]*[^>]*>([^<]*)</p>""", page)
+        assert rendered and rendered[1].strip() == label, (rendered[1].strip() if rendered else 'missing status element', label)
         return id_
 
     def accepted(submission, expected_rows):
@@ -258,7 +267,7 @@ def main():
         output = context.redact(result.stdout + result.stderr)
         print(output)
         assert result.returncode == 0, 'Domain probe failed'
-        assert 'DELIVERY_DOMAIN_ASSERTIONS=41 SKIP=0' in output.splitlines()
+        assert 'DELIVERY_DOMAIN_ASSERTIONS=43 SKIP=0' in output.splitlines()
         assert 'DELIVERY_HTTP_ASSERTIONS=24 SKIP=0' in output.splitlines()
         assert 'ACCESS_CATALOG_CASES=5 SKIP=0' in output.splitlines()
         context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
