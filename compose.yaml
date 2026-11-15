@@ -255,10 +255,7 @@
       "image": "${ADMIN_IMAGE:-ghcr.io/sogis/dateninfrastruktur-admin:0.2.7}",
       "build": {
         "context": "../dateninfrastruktur-admin",
-        "target": "jvm-runtime",
-        "additional_contexts": {
-          "topics_source": "${THEMEN_REPO_DIR:-../dateninfrastruktur-themenrepo}"
-        }
+        "target": "jvm-runtime"
       },
       "restart": "unless-stopped",
       "depends_on": {

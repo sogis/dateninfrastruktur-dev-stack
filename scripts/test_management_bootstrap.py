@@ -168,6 +168,19 @@ def exercise(context):
     sql(context, 'SET ROLE di_public; DELETE FROM di_api_public.datasets;', failure='cannot delete from view')
     sql(context, 'UPDATE di_management.office SET t_ili_tid=NULL;', failure='not-null constraint')
     sql(context, "UPDATE di_management.office SET t_ili_tid='same';", failure='duplicate key')
+    sql(context, "UPDATE di_management.office SET aname=' ';",
+        failure='office_aname_check')
+    sql(context, r"UPDATE di_management.office SET aname=E'a\nb';",
+        failure='office_aname_check')
+    sql(context, r"BEGIN; UPDATE di_management.office SET aname='a\nb'; ROLLBACK;")
+    sql(context, "UPDATE di_management.dataversion SET acceptedat='infinity';",
+        failure='dataversion_acceptedat_check')
+    sql(context, 'UPDATE di_management.dataversion SET asequence=0;',
+        failure='dataversion_asequence_check')
+    sql(context, 'UPDATE di_management.datasetissue SET dataset=NULL;',
+        failure='not-null constraint')
+    sql(context, 'UPDATE di_management.dataset SET currentissue=-1;',
+        failure='foreign key constraint')
     initial = snapshot(context)
     print(tool(context, 'setup'))
     assert snapshot(context) == initial
@@ -180,7 +193,7 @@ def exercise(context):
     assert transfer_ids(target) == (baskets, objects), 'Export changed basket or object identities'
     assert target.stat().st_mode & 0o777 == 0o600
     context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
-                     'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.0.jar',
+                     'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
                      '--modeldir', '/opt/admin/models', '/runtime/management-export.xtf'])
     assert snapshot(context) == initial
     print('PostgreSQL and export preserved synthetic BIDs and TIDs')
@@ -199,7 +212,10 @@ def main():
     assert not context.command(['ps', '-aq']).stdout.strip()
     assert not subprocess.check_output(['docker', 'volume', 'ls', '-q', '--filter',
         'label=com.docker.compose.project=' + context.project], text=True).strip()
-    print('ASSERTIONS=28 SKIP=0')
+    for key in ('POSTGRES_IMAGE', 'TOOL_IMAGE'):
+        result = subprocess.run(['docker', 'image', 'inspect', context.values[key]], capture_output=True)
+        assert result.returncode, f"Fixture image tag remained: {context.values[key]}"
+    print('ASSERTIONS=37 SKIP=0')
 
 
 if __name__ == '__main__':

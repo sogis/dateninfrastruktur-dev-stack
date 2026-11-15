@@ -114,7 +114,7 @@ def exercise(context):
     assert all(actual[tid][1].endswith('}' + kind) for tid, kind in NEW_IDS.items())
     assert database_ids(context, actual) == actual
     context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
-                     'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.0.jar',
+                     'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
                      '--modeldir', '/opt/admin/models', '/runtime/cayenne-export.xtf'])
     print('Pinned ilivalidator accepted the export with all five new object TIDs')
     reject_legacy_width(context)
