@@ -104,9 +104,10 @@ Jenkins-Plugin und den festen Job, den Jenkins mit der GRETL-CLI ausführt.
 
 ## CSV-Anlieferung mit GRETL 6
 
-Für eine lokale CSV-Anlieferung genügen PostgreSQL, Keycloak, Garage,
-Origin, Admin und ClickHouse. Sodata und Gateway zeigen die publizierte
-Version. Verwende eine isolierte lokale Instanz mit separaten Ports.
+Der lokale Lieferweg über `/anlieferung` nutzt Gateway, Jenkins,
+Keycloak, Admin, PostgreSQL, Garage, Origin und ClickHouse.
+Sodata zeigt die publizierte Version. Verwende eine isolierte lokale
+Instanz mit separaten Ports.
 Der Integrationstest `scripts/test_delivery_domain.py` zeigt, wie
 `ComposeContext` diese Instanz einrichtet und die vier Modelle per
 `management-setup` initialisiert. Er importiert das synthetische
@@ -126,7 +127,8 @@ CSV für eine berechtigte Ausgabe hoch. Jenkins startet den festen Job.
 Admin erzeugt das INTERLIS-Modell aus der gebundenen Schemafassung. GRETL
 bezieht mit `OAuth2ClientCredentials` einen technischen Token und lädt
 das Modell per `Curl`. Bei Append lädt GRETL zusätzlich die letzte CSV aus
-Garage. Für `reject` und `complete` bezieht GRETL jeweils einen frischen Token. Admin akzeptiert nur
+Garage. Für `reject` und `complete` bezieht GRETL jeweils einen frischen
+Token. Admin akzeptiert nur
 einen Stand mit weiterhin gültigen Fachrechten, Schema und Basisversion.
 Die angenommene CSV ist unter `/downloads/<distribution-id>/snapshot.csv`
 verfügbar. Die ClickHouse-Tabelle heisst
@@ -141,19 +143,57 @@ python3 scripts/test_delivery_domain.py --jenkins-image dateninfrastruktur-jenki
 
 Der Test verwendet eine eigene Compose-Instanz und prüft Replace, Append,
 CSV mit ausschliesslich Kopfzeile, Validierungsablehnung, typisierte
-ClickHouse-Werte, Prozessabbruch und ClickHouse-Ausfall. Nach einem fachlichen Reject zeigt
-die berechtigte Statusseite die begrenzten CSV-Diagnosen aus dem
-Jenkins-Buildlog. Zeile, Regel und Attribut erscheinen, soweit der Validator
-sie meldet. Die privaten Laufzeitdateien werden nach dem Lauf entfernt.
-Bei einer Cleanup-Warnung kann der Jenkins-Betreiber das anhand der
-Lieferkennung eindeutig zugeordnete Verzeichnis unter
-`$JENKINS_HOME/data-infrastructure/uploads` nach Ende des Laufs bereinigen.
+ClickHouse-Werte, Prozessabbruch und ClickHouse-Ausfall. Nach einem fachlichen
+Reject zeigt die berechtigte Statusseite die begrenzten CSV-Diagnosen aus
+dem Jenkins-Buildlog. Zeile, Regel und Attribut erscheinen, soweit der
+Validator sie meldet. Bei UNIQUE-Verletzungen liefert der Validator den
+Namen der Modellregel.
+
+Jenkins entfernt die privaten Laufzeitdateien nach dem Lauf. Bei einer
+Cleanup-Warnung entfernt der Betreiber nach Ende des Laufs das Verzeichnis
+unter `$JENKINS_HOME/data-infrastructure/uploads`, das zur Lieferkennung im
+Joblog gehört. Es kann noch CSV-Daten, das Validierungslog und
+Laufzeit-Credentials enthalten und soll zeitnah entfernt werden.
 
 Wird eine Queue-Position vor dem Start administrativ abgebrochen, entfernt
-Jenkins die private Upload-Datei. Eine in Admin verbleibende `pending`-Submission
-kann die einreichende Person mit ihrem Benutzer-JWT über die interne API
-`POST /internal/deliveries/{id}/cancel` abbrechen. Ein erneuter Upload erzeugt
-eine eigene Submission.
+Jenkins die private Upload-Datei. Die Submission kann in Admin `pending`
+bleiben. Ein erneuter Upload erzeugt eine eigene Submission.
+
+Für die manuelle Bereinigung koordiniert der Betreiber mit der einreichenden
+Person eine autorisierte Betriebssitzung. Die interne Admin-API ist am
+Gateway gesperrt. Aus dem Stack-Checkout erreicht der folgende Befehl
+die API über den Jenkins-Container des gebundenen Compose-Kontexts. Setze
+`runtime_env` auf dessen `runtime.env` und `submission_id` auf die
+Lieferkennung der abgebrochenen Queue-Position. Die einreichende Person
+gibt ihr gültiges Benutzer-JWT für die Audience `management-api` direkt
+in die verdeckte Abfrage ein. Admin prüft ihre Identität und `pending`.
+
+```sh
+python3 - "$runtime_env" "$submission_id" <<'PYTHON'
+from getpass import getpass
+import json
+import re
+import sys
+from uuid import UUID
+
+sys.path.insert(0, "scripts")
+from compose_runtime import ComposeContext
+
+context = ComposeContext(sys.argv[1])
+submission = UUID(sys.argv[2])
+jwt = getpass("Benutzer-JWT der einreichenden Person: ")
+if not re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}", jwt):
+    raise SystemExit("Ungültiges JWT-Format.")
+result = context.command(
+    ["exec", "-T", "jenkins", "curl", "-fsS", "--config", "-", "--request", "POST",
+     f"http://admin:8080/internal/deliveries/{submission}/cancel"],
+    input=f'header = "Authorization: Bearer {jwt}"\n',
+)
+print(json.loads(result.stdout)["status"])
+PYTHON
+```
+
+Bei Erfolg meldet Admin `cancelled`.
 
 Bei Prozessabbruch, Timeout oder technischem Fehler meldet Jenkins den Fehler an
 Admin. Bleibt die Submission bei einem Ausfall in `processing`, kann der
