@@ -329,7 +329,7 @@ def verify_jenkins_delivery(context):
                       b'B,7,-0.010,false,2024-03-01,2024-03-01T00:00:00.001,rural,Kommentar\n')
     typed, _ = await_result(upload(valid), 'accepted')
     rows = clickhouse_rows(f"""
-        SELECT identifier, population, toString(amount), toString(active), toString(surveyDate),
+        SELECT identifier, population, toDecimalString(amount, 3), toString(active), toString(surveyDate),
                toString(recordedAt), category, note
         FROM default.snapshot_{typed.hex} ORDER BY identifier FORMAT JSONCompactEachRow
     """)
