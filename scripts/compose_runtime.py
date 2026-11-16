@@ -1,6 +1,5 @@
 """One explicit Compose context. No secondary container lifecycle."""
 import json,os,pathlib,re,secrets,subprocess
-from ingestion_clients import extend_fresh
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ADMIN_DEV_OVERLAY = ROOT / 'compose.admin-dev.yaml'
 ADMIN_DEV_MARKER = 'admin-dev.json'
@@ -75,7 +74,7 @@ def init_context(project,ports=None,test_fixture=False):
     if existing:raise RuntimeError('Existing project requires explicit planned migration, never fresh init')
     values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader'}
     if ports:values.update({k:str(v) for k,v in ports.items()})
-    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_PUBLIC_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_INGESTION_PLUGIN_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_INGESTION_EXECUTOR_CLIENT_SECRET','DI_GRETL_DELIVERY_CLIENT_SECRET','DI_CH_LOADER_PASSWORD']:values[key]=secrets.token_hex(32)
+    for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_PUBLIC_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_GRETL_DELIVERY_CLIENT_SECRET','DI_CH_LOADER_PASSWORD']:values[key]=secrets.token_hex(32)
     values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
     for kind in ['WRITER','READER']:
         values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
@@ -111,8 +110,20 @@ def render(context):
             'serviceAccountsEnabled': True, 'protocolMappers': [audience],
         })
     if v['DI_TEST_FIXTURE']=='true':realm['clients'].append({'clientId':'management-test','enabled':True,'protocol':'openid-connect','publicClient':True,'standardFlowEnabled':False,'directAccessGrantsEnabled':True,'protocolMappers':[audience]})
+    gateway = 'http://localhost:' + v['GATEWAY_PORT']
+    realm['clients'].append({
+        'clientId': 'jenkins-delivery', 'enabled': True, 'protocol': 'openid-connect',
+        'publicClient': False, 'secret': v['DI_JENKINS_OIDC_CLIENT_SECRET'],
+        'standardFlowEnabled': True, 'directAccessGrantsEnabled': False,
+        'redirectUris': [gateway + '/jenkins/securityRealm/finishLogin'],
+        'webOrigins': [gateway],
+        'attributes': {
+            'pkce.code.challenge.method': 'S256',
+            'post.logout.redirect.uris': gateway + '/jenkins/',
+        },
+        'protocolMappers': [audience],
+    })
     if not (r/'realm-initial.json').exists():
-        extend_fresh(realm,v)
         write_private(r/'realm-initial.json',json.dumps(realm,indent=2))
     # Non-root Keycloak reads the bind-mounted initial definition; parent remains0700.
     (r/'realm-initial.json').chmod(0o644)

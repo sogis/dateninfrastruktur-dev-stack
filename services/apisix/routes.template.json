@@ -44,8 +44,6 @@
       "id": "internal-deny",
       "priority": 200,
       "uris": [
-        "/anlieferung",
-        "/anlieferung/",
         "/jenkins/data-delivery",
         "/jenkins/data-delivery/*",
         "/internal",
@@ -214,6 +212,16 @@
         "mocking": {
           "response_status": 200,
           "response_example": "ok"
+        }
+      }
+    },
+    {
+      "id": "delivery-entry",
+      "uris": ["/anlieferung", "/anlieferung/"],
+      "plugins": {
+        "redirect": {
+          "uri": "/jenkins/anlieferung/",
+          "ret_code": 302
         }
       }
     },
