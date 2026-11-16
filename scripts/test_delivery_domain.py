@@ -30,7 +30,7 @@ def delivery_identities(context):
     assert status == 200
     service_token = json.loads(payload)['access_token']
     user_token = token(context, 'anna')
-    for name, jwt in [('anna', user_token), ('gretl', service_token)]:
+    for name, jwt in [('anna', user_token), ('claudia', token(context, 'claudia')), ('gretl', service_token)]:
         segment = jwt.split('.')[1]
         claims = json.loads(base64.urlsafe_b64decode(segment + '=' * (-len(segment) % 4)))
         assert claims['iss'] == issuer and 'management-api' in claims['aud']
@@ -127,43 +127,47 @@ class Forms(HTMLParser):
 
 def verify_jenkins_delivery(context):
     base = 'http://localhost:' + context.values['GATEWAY_PORT']
-    # Browsers send Secure cookies on localhost, including the HTTP test realm.
-    cookies = CookieJar(policy=DefaultCookiePolicy(secure_protocols=('https', 'wss', 'http')))
-    browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
-    try:
-        with browser.open(base + '/anlieferung', timeout=30) as response:
-            page = response.read().decode()
-            page_url = response.url
-    except urllib.error.HTTPError as error:
-        assert error.code in (401, 403), error.code
-        page = ''
-        page_url = base
-    if 'di-upload' not in page:
-        if 'kc-form-login' not in page:
-            login_url = base + '/jenkins/securityRealm/commenceLogin?from=/jenkins/anlieferung/'
-            with browser.open(login_url, timeout=30) as response:
+    def login_as(username):
+        # Browsers send Secure cookies on localhost, including the HTTP test realm.
+        cookies = CookieJar(policy=DefaultCookiePolicy(secure_protocols=('https', 'wss', 'http')))
+        browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
+        try:
+            with browser.open(base + '/anlieferung', timeout=30) as response:
                 page = response.read().decode()
                 page_url = response.url
-        action = next(form['action'] for form in Forms(page).forms if form.get('id') == 'kc-form-login')
-        login = urllib.parse.urljoin(page_url, action)
-        issuer = 'http://localhost:' + context.values['KEYCLOAK_PORT']
-        assert login.startswith(issuer + '/realms/dateninfrastruktur/')
-        credentials = urllib.parse.urlencode({
-            'username': 'anna', 'password': context.values['KEYCLOAK_DEMO_PASSWORD'],
-        }).encode()
-        try:
-            with browser.open(login, data=credentials, timeout=30) as response:
-                assert response.url.startswith(base + '/jenkins/')
-                page = response.read().decode()
         except urllib.error.HTTPError as error:
-            path = urllib.parse.urlsplit(error.url).path
-            body = error.read(4096).decode(errors='replace')
-            title = re.search(r'<title>([^<]*)</title>', body, re.IGNORECASE)
-            details = [known for known in ('Cookie not found', 'Invalid username or password',
-                       'Invalid code', 'Invalid request') if known.lower() in body.lower()]
-            summary = ', '.join(details) if details else title.group(1) if title else ''
-            raise AssertionError(f'OIDC callback {path} returned HTTP {error.code} {summary}') from None
+            assert error.code in (401, 403), error.code
+            page = ''
+            page_url = base
+        if 'di-upload' not in page:
+            if 'kc-form-login' not in page:
+                login_url = base + '/jenkins/securityRealm/commenceLogin?from=/jenkins/anlieferung/'
+                with browser.open(login_url, timeout=30) as response:
+                    page = response.read().decode()
+                    page_url = response.url
+            action = next(form['action'] for form in Forms(page).forms if form.get('id') == 'kc-form-login')
+            login = urllib.parse.urljoin(page_url, action)
+            issuer = 'http://localhost:' + context.values['KEYCLOAK_PORT']
+            assert login.startswith(issuer + '/realms/dateninfrastruktur/')
+            credentials = urllib.parse.urlencode({
+                'username': username, 'password': context.values['KEYCLOAK_DEMO_PASSWORD'],
+            }).encode()
+            try:
+                with browser.open(login, data=credentials, timeout=30) as response:
+                    assert response.url.startswith(base + '/jenkins/')
+                    page = response.read().decode()
+            except urllib.error.HTTPError as error:
+                path = urllib.parse.urlsplit(error.url).path
+                body = error.read(4096).decode(errors='replace')
+                title = re.search(r'<title>([^<]*)</title>', body, re.IGNORECASE)
+                details = [known for known in ('Cookie not found', 'Invalid username or password',
+                           'Invalid code', 'Invalid request') if known.lower() in body.lower()]
+                summary = ', '.join(details) if details else title.group(1) if title else ''
+                raise AssertionError(f'OIDC callback {path} returned HTTP {error.code} {summary}') from None
 
+        return browser, page
+
+    browser, page = login_as('anna')
     forms = [form for form in Forms(page).forms if 'di-upload' in form.get('class', '').split()]
     assert len(forms) == 1, 'Expected one authorised CSV upload form'
     form = forms[0]
@@ -209,6 +213,13 @@ def verify_jenkins_delivery(context):
                 'if [ -f "$log" ]; then tail -30 "$log"; fi; done'], check=False)
             print(context.redact(result.stdout), flush=True)
             raise AssertionError((record, expected))
+        for _ in range(30):
+            removed = context.command(['exec', '-T', 'jenkins', 'sh', '-c',
+                'test ! -e "$JENKINS_HOME/data-infrastructure/uploads/$1"', 'sh', str(id_)], check=False)
+            if removed.returncode == 0:
+                break
+            time.sleep(1)
+        assert removed.returncode == 0, 'Private delivery directory still exists'
         with browser.open(status_url, timeout=20) as response:
             page = response.read().decode()
             page_path = urllib.parse.urlsplit(response.url).path
@@ -220,10 +231,24 @@ def verify_jenkins_delivery(context):
                           rendered[1].strip() if rendered else 'missing status element')
             status_errors.append(diagnostic)
             print('Jenkins status view mismatch', diagnostic, flush=True)
-        return id_
+        if expected == 'accepted':
+            assert 'GRETL authorizeReject SKIPPED' in page
+            assert 'GRETL authorizeComplete SUCCEEDED' in page
+            assert 'CSV-Validierung, Zeile' not in page
+        for key in ('DI_GRETL_DELIVERY_CLIENT_SECRET', 'DI_CH_LOADER_PASSWORD', 'DI_STORAGE_WRITER_SECRET_KEY'):
+            assert context.values[key] not in page, f'Secret {key} visible in delivery status'
+        return id_, page
+
+    def clickhouse_rows(query):
+        credentials = 'ch_delivery:' + context.values['DI_CH_LOADER_PASSWORD']
+        auth = 'Basic ' + base64.b64encode(credentials.encode()).decode()
+        status, _, actual = http('http://localhost:' + context.values['CLICKHOUSE_HTTP_PORT'],
+                                 method='POST', headers={'Authorization': auth}, data=query.encode())
+        assert status == 200, f'ClickHouse query returned HTTP {status}'
+        return actual.decode().splitlines()
 
     def accepted(submission, expected_rows):
-        id_ = await_result(submission, 'accepted')
+        id_, _ = await_result(submission, 'accepted')
         state = sql(context, f"""
             SELECT concat_ws(':', d.objectkey, v.objectcount, d.bytesize)
             FROM di_management.submission s
@@ -236,13 +261,8 @@ def verify_jenkins_delivery(context):
         code, _, data = http(base + '/' + key)
         assert code == 200, code
         table = 'default.snapshot_' + id_.hex
-        credentials = 'ch_delivery:' + context.values['DI_CH_LOADER_PASSWORD']
-        auth = 'Basic ' + base64.b64encode(credentials.encode()).decode()
-        status, _, actual = http('http://localhost:' + context.values['CLICKHOUSE_HTTP_PORT'],
-                                 method='POST', headers={'Authorization': auth},
-                                 data=('SELECT zone, code FROM ' + table + ' ORDER BY zone FORMAT CSV').encode())
-        assert status == 200
-        return key, list(csv.reader(data.decode().splitlines())), list(csv.reader(actual.decode().splitlines()))
+        rows = clickhouse_rows(f'SELECT zone, code FROM {table} ORDER BY zone FORMAT CSV')
+        return key, list(csv.reader(data.decode().splitlines())), list(csv.reader(rows))
 
     expected = [['zone', 'code'], ['A', '1']]
     first_key, content, rows = accepted(upload(b'zone,code\nA,1\n'), 1)
@@ -253,19 +273,117 @@ def verify_jenkins_delivery(context):
     assert old_code == 200 and old_data == b'zone,code\nA,1\n'
     _, content, rows = accepted(upload(b'zone,code\n'), 0)
     assert content == [['zone', 'code']] and rows == [], (content, rows)
-    current = sql(context, f"SELECT currentversion FROM di_management.datasetissue WHERE t_ili_tid='{UUID(form['data-issue'])}'")
+    rejected = upload(b'zone,code\nprivate-zone,private-code\nprivate-zone,private-code\n')
+    _, page = await_result(rejected, 'rejected')
+    assert 'GRETL authorizeReject SUCCEEDED' in page
+    assert 'Unique constraint DI_ExampleCsv.Snapshot.Row.Constraint1 is violated!' in page
+    assert 'private-zone' not in page and 'private-code' not in page
+    other_browser, _ = login_as('claudia')
+    try:
+        with other_browser.open(rejected[1], timeout=20):
+            raise AssertionError('Another supplier could see the submission')
+    except urllib.error.HTTPError as error:
+        assert error.code == 403, error.code
+        assert b'CSV-Validierung, Zeile' not in error.read()
+
+
+    # Bind a second schema revision to the same synthetic issue. Earlier accepted
+    # versions retain their original schema and the five delivery paths share one fixture.
+    issue = UUID(form['data-issue'])
+    sql(context, f"""
+        WITH schema_revision AS (
+            INSERT INTO di_management.dataschema (t_id, t_basket, t_ili_tid, identifier, akind, modelname)
+            SELECT nextval('di_management.t_ili2db_seq'), s.t_basket, '{uuid4()}',
+                   'test-typed', 'simple_csv', 'DI_TypedCsv'
+            FROM di_management.datasetissue i JOIN di_management.dataschema s ON s.t_id=i.aschema
+            WHERE i.t_ili_tid='{issue}'
+            RETURNING t_id
+        )
+        UPDATE di_management.datasetissue SET aschema=(SELECT t_id FROM schema_revision)
+        WHERE t_ili_tid='{issue}';
+        INSERT INTO di_management.attributedefinition
+            (t_id,t_basket,t_ili_tid,aschema,aname,datatype,ordinal,mandatory,
+             maxlength,numericminimum,numericmaximum,decimalplaces)
+        SELECT nextval('di_management.t_ili2db_seq'), s.t_basket, a.id::uuid, s.t_id, a.name,
+               a.kind, a.ordinal, a.mandatory, a.maxlength, a.minimum, a.maximum, a.places
+        FROM di_management.dataschema s CROSS JOIN (VALUES
+            ('{uuid4()}', 'identifier', 'text', 1, true, 32, NULL, NULL, NULL),
+            ('{uuid4()}', 'population', 'integer', 2, true, NULL, 0, 99999, 0),
+            ('{uuid4()}', 'amount', 'decimal', 3, true, NULL, -99999.999, 99999.999, 3),
+            ('{uuid4()}', 'active', 'boolean', 4, true, NULL, NULL, NULL, NULL),
+            ('{uuid4()}', 'surveyDate', 'date', 5, true, NULL, NULL, NULL, NULL),
+            ('{uuid4()}', 'recordedAt', 'datetime', 6, true, NULL, NULL, NULL, NULL),
+            ('{uuid4()}', 'category', 'enumeration', 7, true, NULL, NULL, NULL, NULL),
+            ('{uuid4()}', 'note', 'text', 8, false, 32, NULL, NULL, NULL)
+        ) AS a(id,name,kind,ordinal,mandatory,maxlength,minimum,maximum,places)
+        WHERE s.identifier='test-typed';
+        INSERT INTO di_management.attributedefinition_enumvalues
+            (t_id,t_basket,attributedefinition_enumvalues,enumvalues,t_seq)
+        SELECT nextval('di_management.t_ili2db_seq'), a.t_basket, a.t_id, codes.code, codes.ordinal
+        FROM di_management.attributedefinition a JOIN di_management.dataschema s ON s.t_id=a.aschema
+        CROSS JOIN (VALUES ('urban',1),('rural',2)) AS codes(code,ordinal)
+        WHERE s.identifier='test-typed' AND a.aname='category';
+    """)
+    header = b'identifier,population,amount,active,surveyDate,recordedAt,category,note\n'
+    valid = header + (b'A,1200,12.345,true,2024-02-29,2024-02-29T12:30:00.123,urban,\n'
+                      b'B,7,-0.010,false,2024-03-01,2024-03-01T00:00:00.001,rural,Kommentar\n')
+    typed, _ = await_result(upload(valid), 'accepted')
+    rows = clickhouse_rows(f"""
+        SELECT identifier, population, toString(amount), toString(active), toString(surveyDate),
+               toString(recordedAt), category, note
+        FROM default.snapshot_{typed.hex} ORDER BY identifier FORMAT JSONCompactEachRow
+    """)
+    assert list(map(json.loads, rows)) == [
+        ['A', 1200, '12.345', 'true', '2024-02-29', '2024-02-29 12:30:00.123', 'urban', None],
+        ['B', 7, '-0.010', 'false', '2024-03-01', '2024-03-01 00:00:00.001', 'rural', 'Kommentar'],
+    ], rows
+    current = sql(context, f"SELECT currentversion FROM di_management.datasetissue WHERE t_ili_tid='{issue}'")
     assert current
-    await_result(upload(b'zone,code\nA,1\nA,1\n'), 'rejected')
+    invalid = header + (b'A,not-a-number,12.345,true,2024-02-29,2024-02-29T12:30:00.123,urban,\n'
+                        b'B,,0.010,false,2024-03-01,2024-03-01T00:00:00.001,unknown,\n')
+    _, page = await_result(upload(invalid), 'rejected')
+    assert 'is not a number in attribute population' in page
+    assert 'Attribute population requires a value' in page
+    assert 'is not a member of the enumeration in attribute category' in page
+    assert 'not-a-number' not in page
+
+    # Hold the import path open and terminate only the GRETL process whose
+    # working directory matches this fixture's processing submission.
+    context.verify_project()
+    context.command(['pause', 'clickhouse'])
+    try:
+        interrupted = upload(valid)
+        for _ in range(30):
+            state = sql(context, f"SELECT astatus FROM di_management.submission WHERE t_ili_tid='{interrupted[0]}'")
+            if state != 'pending':
+                break
+            time.sleep(1)
+        assert state == 'processing', state
+        context.command(['exec', '-T', 'jenkins', 'sh', '-c', '''
+            for proc in /proc/[0-9]*; do
+                [ "$(readlink "$proc/cwd")" = "$JENKINS_HOME/data-infrastructure/uploads/$1" ] || continue
+                [ "$(cat "$proc/comm")" = java ] || continue
+                kill -TERM "${proc##*/}"
+                exit $?
+            done
+            exit 1
+        ''', 'sh', str(interrupted[0])])
+        await_result(interrupted, 'failed')
+    finally:
+        context.verify_project()
+        context.command(['unpause', 'clickhouse'])
+
     context.command(['stop', 'clickhouse'])
-    await_result(upload(b'zone,code\nA,1\n'), 'failed')
-    assert current == sql(context, f"SELECT currentversion FROM di_management.datasetissue WHERE t_ili_tid='{UUID(form['data-issue'])}'")
+    _, page = await_result(upload(valid), 'failed')
+    assert 'GRETL createTable FAILED' in page
+    assert current == sql(context, f"SELECT currentversion FROM di_management.datasetissue WHERE t_ili_tid='{issue}'")
     assert not status_errors, status_errors
-    print('JENKINS_DELIVERY_CASES=5 SKIP=0', flush=True)
+    print('JENKINS_DELIVERY_CASES=8 SKIP=0', flush=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--jenkins-image', help='Run the five Jenkins delivery cases with this locally built image')
+    parser.add_argument('--jenkins-image', help='Run the Jenkins delivery cases with this locally built image')
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
