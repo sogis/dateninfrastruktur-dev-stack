@@ -143,11 +143,12 @@ python3 scripts/test_delivery_domain.py --jenkins-image dateninfrastruktur-jenki
 
 Der Test verwendet eine eigene Compose-Instanz und prüft Replace, Append,
 CSV mit ausschliesslich Kopfzeile, Validierungsablehnung, typisierte
-ClickHouse-Werte, Prozessabbruch und ClickHouse-Ausfall. Nach einem fachlichen
-Reject zeigt die berechtigte Statusseite die begrenzten CSV-Diagnosen aus
-dem Jenkins-Buildlog. Zeile, Regel und Attribut erscheinen, soweit der
-Validator sie meldet. Bei UNIQUE-Verletzungen liefert der Validator den
-Namen der Modellregel.
+ClickHouse-Werte, Prozessabbruch und ClickHouse-Ausfall. Jenkins speichert
+den originalen Validierungsbericht bis 64 MiB unverändert und privat beim
+zugehörigen Build. Der ursprüngliche Einreicher kann ihn nach der
+Admin-Statusprüfung von der Statusseite herunterladen. Der Bericht kann
+konkrete CSV-Werte enthalten. Jenkins wertet die einzelnen Meldungen nicht
+aus. Mit dem Build wird auch der Bericht gelöscht.
 
 Jenkins entfernt die privaten Laufzeitdateien nach dem Lauf. Bei einer
 Cleanup-Warnung entfernt der Betreiber nach Ende des Laufs das Verzeichnis
