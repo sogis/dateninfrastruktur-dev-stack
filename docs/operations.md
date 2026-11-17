@@ -90,22 +90,24 @@ Sodata liest die veröffentlichten Katalogdaten direkt aus PostgreSQL.
 APISIX prüft jede Dateianfrage beim Admin und liefert freigegebene
 Dateien aus dem privaten Bucket.
 
-Die GRETL-/Jenkins-Anlieferung benötigt die Portierung auf
-`/internal/deliveries`. Der laufende Jenkins-Dienst wird auf
-Bereitschaft geprüft. Die alten öffentlichen Uploadpfade sind gesperrt.
+Das Jenkins-Plugin registriert Submissions bei Admin unter
+`/internal/deliveries`. GRETL startet und beendet die Submission über
+dieselbe interne API. Der Stack prüft die Bereitschaft des Jenkins-Diensts.
+Der öffentliche Einstieg für CSV-Lieferungen ist `/anlieferung`.
 
 Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt. Die
 Testbereinigung entfernt die projektspezifischen lokalen Image-Tags
-nach dem Compose-Down. Release-Staging-Tags bleiben erhalten.
-Der Registry-Build bindet den Jenkins-Quellcommit und denselben
-GRETL-Snapshot mit SHA-256 für beide Plattformen. Er veröffentlicht
-erst nach erfolgreicher Qualifikation der Plattformimages.
+nach dem Compose-Down. Der Jenkins-Image-Build verwendet den Gradle-Resolver
+für `ch.so.agi.gretl:gretl-dist:6.0.0-SNAPSHOT:bin@zip` aus
+`https://jars.interlis.guru/snapshots`. Das Image enthält das lokale
+Jenkins-Plugin und den festen Job, den Jenkins mit der GRETL-CLI ausführt.
 
 ## CSV-Anlieferung mit GRETL 6
 
-Für eine lokale CSV-Anlieferung genügen PostgreSQL, Keycloak, Garage,
-Origin, Admin und ClickHouse. Sodata und Gateway zeigen die publizierte
-Version. Verwende eine isolierte lokale Instanz mit separaten Ports.
+Der lokale Lieferweg über `/anlieferung` nutzt Gateway, Jenkins,
+Keycloak, Admin, PostgreSQL, Garage, Origin und ClickHouse.
+Sodata zeigt die publizierte Version. Verwende eine isolierte lokale
+Instanz mit separaten Ports.
 Der Integrationstest `scripts/test_delivery_domain.py` zeigt, wie
 `ComposeContext` diese Instanz einrichtet und die vier Modelle per
 `management-setup` initialisiert. Er importiert das synthetische
@@ -122,8 +124,11 @@ Client Credentials. Das ClickHouse-Setup berechtigt `ch_delivery` für
 
 Öffne `/anlieferung` am Gateway und lade nach der Keycloak-Anmeldung eine
 CSV für eine berechtigte Ausgabe hoch. Jenkins startet den festen Job.
-GRETL lädt über die interne Delivery-API das gebundene Modell. Bei Append
-lädt GRETL zusätzlich die letzte CSV aus Garage. Admin akzeptiert nur
+Admin erzeugt das INTERLIS-Modell aus der gebundenen Schemafassung. GRETL
+bezieht mit `OAuth2ClientCredentials` einen technischen Token und lädt
+das Modell per `Curl`. Bei Append lädt GRETL zusätzlich die letzte CSV aus
+Garage. Für `reject` und `complete` bezieht GRETL jeweils einen frischen
+Token. Admin akzeptiert nur
 einen Stand mit weiterhin gültigen Fachrechten, Schema und Basisversion.
 Die angenommene CSV ist unter `/downloads/<distribution-id>/snapshot.csv`
 verfügbar. Die ClickHouse-Tabelle heisst
@@ -137,10 +142,67 @@ python3 scripts/test_delivery_domain.py --jenkins-image dateninfrastruktur-jenki
 ```
 
 Der Test verwendet eine eigene Compose-Instanz und prüft Replace, Append,
-CSV mit ausschliesslich Kopfzeile, Validierungsablehnung und ClickHouse-Ausfall.
-Bleibt eine Submission nach einem Netz- oder Prozessausfall in `processing`,
-kann der registrierte Service-Principal sie über
-`POST /internal/deliveries/{id}/fail` mit einer technischen Begründung beenden.
-Wird ein Eintrag vor dem Jenkins-Start aus der Warteschlange abgebrochen,
-löscht Jenkins die Upload-Datei. Eine solche Submission kann in `pending`
-stehen bleiben. Ein neuer Upload erzeugt eine neue Submission.
+CSV mit ausschliesslich Kopfzeile, Validierungsablehnung, typisierte
+ClickHouse-Werte, Prozessabbruch und ClickHouse-Ausfall. Nach einem fachlichen
+Reject zeigt die berechtigte Statusseite die begrenzten CSV-Diagnosen aus
+dem Jenkins-Buildlog. Zeile, Regel und Attribut erscheinen, soweit der
+Validator sie meldet. Bei UNIQUE-Verletzungen liefert der Validator den
+Namen der Modellregel.
+
+Jenkins entfernt die privaten Laufzeitdateien nach dem Lauf. Bei einer
+Cleanup-Warnung entfernt der Betreiber nach Ende des Laufs das Verzeichnis
+unter `$JENKINS_HOME/data-infrastructure/uploads`, das zur Lieferkennung im
+Joblog gehört. Es kann noch CSV-Daten, das Validierungslog und
+Laufzeit-Credentials enthalten und soll zeitnah entfernt werden.
+
+Wird eine Queue-Position vor dem Start administrativ abgebrochen, entfernt
+Jenkins die private Upload-Datei. Die Submission kann in Admin `pending`
+bleiben. Ein erneuter Upload erzeugt eine eigene Submission.
+
+Für die manuelle Bereinigung koordiniert der Betreiber mit der einreichenden
+Person eine autorisierte Betriebssitzung. Die interne Admin-API ist am
+Gateway gesperrt. Aus dem Stack-Checkout erreicht der folgende Befehl
+die API über den Jenkins-Container des gebundenen Compose-Kontexts. Setze
+`runtime_env` auf dessen `runtime.env` und `submission_id` auf die
+Lieferkennung der abgebrochenen Queue-Position. Die einreichende Person
+gibt ihr gültiges Benutzer-JWT für die Audience `management-api` direkt
+in die verdeckte Abfrage ein. Admin prüft ihre Identität und `pending`.
+
+```sh
+python3 - "$runtime_env" "$submission_id" <<'PYTHON'
+from getpass import getpass
+import json
+import re
+import sys
+from uuid import UUID
+
+sys.path.insert(0, "scripts")
+from compose_runtime import ComposeContext
+
+context = ComposeContext(sys.argv[1])
+submission = UUID(sys.argv[2])
+jwt = getpass("Benutzer-JWT der einreichenden Person: ")
+if not re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}", jwt):
+    raise SystemExit("Ungültiges JWT-Format.")
+result = context.command(
+    ["exec", "-T", "jenkins", "curl", "-fsS", "--config", "-", "--request", "POST",
+     f"http://admin:8080/internal/deliveries/{submission}/cancel"],
+    input=f'header = "Authorization: Bearer {jwt}"\n',
+)
+print(json.loads(result.stdout)["status"])
+PYTHON
+```
+
+Bei Erfolg meldet Admin `cancelled`.
+
+Bei Prozessabbruch, Timeout oder technischem Fehler meldet Jenkins den Fehler an
+Admin. Bleibt die Submission bei einem Ausfall in `processing`, kann der
+registrierte Service-Principal sie über `POST /internal/deliveries/{id}/fail`
+mit einer technischen Begründung abschliessen, sobald feststeht, dass der Lauf
+beendet ist. Admin führt diesen Übergang nur aus `processing` aus.
+
+Bei einem Import-, Upload- oder Abschlussfehler kann eine ClickHouse-Tabelle
+zurückbleiben. Vor einer administrativen Löschung den endgültigen Admin-Status
+und die Zuordnung über Submission-ID und `versionKey` prüfen. Nur die eindeutig
+zugehörige Tabelle eines beendeten, nachweislich nicht angenommenen Laufs
+entfernen.
