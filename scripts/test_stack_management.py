@@ -128,10 +128,10 @@ def main():
         # Keep the imported catalogue chain and the dataset published through
         # the browser, including the physical database and row identities.
         retained = '''
-            SELECT db.oid, d.t_id, d.t_ili_tid, d.identifier, d.publicationstatus,
+            SELECT db.oid, d.t_id, d.t_ili_tid, d.identifier, d.publicationstatus, d.currentissue,
                    i.t_id, i.t_ili_tid, i.publicationstatus, v.t_id, v.t_ili_tid, v.asequence
             FROM pg_database db CROSS JOIN di_management.dataset d
-            JOIN di_management.datasetissue i ON i.t_id=d.currentissue
+            JOIN di_management.datasetissue i ON i.dataset=d.t_id AND i.issuekey='default'
             LEFT JOIN di_management.dataversion v ON v.t_id=i.currentversion
             WHERE db.datname=current_database() AND d.identifier IN ('test-open', 's1f-browser')
             ORDER BY d.identifier;
