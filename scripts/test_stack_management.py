@@ -150,7 +150,6 @@ def main():
     finally:
         cleanup(context)
     assert not context.command(['ps', '-aq']).stdout.strip()
-    print(f'ASSERTIONS={admin + portal + 13} SKIP=0')
 
 
 if __name__ == '__main__':

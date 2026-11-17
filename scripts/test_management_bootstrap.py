@@ -2,7 +2,6 @@
 """Qualify the explicit management setup with real ili2pg and PostgreSQL."""
 import os
 import re
-from pathlib import Path
 import subprocess
 import sys
 from uuid import uuid4
@@ -194,7 +193,7 @@ def main():
     for key in ('POSTGRES_IMAGE', 'TOOL_IMAGE'):
         result = subprocess.run(['docker', 'image', 'inspect', context.values[key]], capture_output=True)
         assert result.returncode, f"Fixture image tag remained: {context.values[key]}"
-    print('ASSERTIONS=37 SKIP=0')
+    print('Management bootstrap and fixture cleanup verified')
 
 
 if __name__ == '__main__':

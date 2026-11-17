@@ -3,7 +3,6 @@
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 from uuid import uuid4
 
 from compose_runtime import ROOT, init_context

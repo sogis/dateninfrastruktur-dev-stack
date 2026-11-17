@@ -45,7 +45,7 @@ def cleanup(c):
     volumes = json.loads(subprocess.check_output(['docker', 'volume', 'inspect', *ids], text=True)) if ids else []
     for volume in volumes:
         name = volume['Name']
-        if (name not in expected or not name.startswith(c.project + '_')
+        if (name not in expected
                 or (volume.get('Labels') or {}).get('com.docker.compose.project') != c.project):
             raise RuntimeError('Refusing to remove an unowned fixture volume: ' + name)
     # Some volumes are external, and Compose resolves named volumes even
