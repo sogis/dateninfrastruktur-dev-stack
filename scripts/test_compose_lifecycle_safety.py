@@ -42,7 +42,8 @@ class LifecycleSafety(unittest.TestCase):
             context = types.SimpleNamespace(runtime=runtime, command=Mock(side_effect=RuntimeError('unhealthy')))
             marker = runtime/'startup-image-mode'
             marker.write_text('registry\n')
-            with patch.object(ops, 'prepare_start', return_value='sha256:fixture'), \
+            with patch.object(ops, 'prepare_images', return_value='fixture:jenkins'), \
+                    patch('bind_jenkins_image.verified_image_id', return_value='sha256:fixture'), \
                     patch.object(ops.subprocess, 'check_output', return_value='sha256:fixture'):
                 with self.assertRaisesRegex(RuntimeError, 'unhealthy'):
                     ops.start(context, 'local')

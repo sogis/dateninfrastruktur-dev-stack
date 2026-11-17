@@ -23,5 +23,6 @@ und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/op
 - `python3 scripts/test_stack_management.py` prüft die zehn Compose-Dienste,
   die Admin- und Sodata-Formulare in Chromium, die HTTP-Sicherheit des Admin
   mit Keycloak und APISIX sowie den XTF-Export.
-  Lokal mit `DOCKER_CONTEXT=rancher-desktop`, Java 25 und Java 21 ausführen.
+  Lokal mit Java 25 und Java 21 ausführen. Die Tests verwenden den
+  aktiven Docker-Kontext oder ein explizit gesetztes `DOCKER_CONTEXT`.
   Der Test baut das Jenkins-Image aus den benachbarten Jenkins- und Plugin-Quellen.

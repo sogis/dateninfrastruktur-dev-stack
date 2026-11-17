@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Regenerate the Cayenne map and qualify TID/basket writes in an owned Compose fixture."""
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -8,8 +7,8 @@ import sys
 from uuid import uuid4
 
 from compose_runtime import ROOT, init_context
-from ingestion_test_runtime import cleanup, reserve_ports
-from test_management_bootstrap import FIXTURE, database_ids, operator, put, snapshot, sql, transfer_ids
+from ingestion_test_runtime import cleanup, reserve_ports, sql
+from test_management_bootstrap import FIXTURE, database_ids, operator, put, transfer_ids
 
 ADMIN = ROOT.parent / 'dateninfrastruktur-admin'
 MAP = Path('src/main/resources/cayenne/management.map.xml')
@@ -72,7 +71,7 @@ def probe(context, scenario):
         print('CAYENNE_WRITER_BOUNDARY=PASS')
 
 
-def reject_legacy_width(context):
+def reject_legacy_width(context, expected_ids):
     # Recreate dependent views around the legacy widths in this owned fixture.
     post_script = (ADMIN / 'sql/public_views.sql').read_text()
     views = post_script[post_script.index('CREATE SCHEMA di_api_public;'):]
@@ -82,11 +81,10 @@ def reject_legacy_width(context):
         ALTER TABLE di_management.office ALTER COLUMN t_ili_tid TYPE varchar(1024);
         ALTER TABLE di_management.contactpoint ALTER COLUMN t_ili_tid TYPE varchar(1024);
     """ + views + "COMMIT;")
-    before = snapshot(context)
     result = context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'management-setup'], check=False)
     assert result.returncode and 'Management schema requires varchar(200) TIDs for Office and ContactPoint' in result.stderr
     probe(context, 'legacy-width')
-    assert snapshot(context) == before
+    assert database_ids(context, expected_ids) == expected_ids
     assert sql(context, """
         SELECT count(*) FROM information_schema.columns
         WHERE table_schema = 'di_management' AND table_name IN ('office','contactpoint')
@@ -117,13 +115,12 @@ def exercise(context):
                      'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
                      '--modeldir', '/opt/admin/models', '/runtime/cayenne-export.xtf'])
     print('Pinned ilivalidator accepted the export with all five new object TIDs')
-    reject_legacy_width(context)
+    reject_legacy_width(context, actual)
 
 
 def main():
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
-    os.environ.setdefault('DOCKER_CONTEXT', 'rancher-desktop')
     context = init_context('mag-s1c-mapping-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:

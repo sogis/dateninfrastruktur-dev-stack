@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Public lifecycle: one explicit Compose context, no legacy runtime or implicit seed."""
 import argparse,fcntl,json,pathlib,sys,os,subprocess,tempfile
-from compose_runtime import ADMIN_DEV_MARKER,ROOT,ComposeContext,init_context,setup_context,read_env,render,write_private
+from compose_runtime import ADMIN_DEV_MARKER,ROOT,ComposeContext,init_context,read_env,render,write_private
 ACTIVE=ROOT/'.runtime/active-compose.json'
 
 def activate(context):
@@ -76,12 +76,6 @@ def prepare_images(c, mode, profiles=()):
             raise RuntimeError(f'Image unavailable: {reference}\n' + c.redact(result.stderr[-2000:]))
     return services['jenkins']['image']
 
-def prepare_start(c, mode):
-    reference = prepare_images(c, mode)
-    from bind_jenkins_image import verified_image_id
-    image_id = verified_image_id(reference)
-    return image_id
-
 def saved_mode(c):
     marker = c.runtime/'startup-image-mode'
     mode = marker.read_text().strip() if marker.exists() else 'registry'
@@ -90,7 +84,8 @@ def saved_mode(c):
     return mode
 
 def start(c, mode, restart=False):
-    jenkins_id = prepare_start(c, mode)
+    from bind_jenkins_image import verified_image_id
+    jenkins_id = verified_image_id(prepare_images(c, mode))
     if restart:
         c.command(['stop', '--timeout', '60'])
     c.command(['up', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '300'])
@@ -116,16 +111,23 @@ def setup(c):
     c.command(['up','--no-build','-d','--wait','--wait-timeout','240','postgres'])
     q="SELECT count(*) FROM pg_database WHERE datname='dateninfrastruktur_management';"
     count=c.command(['exec','-T','postgres','psql','-X','-q','-At','-U','postgres','-d','postgres','-c',q]).stdout.strip()
-    fresh=count=='0' and not (c.runtime/'setup-complete.json').exists()
-    if (c.runtime/'setup-complete.json').exists():
-        if count!='1':raise RuntimeError('Known management database is missing; retained setup must not create an empty replacement')
-        c.command(['--profile','setup','run','--rm','--no-deps','management-setup','verify'])
-    elif count=='0':setup_context(c)
-    else:c.command(['--profile','setup','run','--rm','--no-deps','management-setup'])
+    retained_setup = (c.runtime / 'setup-complete.json').exists()
+    if retained_setup and count != '1':
+        raise RuntimeError('Known management database is missing; retained setup must not create an empty replacement')
+    fresh = count == '0'
+    if fresh:
+        c.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '240', 'garage', 'clickhouse'])
+        c.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'postgres-init'])
+    c.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'management-setup',
+               *(['verify'] if retained_setup else [])])
     if not fresh:
-        c.command(['up','--no-build','-d','--wait','--wait-timeout','120','garage'])
-        c.command(['--profile','setup','run','--rm','--no-deps','garage-setup'])
-        c.values=read_env(c.env_file);render(c)
+        c.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '120', 'garage'])
+    c.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'garage-setup'])
+    c.values = read_env(c.env_file)
+    render(c)
+    if fresh:
+        c.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'clickhouse-init'])
+        print('Explicit setup complete; no application demo seed')
     write_private(c.runtime/'setup-complete.json',json.dumps({'instance':c.values['INSTANCE_ID'],'mode':'explicit-setup','volumes':volume_bindings(c)},indent=2)+'\n')
 
 def require_dev_setup(c):
