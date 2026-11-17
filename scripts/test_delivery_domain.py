@@ -170,9 +170,6 @@ def verify_jenkins_delivery(context):
     forms = [form for form in Forms(page).forms if 'di-upload' in form.get('class', '').split()]
     assert len(forms) == 1, 'Expected one authorised CSV upload form'
     form = forms[0]
-    # The preceding domain probe tests access changes on this synthetic dataset.
-    dataset = UUID(form['data-dataset'])
-    sql(context, f"UPDATE di_management.dataset SET accesslevel='open' WHERE t_ili_tid='{dataset}'")
 
     def upload(csv, mode='replace'):
         boundary = uuid4().hex
@@ -462,47 +459,53 @@ def verify_jenkins_delivery(context):
     print('JENKINS_DELIVERY_CASES=8 SKIP=0', flush=True)
 
 
+def verify_delivery_domain(context):
+    result = context.command(['--profile', 'test', 'run', '--rm', '--no-deps',
+        '--entrypoint', 'java', 'test-fixture', '-cp', '/opt/compose-test/classes:/opt/compose-test/lib/*',
+        'ch.so.agi.dateninfrastruktur.admin.DeliveryDomainProbe'], check=False)
+    output = context.redact(result.stdout + result.stderr)
+    print(output)
+    assert result.returncode == 0, 'Domain probe failed'
+    assert 'DELIVERY_DOMAIN_ASSERTIONS=43 SKIP=0' in output.splitlines()
+    assert 'DELIVERY_HTTP_ASSERTIONS=24 SKIP=0' in output.splitlines()
+    assert 'ACCESS_CATALOG_CASES=5 SKIP=0' in output.splitlines()
+    context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
+        'management-setup', '-jar', '/opt/admin/.runtime/tools/ili2c/ili2c.jar',
+        '--no-auto', '/runtime/DI_ExampleCsv.ili'])
+    operator(context, 'export', context.runtime / 'delivery-export.xtf')
+    context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
+        'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
+        '--modeldir', '/opt/admin/models', '/runtime/delivery-export.xtf'])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--jenkins-image', help='Run the Jenkins delivery cases with this locally built image')
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
+    jenkins_id = jenkins_image_id(args.jenkins_image) if args.jenkins_image else None
     context = init_context('mag-s1d-delivery-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:
-        context.command(['--profile', 'build-tools', 'build', 'postgres', 'management-tool-build', 'test-tool-build'])
+        services = ['postgres', 'management-tool-build', 'admin',
+                    'sodata' if jenkins_id else 'test-tool-build']
+        context.command(['--profile', 'build-tools', 'build', *services])
         context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '150', 'postgres'])
         for service in ('postgres-init', 'management-setup'):
             context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', service])
         source = put(context, 'management-bootstrap.xtf', FIXTURE.read_bytes())
         operator(context, 'import', source)
-        result = context.command(['--profile', 'test', 'run', '--rm', '--no-deps',
-            '--entrypoint', 'java', 'test-fixture', '-cp', '/opt/compose-test/classes:/opt/compose-test/lib/*',
-            'ch.so.agi.dateninfrastruktur.admin.DeliveryDomainProbe'], check=False)
-        output = context.redact(result.stdout + result.stderr)
-        print(output)
-        assert result.returncode == 0, 'Domain probe failed'
-        assert 'DELIVERY_DOMAIN_ASSERTIONS=43 SKIP=0' in output.splitlines()
-        assert 'DELIVERY_HTTP_ASSERTIONS=24 SKIP=0' in output.splitlines()
-        assert 'ACCESS_CATALOG_CASES=5 SKIP=0' in output.splitlines()
-        context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
-            'management-setup', '-jar', '/opt/admin/.runtime/tools/ili2c/ili2c.jar',
-            '--no-auto', '/runtime/DI_ExampleCsv.ili'])
-        operator(context, 'export', context.runtime / 'delivery-export.xtf')
-        context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
-            'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
-            '--modeldir', '/opt/admin/models', '/runtime/delivery-export.xtf'])
-        context.command(['build', 'admin'])
+        if not jenkins_id:
+            verify_delivery_domain(context)
         context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '240', 'garage'])
         context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'garage-setup'])
         context = ComposeContext(context.env_file)
         context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300',
                          'keycloak', 'origin', 'admin'])
         identities = delivery_identities(context)
-        if args.jenkins_image:
-            context.command_overrides['JENKINS_IMAGE'] = jenkins_image_id(args.jenkins_image)
-            context.command(['build', 'sodata'])
+        if jenkins_id:
+            context.command_overrides['JENKINS_IMAGE'] = jenkins_id
             context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'clickhouse'])
             context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'clickhouse-init'])
             context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'gateway'])
@@ -513,7 +516,7 @@ def main():
     finally:
         cleanup(context)
     assert not context.command(['ps', '-aq']).stdout.strip()
-    print('ASSERTIONS=82 SKIP=0')
+    print('Delivery checks and fixture cleanup passed')
 
 
 if __name__ == '__main__':

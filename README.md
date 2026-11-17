@@ -14,8 +14,9 @@ und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/op
 - `python3 scripts/test_management_bootstrap.py` prüft Schema, Rollen und XTF-Import/-Export.
 - `python3 scripts/test_cayenne_mapping.py` prüft Mapping-Generierung und echte Cayenne-Schreibvorgänge.
 - `python3 scripts/test_delivery_domain.py` prüft Lieferrechte, Modellabruf,
-  Dateimetadaten und konkurrierende Abschlüsse. Mit `--jenkins-image` prüft
-  derselbe isolierte Stack auch Lieferungen über Jenkins und GRETL 6.
+  Dateimetadaten, konkurrierende Abschlüsse und den direkten Garage-Lieferweg.
+  Mit `--jenkins-image` qualifiziert der Test stattdessen die Lieferkette mit
+  Jenkins, GRETL 6, Garage und ClickHouse.
 - `python3 scripts/test_single_bucket_storage.py` prüft Reader-/Writer-Grenzen
   und wiederholbares Storage-Setup im isolierten Garage-Kontext.
 - `python3 scripts/test_public_catalog.py` prüft ili2pg-Sichten, die
