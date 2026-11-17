@@ -31,8 +31,9 @@ verwenden den Projektnamen als Tag. Für diesen Build werden zusätzlich
 Java 21 und Maven für das Jenkins-HPI benötigt. Admin und Sodata bauen mit
 Java 25 im Container. Beim Jenkins-Image-Build löst Gradle die veröffentlichte
 GRETL-6-Distribution aus Maven auf. `./scripts/build.sh` baut dieselben lokalen
-Images. `restart.sh` verwendet den zuletzt erfolgreich
-gestarteten Modus.
+Images. Der Start löst das ausgewählte Jenkins-Tag in eine lokale Image-ID
+auf und übergibt diese an Compose. `restart.sh` verwendet den zuletzt
+erfolgreich gestarteten Modus.
 
 Das Setup legt nur technische Rollen, SQL-Sichten, den Bucket mit separatem
 Reader/Writer und leere Anwendungsschemas an. Es erstellt keine Personen,

@@ -36,6 +36,15 @@ class LifecycleSafety(unittest.TestCase):
                 ops.start(context, 'registry', restart=True)
         context.command.assert_called_once_with(['config', '--format', 'json'])
 
+    def test_invalid_gretl_image_stops_before_container_change(self):
+        context = types.SimpleNamespace(command=Mock())
+        result = types.SimpleNamespace(returncode=0, stdout='sha256:' + 'a' * 64 + ' 5.0.0')
+        with patch.object(ops, 'prepare_images', return_value='fixture:jenkins'), \
+                patch.object(ops.subprocess, 'run', return_value=result):
+            with self.assertRaisesRegex(RuntimeError, 'Expected a local Jenkins image with GRETL'):
+                ops.start(context, 'local', restart=True)
+        context.command.assert_not_called()
+
     def test_start_persists_mode_only_after_success(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = pathlib.Path(directory)
@@ -43,16 +52,15 @@ class LifecycleSafety(unittest.TestCase):
             marker = runtime/'startup-image-mode'
             marker.write_text('registry\n')
             with patch.object(ops, 'prepare_images', return_value='fixture:jenkins'), \
-                    patch('bind_jenkins_image.verified_image_id', return_value='sha256:fixture'), \
-                    patch.object(ops.subprocess, 'check_output', return_value='sha256:fixture'):
+                    patch.object(ops, 'jenkins_image_id', return_value='sha256:fixture'):
                 with self.assertRaisesRegex(RuntimeError, 'unhealthy'):
                     ops.start(context, 'local')
                 self.assertEqual(marker.read_text(), 'registry\n')
                 context.command.side_effect = None
-                context.command.return_value.stdout = 'fixture-container'
-                ops.start(context, 'local')
+                self.assertEqual(ops.start(context, 'local'), 'sha256:fixture')
             self.assertEqual(marker.read_text(), 'local\n')
-            start_args = context.command.call_args_list[-2].args[0]
+            start_args = context.command.call_args.args[0]
+            self.assertEqual(context.command.call_args.kwargs['overrides'], {'JENKINS_IMAGE': 'sha256:fixture'})
             self.assertIn('--no-build', start_args)
             self.assertIn('never', start_args)
 

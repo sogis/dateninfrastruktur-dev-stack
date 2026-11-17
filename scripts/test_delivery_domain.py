@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from uuid import UUID, uuid4
 
-from bind_jenkins_image import verified_image_id
+from compose_operations import jenkins_image_id
 from compose_runtime import ComposeContext, init_context
 from ingestion_test_runtime import cleanup, http, reserve_ports, sql, token
 from test_management_bootstrap import FIXTURE, operator, put
@@ -501,7 +501,7 @@ def main():
                          'keycloak', 'origin', 'admin'])
         identities = delivery_identities(context)
         if args.jenkins_image:
-            context.command_overrides['JENKINS_IMAGE'] = verified_image_id(args.jenkins_image)
+            context.command_overrides['JENKINS_IMAGE'] = jenkins_image_id(args.jenkins_image)
             context.command(['build', 'sodata'])
             context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'clickhouse'])
             context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'clickhouse-init'])

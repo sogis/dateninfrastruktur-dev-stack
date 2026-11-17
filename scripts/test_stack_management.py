@@ -83,7 +83,7 @@ def main():
         setup(context)
         assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
         assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
-        start(context, 'local')
+        jenkins_id = start(context, 'local')
         run_smoke(context)
         assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
         assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
@@ -138,13 +138,15 @@ def main():
         '''
         before_restart = sql(context, retained)
         assert len(before_restart.splitlines()) == 2
-        start(context, 'local', restart=True)
+        restarted_jenkins_id = start(context, 'local', restart=True)
+        assert restarted_jenkins_id == jenkins_id
         run_smoke(context)
         assert sql(context, retained) == before_restart
         if args.release_staging_tag:
             for name in ('admin', 'jenkins', 'postgres', 'superset', 'tools'):
                 key = ('TOOL' if name == 'tools' else name.upper()) + '_IMAGE'
-                subprocess.run(['docker', 'tag', context.command_overrides[key],
+                source = jenkins_id if name == 'jenkins' else context.command_overrides[key]
+                subprocess.run(['docker', 'tag', source,
                                 f'dateninfrastruktur-{name}:{args.release_staging_tag}'], check=True)
         print(f'ADMIN_INTEGRATION={admin} SODATA_INTEGRATION={portal} SKIP=0', flush=True)
     finally:

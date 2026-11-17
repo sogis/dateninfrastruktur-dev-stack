@@ -79,7 +79,7 @@ def init_context(project,ports=None,test_fixture=False):
     for kind in ['WRITER','READER']:
         values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
     for key,tag in [('ADMIN_IMAGE','admin'),('TOOL_IMAGE','tools'),('TEST_TOOL_IMAGE','test-tools'),('POSTGRES_IMAGE','postgres'),('SODATA_IMAGE','sodata'),('SUPERSET_IMAGE','superset')]:values[key]='dateninfrastruktur-'+tag+':'+project
-    # Placeholder until an explicit candidate build is bound by immutable ID.
+    # Local build tag; startup resolves it to an immutable image ID.
     values['JENKINS_IMAGE']='dateninfrastruktur-jenkins:'+project
     write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     context=ComposeContext(env_file);render(context);return context
@@ -126,8 +126,3 @@ def render(context):
             for k,x in v.items():value=value.replace('${'+k+'}',x)
         return value
     write_private(r/'apisix.yaml',json.dumps(substitute(template),indent=2)+'\n#END\n');(r/'apisix.yaml').chmod(0o644)
-
-def update_context(context,updates):
-    values={**context.values,**updates}
-    write_private(context.env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
-    return ComposeContext(context.env_file)
