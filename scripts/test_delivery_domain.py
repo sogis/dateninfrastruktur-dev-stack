@@ -234,10 +234,36 @@ def verify_jenkins_delivery(context):
         if expected == 'accepted':
             assert 'GRETL authorizeReject SKIPPED' in page
             assert 'GRETL authorizeComplete SUCCEEDED' in page
-            assert 'CSV-Validierung, Zeile' not in page
         for key in ('DI_GRETL_DELIVERY_CLIENT_SECRET', 'DI_CH_LOADER_PASSWORD', 'DI_STORAGE_WRITER_SECRET_KEY'):
             assert context.values[key] not in page, f'Secret {key} visible in delivery status'
         return id_, page
+
+    def report_link(submission, page):
+        href = f'validationLog?id={submission[0]}'
+        return urllib.parse.urljoin(submission[1], href) if f'href="{href}"' in page else None
+
+    def download_report(submission, page):
+        url = report_link(submission, page)
+        assert url, 'Original validation report link missing'
+        with browser.open(url, timeout=20) as response:
+            assert response.status == 200
+            assert response.headers.get_content_type() == 'text/plain'
+            assert response.headers.get_content_charset() == 'utf-8'
+            assert response.headers['Content-Disposition'] == 'attachment; filename="validation.log"'
+            assert response.headers['Cache-Control'] == 'no-store'
+            assert response.headers['X-Content-Type-Options'] == 'nosniff'
+            body = response.read()
+        assert body, 'Validator report is empty'
+        return url, body
+
+    def assert_denied(client, url, *statuses):
+        try:
+            with client.open(url, timeout=20) as response:
+                raise AssertionError(f'Unexpected HTTP {response.status} for restricted resource')
+        except urllib.error.HTTPError as error:
+            assert error.code in statuses, error.code
+            body = error.read()
+            assert b'private-zone' not in body and b'private-code' not in body
 
     def clickhouse_rows(query):
         credentials = 'ch_delivery:' + context.values['DI_CH_LOADER_PASSWORD']
@@ -248,7 +274,8 @@ def verify_jenkins_delivery(context):
         return actual.decode().splitlines()
 
     def accepted(submission, expected_rows):
-        id_, _ = await_result(submission, 'accepted')
+        id_, page = await_result(submission, 'accepted')
+        download_report(submission, page)
         state = sql(context, f"""
             SELECT concat_ws(':', d.objectkey, v.objectcount, d.bytesize)
             FROM di_management.submission s
@@ -276,16 +303,66 @@ def verify_jenkins_delivery(context):
     rejected = upload(b'zone,code\nprivate-zone,private-code\nprivate-zone,private-code\n')
     _, page = await_result(rejected, 'rejected')
     assert 'GRETL authorizeReject SUCCEEDED' in page
-    assert 'Unique constraint DI_ExampleCsv.Snapshot.Row.Constraint1 is violated!' in page
+    assert 'Unique constraint' not in page
     assert 'private-zone' not in page and 'private-code' not in page
-    other_browser, _ = login_as('claudia')
-    try:
-        with other_browser.open(rejected[1], timeout=20):
-            raise AssertionError('Another supplier could see the submission')
-    except urllib.error.HTTPError as error:
-        assert error.code == 403, error.code
-        assert b'CSV-Validierung, Zeile' not in error.read()
+    report_url, report = download_report(rejected, page)
+    unique = next(line for line in report.splitlines()
+                  if b'Unique constraint DI_ExampleCsv.Snapshot.Row.Constraint1 is violated!' in line)
+    assert b'private-zone' in unique and b'private-code' in unique
+    assert b'Info:' in report
+    build = re.search(r'Jenkins-Lauf ([0-9]+)', page)[1]
+    report_path = f'jobs/di-csv-ingest/builds/{build}/validation.log'
+    checksum = context.command(['exec', '-T', 'jenkins', 'sh', '-c',
+        'sha256sum "$JENKINS_HOME/$1"', 'sh', report_path]).stdout.split()[0]
+    assert hashlib.sha256(report).hexdigest() == checksum
 
+    other_browser, _ = login_as('claudia')
+    assert_denied(other_browser, rejected[1], 403)
+    assert_denied(other_browser, report_url, 403)
+    assert_denied(browser, report_url.replace(str(rejected[0]), str(uuid4())), 403, 404)
+    # Observe the Jenkins response before following any anonymous OIDC redirect.
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, request, response, code, message, headers, url):
+            return None
+
+    assert_denied(urllib.request.build_opener(NoRedirect()), report_url, 302, 401, 403, 404)
+    build_url = f'{base}/jenkins/job/di-csv-ingest/{build}/'
+    for path in ('artifact/validation.log', 'validation.log'):
+        assert_denied(browser, build_url + path, 403, 404)
+
+    # Give the other user metadata rights on this fixture without changing the submitter.
+    grant = '41c2f22f-7c11-5d81-9cbd-09df9878605d'
+    claudia = '98ea50b1-eb3f-5dd0-82d8-e1c5a6be0889'
+    anna = 'aca067cc-6587-5a58-b98f-01d980f6021e'
+
+    def set_metadata_reader(principal):
+        sql(context, f"UPDATE di_management.authorityassignment SET principal=("
+                     f"SELECT t_id FROM di_management.principal WHERE t_ili_tid='{principal}') "
+                     f"WHERE t_ili_tid='{grant}'")
+
+    set_metadata_reader(claudia)
+    try:
+        with other_browser.open(rejected[1], timeout=20) as response:
+            other_page = response.read().decode()
+            assert response.status == 200 and 'CSV abgelehnt' in other_page
+            assert report_link(rejected, other_page) is None
+            assert 'private-zone' not in other_page and 'private-code' not in other_page
+        assert_denied(other_browser, report_url, 404)
+    finally:
+        set_metadata_reader(anna)
+
+    def move_report(source, target):
+        context.verify_project()
+        context.command(['exec', '-T', 'jenkins', 'sh', '-c',
+            'mv "$JENKINS_HOME/$1" "$JENKINS_HOME/$2"', 'sh', source, target])
+
+    move_report(report_path, report_path + '.fixture')
+    try:
+        with browser.open(rejected[1], timeout=20) as response:
+            assert report_link(rejected, response.read().decode()) is None
+        assert_denied(browser, report_url, 404)
+    finally:
+        move_report(report_path + '.fixture', report_path)
 
     # Bind a second schema revision to the same synthetic issue. Earlier accepted
     # versions retain their original schema and the five delivery paths share one fixture.
@@ -341,10 +418,13 @@ def verify_jenkins_delivery(context):
     assert current
     invalid = header + (b'A,not-a-number,12.345,true,2024-02-29,2024-02-29T12:30:00.123,urban,\n'
                         b'B,,0.010,false,2024-03-01,2024-03-01T00:00:00.001,unknown,\n')
-    _, page = await_result(upload(invalid), 'rejected')
-    assert 'is not a number in attribute population' in page
-    assert 'Attribute population requires a value' in page
-    assert 'is not a member of the enumeration in attribute category' in page
+    invalid_submission = upload(invalid)
+    _, page = await_result(invalid_submission, 'rejected')
+    _, report = download_report(invalid_submission, page)
+    assert b'is not a number in attribute population' in report
+    assert b'Attribute population requires a value' in report
+    assert b'is not a member of the enumeration in attribute category' in report
+    assert b'not-a-number' in report
     assert 'not-a-number' not in page
 
     # Hold the import path open and terminate only the GRETL process whose
@@ -374,8 +454,10 @@ def verify_jenkins_delivery(context):
         context.command(['unpause', 'clickhouse'])
 
     context.command(['stop', 'clickhouse'])
-    _, page = await_result(upload(valid), 'failed')
+    with_clickhouse_down = upload(valid)
+    _, page = await_result(with_clickhouse_down, 'failed')
     assert 'GRETL createTable FAILED' in page
+    download_report(with_clickhouse_down, page)
     assert current == sql(context, f"SELECT currentversion FROM di_management.datasetissue WHERE t_ili_tid='{issue}'")
     assert not status_errors, status_errors
     print('JENKINS_DELIVERY_CASES=8 SKIP=0', flush=True)
