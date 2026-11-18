@@ -13,11 +13,13 @@ keinen eigenen Hostport.
 ## Frische Installation und Normalstart
 
 Benötigt werden Docker mit Compose und Buildx sowie Python 3.9 oder neuer.
-Alle Beispiele laufen aus dem Stack-Checkout in Bash. Wähle den Docker-Kontext
-bewusst und verwende ihn für Prüfung und Compose-Befehl gleichermassen.
+Alle Beispiele laufen aus dem Stack-Checkout in Bash. Wähle mit `docker context ls` einen benannten Docker-Kontext mit dem
+gewünschten Endpunkt und verwende ihn für Prüfung und Compose-Befehl
+gleichermassen. Für einen Zugang über `DOCKER_HOST` oder TLS-Variablen
+verwende einen Docker-Kontext mit der entsprechenden Verbindungskonfiguration.
 
 ```bash
-docker_context=$(docker context show)
+docker_context=desktop-linux  # Beispiel, bei lokalem Linux meist: default
 docker_env=(env -i "PATH=$PATH" "HOME=$HOME" "DOCKER_CONTEXT=$docker_context")
 runtime_env=$( "${docker_env[@]}" python3 scripts/compose_runtime.py init dateninfrastruktur-dev-stack )
 compose=(docker compose --file compose.yaml --env-file "$runtime_env")
@@ -44,7 +46,8 @@ Admin und Sodata werden im Container mit Java 25 gebaut.
 "${docker_env[@]}" "${compose[@]}" --profile build-tools build postgres admin sodata superset management-tool-build
 "${docker_env[@]}" "${compose[@]}" pull --policy missing garage clickhouse keycloak origin gateway
 build_dir=$(mktemp -d "$(dirname "$runtime_env")/jenkins-build.XXXXXXXX")
-IMAGE_NAME=dateninfrastruktur-jenkins:mein-projekt \
+"${docker_env[@]}" "JAVA21_HOME=${JAVA21_HOME:-}" \
+  IMAGE_NAME=dateninfrastruktur-jenkins:dateninfrastruktur-dev-stack \
   ../dateninfrastruktur-jenkins-dev/bin/build-image.sh "$build_dir/context"
 ```
 
