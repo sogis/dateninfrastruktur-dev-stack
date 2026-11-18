@@ -85,11 +85,13 @@ class ComposeOwnershipTest(unittest.TestCase):
 
     def test_retained_setup_does_not_initialize_a_missing_database(self):
         self.record_setup()
-        self.context.command = Mock(side_effect=[None, SimpleNamespace(stdout='0\n')])
         with patch.object(runtime, 'docker_output', side_effect=self.docker):
-            with self.assertRaisesRegex(RuntimeError, 'Known management database is missing'):
-                setup(self.context)
-        self.assertEqual(self.context.command.call_count, 2)
+            for result, message in [('0\n', 'Known management database is missing'),
+                                    ('', 'Could not determine whether the management database exists')]:
+                self.context.command = Mock(side_effect=[None, SimpleNamespace(stdout=result)])
+                with self.subTest(result=result), self.assertRaisesRegex(RuntimeError, message):
+                    setup(self.context)
+                self.assertEqual(self.context.command.call_count, 2)
 
     def test_setup_refuses_to_replace_missing_garage_identity(self):
         self.record_setup()

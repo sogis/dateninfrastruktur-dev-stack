@@ -70,9 +70,9 @@ Bei wiederholten Starts bleibt die Image-Auswahl in der privaten Datei.
 
 Das explizite Setup richtet PostgreSQL-Datenbanken, Management-Schema,
 Rollen, den privaten Garage-Bucket mit Reader/Writer und ClickHouse ein.
-Zum Abschluss bindet es die leeren Jenkins- und Superset-Volumes.
-Dadurch kann das Setup schon vor dem Build dieser beiden Images
-abgeschlossen werden. Ein vorhandenes Management-Schema wird geprüft.
+Zum Abschluss legt das Setup die Jenkins- und Superset-Volumes mit den
+Compose-Eigentumslabels des Projekts an und bindet sie. Dadurch kann es
+schon vor dem Build dieser beiden Images abgeschlossen werden. Ein vorhandenes Management-Schema wird geprüft.
 Fehlt eine bekannte Managementdatenbank, bricht das Setup ab. Demo-Daten
 sind dem Testmodus vorbehalten.
 

@@ -19,13 +19,13 @@ def setup(context):
     query = "SELECT count(*) FROM pg_database WHERE datname='dateninfrastruktur_management';"
     count = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
                              '-U', 'postgres', '-d', 'postgres', '-c', query]).stdout.strip()
-    if count == '1':
-        context.command([*run, 'management-setup', 'verify'])
-    elif count == '0' and not retained:
+    if count not in {'0', '1'}:
+        raise RuntimeError('Could not determine whether the management database exists')
+    if count == '0':
+        if retained:
+            raise RuntimeError('Known management database is missing; restore it before setup')
         context.command([*run, 'postgres-init'])
-        context.command([*run, 'management-setup'])
-    else:
-        raise RuntimeError('Known management database is missing; restore it before setup')
+    context.command([*run, 'management-setup', *(['verify'] if count == '1' else [])])
 
     if not (context.runtime / 'garage.toml').is_file():
         raise RuntimeError('Private Garage configuration is missing; restore it before setup')
