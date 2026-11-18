@@ -5,7 +5,9 @@ Admin, Sodata, Origin, APISIX und Jenkins in einem Compose-Projekt. Der private
 Bucket `ch.so.daten` dient den gebundenen CSV-Lieferungen und Downloads. Der
 Managementkatalog und die Fachrechte liegen in PostgreSQL.
 
-[Lokaler Betrieb](docs/operations.md) beschreibt Erstaufbau, Normalstart,
+Docker Compose übernimmt Build, Pull, Start, Status, Stopp und Down.
+[Lokaler Betrieb](docs/operations.md) beschreibt die private Instanzauswahl,
+das explizite Setup, die Startprüfung,
 Anlieferung, Betrieb und Testgrenzen. Für integrierte Prüfungen die
 jeweils benötigten Schwesterrepositories im selben Workspace bereitstellen.
 Der Admin-Image-Build benötigt nur den Admin-Checkout. Für CSS, JTE

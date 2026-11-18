@@ -42,6 +42,17 @@ CREATE TABLE IF NOT EXISTS foundation.restricted_metrics
 ENGINE = MergeTree
 ORDER BY id;
 
+CREATE ROLE IF NOT EXISTS foundation_reader;
+GRANT SELECT ON foundation.smoke_metrics TO foundation_reader;
+
+CREATE USER IF NOT EXISTS ch_test_reader;
+CREATE USER IF NOT EXISTS superset_reader;
+GRANT foundation_reader TO ch_test_reader;
+GRANT foundation_reader TO superset_reader;
+SQL
+
+if [ "${DI_TEST_FIXTURE:-false}" = true ]; then
+  sql <<'SQL'
 INSERT INTO foundation.smoke_metrics
 SELECT * FROM
 (
@@ -59,15 +70,8 @@ SELECT * FROM
     SELECT 1 AS id, 'restricted' AS metric, 9.9 AS value, toDate('2026-01-01') AS observed_at
 )
 WHERE NOT EXISTS (SELECT 1 FROM foundation.restricted_metrics);
-
-CREATE ROLE IF NOT EXISTS foundation_reader;
-GRANT SELECT ON foundation.smoke_metrics TO foundation_reader;
-
-CREATE USER IF NOT EXISTS ch_test_reader;
-CREATE USER IF NOT EXISTS superset_reader;
-GRANT foundation_reader TO ch_test_reader;
-GRANT foundation_reader TO superset_reader;
 SQL
+fi
 
 # Passwords are written to a temporary SQL file and fed through stdin; they
 # do not become command-line arguments in the container process list.
@@ -96,4 +100,4 @@ rm -f /tmp/clickhouse-init-users.sql
 client --query "SELECT 'smoke_metrics=' || toString(count()) FROM foundation.smoke_metrics"
 client --query "SELECT 'restricted_metrics=' || toString(count()) FROM foundation.restricted_metrics"
 
-echo "ClickHouse-Initialisierung abgeschlossen; Testzeilen sind idempotent vorhanden."
+echo "ClickHouse-Initialisierung abgeschlossen."

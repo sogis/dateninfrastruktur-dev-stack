@@ -13,8 +13,7 @@ import urllib.parse
 import urllib.request
 from uuid import UUID, uuid4
 
-from compose_operations import jenkins_image_id
-from compose_runtime import ComposeContext, init_context
+from compose_runtime import ComposeContext, init_context, jenkins_image_id
 from ingestion_test_runtime import cleanup, http, reserve_ports, sql, token
 from test_management_bootstrap import FIXTURE, operator, put
 

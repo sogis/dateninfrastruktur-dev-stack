@@ -5,57 +5,149 @@ Schwestercheckouts. Der Compose-Stack führt PostgreSQL 16/PostGIS, Garage, Clic
 Superset, Admin, Sodata, Origin, APISIX und Jenkins je einmal aus. Die
 PostgreSQL-Datenbanken und der private Bucket `ch.so.daten` werden durch
 explizites Setup eingerichtet. Normalstart und Recreate verwenden die
-bestehenden Volumes. Der aktive Kontext und alle Secrets liegen privat unter
+bestehenden Volumes. Die Konfiguration jeder Instanz und ihre Secrets liegen privat unter
 `.runtime/`. Ports für Gateway, Keycloak, Superset und ClickHouse sind nur
 an Loopback gebunden. Admin, PostgreSQL, Jenkins, Sodata und Origin haben
 keinen eigenen Hostport.
 
 ## Frische Installation und Normalstart
 
-Für den Betrieb werden Docker mit Compose/Buildx und Python 3.9 oder neuer
-benötigt. Für den GRETL-6-Lieferweg die eigenen Images aus den
-Schwestercheckouts bauen. Die Befehle und Integrationstests verwenden
-den aktiven Docker-Kontext. Mit `DOCKER_CONTEXT=<name>` lässt sich der
-Kontext für einen einzelnen Aufruf wählen.
+Benötigt werden Docker mit Compose und Buildx sowie Python 3.9 oder neuer.
+Alle Beispiele laufen aus dem Stack-Checkout in Bash. Wähle den Docker-Kontext
+bewusst und verwende ihn für Prüfung und Compose-Befehl gleichermassen.
 
-```sh
-./scripts/init.sh
-./scripts/setup.sh
-./scripts/up.sh
-./scripts/status.sh
+```bash
+docker_context=$(docker context show)
+docker_env=(env -i "PATH=$PATH" "HOME=$HOME" "DOCKER_CONTEXT=$docker_context")
+runtime_env=$( "${docker_env[@]}" python3 scripts/compose_runtime.py init dateninfrastruktur-dev-stack )
+compose=(docker compose --file compose.yaml --env-file "$runtime_env")
 ```
 
-`./scripts/up.sh` baut die eigenen Images aus den Schwestercheckouts und
-verwendet beim Standardprojekt `:local`. Benannte Instanzen und Tests
-verwenden den Projektnamen als Tag. Für diesen Build werden zusätzlich
-Java 21 und Maven für das Jenkins-HPI benötigt. Admin und Sodata bauen mit
-Java 25 im Container. Beim Jenkins-Image-Build löst Gradle die veröffentlichte
-GRETL-6-Distribution aus Maven auf. `./scripts/build.sh` baut dieselben lokalen
-Images. Der Start löst das ausgewählte Jenkins-Tag in eine lokale Image-ID
-auf und übergibt diese an Compose. `restart.sh` verwendet den zuletzt
-erfolgreich gestarteten Modus.
+Für eine eingerichtete Instanz setze `runtime_env` auf deren bestehende
+`.runtime/<projekt>/runtime.env` und definiere das Array `compose` danach
+erneut. Projektname, Instanz-ID, Bind-Mounts, Portnummern, Volumes und
+Credentials kommen aus der ausgewählten Datei. Die leere Prozessumgebung
+verhindert, dass exportierte Compose- und Stack-Variablen diese Auswahl
+überschreiben. Falls Docker eine abweichende Konfigurationsablage oder SSH
+benötigt, übergib `DOCKER_CONFIG` beziehungsweise `SSH_AUTH_SOCK` ausdrücklich
+im Array `docker_env`.
 
-Das Setup legt nur technische Rollen, SQL-Sichten, den Bucket mit separatem
-Reader/Writer und leere Anwendungsschemas an. Es erstellt keine Personen,
-Datensätze, Grants oder Demodateien. Für bestehende Daten mit abweichendem
-Schema stoppt es. Die Bedienbefehle
-`up.sh --skip-build`, `stop.sh`, `restart.sh`, `down.sh`, `status.sh` und
-`logs.sh` verwenden denselben gebundenen Kontext. `down.sh` erhält Volumes.
-Für einen bewusst separaten Kontext dienen `--project` und `--env`;
-keine Dateien zwischen Instanzen kopieren.
+### Images bereitstellen
+
+Eine neue Instanz nutzt die Registry-Referenzen aus `compose.yaml`. Hole die
+Images ausdrücklich vor dem Setup. Das Profil aktiviert die Setup-Images
+für diesen Pull.
+
+```bash
+"${docker_env[@]}" "${compose[@]}" --profile setup pull --policy missing
+```
+
+Für lokale Builds trage stattdessen die gewünschten lokalen Tags für
+`POSTGRES_IMAGE`, `ADMIN_IMAGE`, `SODATA_IMAGE`, `SUPERSET_IMAGE`,
+`TOOL_IMAGE` und `JENKINS_IMAGE` in der privaten Datei ein. Verwende eigene
+Tags pro Instanz. Die regulären Images baut Compose. Der separate
+Jenkins-Build braucht den Jenkins- und Plugin-Checkout, Java 21 und Maven.
+Admin und Sodata werden im Container mit Java 25 gebaut.
+
+```bash
+"${docker_env[@]}" "${compose[@]}" --profile build-tools build postgres admin sodata superset management-tool-build
+"${docker_env[@]}" "${compose[@]}" pull --policy missing garage clickhouse keycloak origin gateway
+build_dir=$(mktemp -d "$(dirname "$runtime_env")/jenkins-build.XXXXXXXX")
+IMAGE_NAME=dateninfrastruktur-jenkins:mein-projekt \
+  ../dateninfrastruktur-jenkins-dev/bin/build-image.sh "$build_dir/context"
+```
+
+Der Wert von `IMAGE_NAME` muss dem ausgewählten `JENKINS_IMAGE` entsprechen.
+Bei wiederholten Starts bleibt die Image-Auswahl in der privaten Datei.
+
+### Setup und Start
+
+Das explizite Setup richtet PostgreSQL-Datenbanken, Management-Schema,
+Rollen, den privaten Garage-Bucket mit Reader/Writer und ClickHouse ein.
+Es prüft ein bereits vorhandenes Management-Schema und bricht bei einer
+fehlenden bekannten Managementdatenbank ab. Demo-Daten sind dem Testmodus
+vorbehalten.
+
+```bash
+"${docker_env[@]}" python3 scripts/setup_instance.py --env "$runtime_env"
+```
+
+Führe den Startblock aus, sobald die Images bereitstehen. Nach der
+Eigentums- und Volumeprüfung startet Compose PostgreSQL. Das vorhandene
+Management-Werkzeug prüft die Datenbank und das Schema lesend, bevor
+Compose den übrigen Stack startet. Jenkins erhält die geprüfte lokale
+Image-ID.
+
+```bash
+jenkins_id=$( "${docker_env[@]}" python3 scripts/compose_runtime.py check --start --env "$runtime_env" ) &&
+  "${docker_env[@]}" "${compose[@]}" up -d --wait --wait-timeout 240 --no-build --pull never postgres &&
+  "${docker_env[@]}" "${compose[@]}" --profile setup run --rm --no-deps --pull never management-setup verify &&
+  "${docker_env[@]}" "JENKINS_IMAGE=$jenkins_id" "${compose[@]}" up -d --wait --wait-timeout 300 --no-build --pull never
+```
+
+Compose führt die Eigentumsprüfung bei einem direkten Aufruf nicht aus.
+Verwende den vollständigen Startblock und vor Stop oder Down den
+Eigentumscheck unten. Führe Änderungen an einer Instanz nacheinander aus.
+Ändere zwischen Prüfung und Compose-Aufruf weder die private Datei noch
+Docker-Kontext oder Projektressourcen.
+
+```bash
+"${docker_env[@]}" "${compose[@]}" ps
+set -o pipefail
+"${docker_env[@]}" "${compose[@]}" logs --tail 100 -f admin 2>&1 |
+  "${docker_env[@]}" python3 scripts/compose_runtime.py redact --env "$runtime_env"
+
+"${docker_env[@]}" python3 scripts/compose_runtime.py check --env "$runtime_env" &&
+  "${docker_env[@]}" "${compose[@]}" stop --timeout 60
+
+"${docker_env[@]}" python3 scripts/compose_runtime.py check --env "$runtime_env" &&
+  "${docker_env[@]}" "${compose[@]}" down --timeout 60
+```
+
+`down` erhält die Volumes. Verzichte für normale Betriebsabläufe auf
+`--volumes`. Der Startblock übernimmt Konfigurationsänderungen mit
+`up`. `restart` startet vorhandene Container mit ihrer bisherigen
+Konfiguration. Führe den Startblock nach einem Stopp oder Down erneut aus.
+
+Verwende für Prüfungen des Compose-Modells `config --quiet`. Eine vollständige
+interpolierte Konfiguration enthält Zugangsdaten. Die Logpipeline filtert
+konfigurierte Secrets aus `runtime.env`. Behandle verbleibende Logs
+weiterhin als vertraulich.
+
+### Bestehende Instanz übernehmen
+
+Schalte Admin-Development gegebenenfalls mit der bisherigen Bedienung aus.
+Beende die laufende Instanz im ursprünglichen Checkout ohne Volume-Löschung.
+Behalte `runtime.env`, `setup-complete.json`, die gerenderten privaten Dateien
+und den ursprünglichen Checkout-Pfad.
+
+Vergleiche vor der Umstellung in der alten Instanz die tatsächlich
+verwendeten Images. Übertrage die sechs Stack-Image-Referenzen explizit in
+die entsprechenden `*_IMAGE`-Zeilen der privaten Datei. Bei der alten
+Standardinstanz können lokale Referenzen auf `:local` enden, während
+`runtime.env` projektbezogene Tags enthält. Für Registry-Images verwende
+die tatsächlich eingesetzten, versionierten Registry-Referenzen. Jenkins
+kann auch direkt über seine vorhandene lokale Image-ID ausgewählt werden.
+Lass Projekt, Instanz-ID, Volumenamen und Credentials unverändert.
+
+Wähle die bestehende `runtime.env` und führe den Startblock aus. Bei
+fehlendem Volume, fehlender Setup-Bindung oder unbekanntem Management-Schema
+halte an und kläre den Zustand anhand der Sicherung. Frühere Dateien für die
+aktive Instanz und den Image-Modus werden nicht mehr gelesen.
 
 ## Admin aus lokalen Quellen entwickeln
 
 Im laufenden und eingerichteten Stack den Admin-Dienst umschalten:
 
-```sh
-./scripts/dev.sh admin on
-./scripts/logs.sh --follow admin
-./scripts/dev.sh admin off
+```bash
+"${docker_env[@]}" python3 scripts/admin_development.py on --env "$runtime_env"
+"${docker_env[@]}" "${compose[@]}" logs --tail 100 -f admin 2>&1 |
+  "${docker_env[@]}" python3 scripts/compose_runtime.py redact --env "$runtime_env"
+"${docker_env[@]}" python3 scripts/admin_development.py off --env "$runtime_env"
 ```
 
-Bei einer benannten Instanz jedem Befehl `--project <name>` oder
-`--env <runtime.env>` mitgeben. Admin bleibt über das Gateway unter
+Schalte den Entwicklungsoverlay vor regulären Änderungen am Stack aus.
+Admin bleibt über das Gateway unter
 `http://localhost:<Gateway-Port>/management` erreichbar. Für eine
 Farbänderung `src/main/resources/static/assets/management.css` im
 Admin-Checkout bearbeiten, speichern und die Seite neu laden. Dasselbe
@@ -68,13 +160,10 @@ Der erste Wechsel baut ein Werkzeugimage mit JDK und Python. Gradle lädt
 beim ersten Start seine Abhängigkeiten. Der Admin-Checkout wird schreibgeschützt eingebunden. Gradle-Cache und Buildausgaben liegen unter
 `.runtime/<instanz>/admin-dev/`. Änderungen am Gradle-Build werden nach erneutem `off` und `on` geladen.
 
-`status.sh`, `logs.sh`, `stop.sh` und `down.sh` funktionieren auch
-im Entwicklungsmodus. Vor `up.sh`, `restart.sh` oder `setup.sh` mit
-`dev.sh admin off` zum bisherigen Admin-Image zurückkehren. Nach
-`stop.sh` stellt `off` den normalen Admin-Container im gestoppten
-Zustand bereit. `down.sh` beendet den Entwicklungsmodus. Beim normalen
-Wechsel prüft der Stack die Bereitschaft von Admin und stellt bei einem
-Fehlstart die vorherige Variante wieder her.
+Status und Logs sind im Entwicklungsmodus weiterhin verfügbar. Beim
+Wechsel prüft Admin seine Bereitschaft. Bei einem Fehlstart stellt das
+Werkzeug die vorherige Variante wieder her. Wenn auch das fehlschlägt,
+bleibt der Zustand für einen erneuten Aufruf von `off` erhalten.
 
 ## Katalog und Lieferung
 
