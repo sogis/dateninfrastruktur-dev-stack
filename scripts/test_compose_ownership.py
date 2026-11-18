@@ -29,18 +29,40 @@ class ComposeOwnershipTest(unittest.TestCase):
         if (resource, action) == ('network', 'ls'):
             return ''
         if (resource, action) == ('volume', 'ls'):
-            return '\n'.join(self.names)
-        if (resource, action) == ('volume', 'inspect'):
-            return json.dumps([{'Name': name, 'Labels': {
-                'com.docker.compose.project': self.label_project,
-                'com.docker.compose.volume': name.removeprefix('fixture_'),
-            }} for name in args])
+            return '\n'.join(json.dumps([name, self.label_project, name.removeprefix('fixture_')])
+                             for name in self.names)
         self.fail((resource, action, args))
 
     def record_setup(self):
         (self.context.runtime / 'setup-complete.json').write_text(json.dumps({
             'instance': self.context.values['INSTANCE_ID'], 'volumes': self.context.volume_bindings(),
         }))
+
+    def test_private_init_keeps_configuration_and_round_trips_multiline_credentials(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(runtime, 'docker_output', return_value=''):
+            root = Path(directory).resolve()
+            (root / 'services').symlink_to(runtime.ROOT / 'services')
+            with patch.object(runtime, 'ROOT', root):
+                context = runtime.init_context('fixture-private', test_fixture=True)
+                self.assertEqual(context.env_file.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(context.runtime.stat().st_mode & 0o777, 0o700)
+                secret = 'a=b# "quote" \\ $ $$ ${literal}\nCOMPOSE_FILE=inside-the-value'
+                content = context.env_file.read_text() + 'EXTRA_SECRET=' + runtime.encode_env(secret) + '\nEMPTY=\nPROJECT_REFERENCE="${COMPOSE_PROJECT_NAME}"\n'
+                runtime.write_private(context.env_file, content)
+                with patch.dict('os.environ', {'COMPOSE_PROJECT_NAME': 'foreign-project', 'INSTANCE_ID': 'foreign',
+                                               'POSTGRES_VOLUME': 'foreign', 'ADMIN_IMAGE': 'foreign'}):
+                    current = runtime.init_context('fixture-private', test_fixture=True)
+                self.assertEqual(current.env_file.read_text(), content)
+                self.assertEqual(current.values['INSTANCE_ID'], context.values['INSTANCE_ID'])
+                self.assertEqual(current.values['POSTGRES_VOLUME'], context.values['POSTGRES_VOLUME'])
+                self.assertEqual(current.values['ADMIN_IMAGE'], context.values['ADMIN_IMAGE'])
+                self.assertEqual(current.values['EXTRA_SECRET'], secret)
+                self.assertEqual(current.values['EMPTY'], '')
+                self.assertEqual(current.values['PROJECT_REFERENCE'], context.project)
+                self.assertNotIn('COMPOSE_FILE', current.values)
+                runtime.write_private(context.env_file, content + 'BROKEN="unterminated\n')
+                with self.assertRaisesRegex(RuntimeError, '^Invalid private dotenv configuration; details withheld$'):
+                    runtime.read_env(context.env_file)
 
     def test_start_requires_setup_and_unchanged_volume_bindings(self):
         with self.assertRaisesRegex(RuntimeError, 'Explicit setup'):

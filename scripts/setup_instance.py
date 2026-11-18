@@ -4,7 +4,7 @@ import fcntl
 import json
 import sys
 
-from compose_runtime import ADMIN_DEV_MARKER, ComposeContext, render, write_private
+from compose_runtime import ADMIN_DEV_MARKER, ComposeContext, read_env, render, write_private
 
 
 def setup(context):
@@ -12,8 +12,6 @@ def setup(context):
     if (context.runtime / ADMIN_DEV_MARKER).exists():
         raise RuntimeError('Switch Admin development off before setup')
     retained = context.has_setup()
-    if not retained:
-        jenkins_id = context.configured_jenkins_id()
     up = ['up', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240']
     run = ['--profile', 'setup', 'run', '--rm', '--no-deps', '--pull', 'never']
 
@@ -21,26 +19,27 @@ def setup(context):
     query = "SELECT count(*) FROM pg_database WHERE datname='dateninfrastruktur_management';"
     count = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
                              '-U', 'postgres', '-d', 'postgres', '-c', query]).stdout.strip()
-    if retained and count != '1':
-        raise RuntimeError('Known management database is missing; restore it before setup')
-    if count not in {'0', '1'}:
-        raise RuntimeError('Could not determine whether the management database exists')
-
-    if count == '0':
+    if count == '1':
+        context.command([*run, 'management-setup', 'verify'])
+    elif count == '0' and not retained:
         context.command([*run, 'postgres-init'])
-    context.command([*run, 'management-setup', *(['verify'] if count == '1' else [])])
+        context.command([*run, 'management-setup'])
+    else:
+        raise RuntimeError('Known management database is missing; restore it before setup')
+
+    render(context)
     context.command([*up, 'garage'])
     context.command([*run, 'garage-setup'])
-    context.values = ComposeContext(context.env_file).values
-    render(context)
+    context.values = read_env(context.env_file)
     if not retained:
         context.command([*up, 'clickhouse'])
         context.command([*run, 'clickhouse-init'])
+        # Compose must allocate both volumes before the complete marker can bind them.
         context.command(['up', '--no-start', '--no-deps', '--no-build', '--pull', 'never', 'jenkins', 'superset'],
-                        overrides={'JENKINS_IMAGE': jenkins_id})
+                        overrides={'JENKINS_IMAGE': context.configured_jenkins_id()})
         context.verify_resources(require_volumes=True)
         write_private(context.runtime / 'setup-complete.json', json.dumps({
-            'instance': context.values['INSTANCE_ID'], 'mode': 'explicit-setup',
+            'instance': context.values['INSTANCE_ID'],
             'volumes': context.volume_bindings(),
         }, indent=2) + '\n')
     print('Explicit setup complete')

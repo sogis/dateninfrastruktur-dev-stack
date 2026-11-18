@@ -1,130 +1,94 @@
 """Switch the Admin service in the existing Compose project."""
 import argparse
 import fcntl
-import hashlib
 import json
 from pathlib import Path
 import re
-import subprocess
-import tempfile
 import sys
+import tempfile
 
-from compose_runtime import ADMIN_DEV_MARKER, ADMIN_DEV_OVERLAY, ROOT, ComposeContext, docker_env, write_private
+from compose_runtime import ADMIN_DEV_MARKER, ADMIN_DEV_OVERLAY, ROOT, ComposeContext, write_private
 
 IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
-
-
-def image_available(reference):
-    return subprocess.run(['docker', 'image', 'inspect', reference], env=docker_env(), capture_output=True).returncode == 0
-
-
-def development_overrides(context, *, require_sources):
-    source = ROOT.parent / 'dateninfrastruktur-admin'
-    state = context.runtime / 'admin-dev'
-    if require_sources:
-        if not (source / 'scripts/dev_reload.py').is_file():
-            raise RuntimeError('Admin development requires the Admin source checkout')
-        if state.is_symlink():
-            raise RuntimeError('OWNERSHIP_MISMATCH: Admin development directory is a symlink')
-        state.mkdir(mode=0o700, exist_ok=True)
-    dockerfile = ROOT / 'services/admin-dev/Dockerfile'
-    revision = hashlib.sha256(dockerfile.read_bytes()).hexdigest()[:16]
-    return {
-        'DI_ADMIN_DEV_IMAGE': f'dateninfrastruktur-admin-dev:{context.values["INSTANCE_ID"]}-{revision}',
-        'DI_ADMIN_DEV_SOURCE': str(source),
-        'DI_ADMIN_DEV_STATE': str(state),
-    }
-
-
-def current_admin(containers):
-    rows = [row for row in containers
-            if row['Config']['Labels'].get('com.docker.compose.service') == 'admin'
-            and row['Config']['Labels'].get('com.docker.compose.oneoff', '').lower() != 'true']
-    if len(rows) != 1:
-        raise RuntimeError('Expected one existing Admin container. Start the configured stack first.')
-    return rows[0]
 
 
 def switch_admin(context, action):
     marker = context.runtime / ADMIN_DEV_MARKER
     containers = context.verify_resources(require_setup=True)
     saved = json.loads(marker.read_text()) if marker.exists() else None
-    if saved is not None:
-        if saved['instance'] != context.values['INSTANCE_ID'] or not IMAGE_ID.fullmatch(saved['image']):
-            raise RuntimeError('OWNERSHIP_MISMATCH: Admin development state')
-    if action == 'off' and not containers and saved is not None:
+    if saved is not None and (saved['instance'] != context.values['INSTANCE_ID'] or not IMAGE_ID.fullmatch(saved['image'])):
+        raise RuntimeError('OWNERSHIP_MISMATCH: Admin development state')
+    enable = action == 'on'
+    if not enable and not saved:
+        print('Admin uses its regular image.')
+        return
+    if not enable and not containers:
         marker.unlink()
         print('Admin development cleared. Start the regular stack.')
         return
-    if action == 'off' and saved is None:
-        print('Admin uses its regular image.')
-        return
 
-    before = current_admin(containers)
-    labels = before['Config']['Labels']
-    active = labels['com.docker.compose.project.config_files'].endswith(',' + str(ADMIN_DEV_OVERLAY))
+    admins = [row for row in containers
+              if row['Config']['Labels'].get('com.docker.compose.service') == 'admin'
+              and row['Config']['Labels'].get('com.docker.compose.oneoff', '').lower() != 'true']
+    if len(admins) != 1:
+        raise RuntimeError('Expected one existing Admin container. Start the configured stack first.')
+    before, = admins
+    active = before['Config']['Labels']['com.docker.compose.project.config_files'].endswith(
+        ',' + str(ADMIN_DEV_OVERLAY))
     running = before['State']['Running']
-    original = saved['image'] if saved else before['Image']
-    original_reference = saved['reference'] if saved else before['Config']['Image']
+    healthy = before['State'].get('Health', {}).get('Status') == 'healthy'
+    if enable and not (running and (active or healthy)):
+        raise RuntimeError('Start the configured stack and wait for a healthy Admin before switching.')
 
-    if action == 'on' and not running:
-        raise RuntimeError('Start the configured stack before enabling Admin development.')
-    if action == 'on' and not active and before['State'].get('Health', {}).get('Status') != 'healthy':
-        raise RuntimeError('The regular Admin container must be healthy before switching to development.')
+    instance = context.values['INSTANCE_ID']
+    source = ROOT.parent / 'dateninfrastruktur-admin'
+    state = context.runtime / 'admin-dev'
+    dev = {'DI_ADMIN_DEV_SOURCE': str(source), 'DI_ADMIN_DEV_STATE': str(state)}
+    if enable:
+        if not (source / 'scripts/dev_reload.py').is_file():
+            raise RuntimeError('Admin development requires the Admin source checkout')
+        if state.is_symlink():
+            raise RuntimeError('OWNERSHIP_MISMATCH: Admin development directory is a symlink')
+        state.mkdir(mode=0o700, exist_ok=True)
+        candidate = f'dateninfrastruktur-admin-dev:{instance}'
+        context.command(['build', 'admin'], admin_dev=True, overrides=dict(dev, DI_ADMIN_DEV_IMAGE=candidate))
+    else:
+        candidate = saved['image']
+
+    if not saved:
+        with tempfile.TemporaryDirectory(dir=context.runtime) as directory:
+            pending = Path(directory) / marker.name
+            write_private(pending, json.dumps({'instance': instance, 'image': before['Image']}) + '\n')
+            pending.replace(marker)
+
+    def replace(image, development, wait):
+        timeout = '900' if development else '240'
+        flags = ['--wait', '--wait-timeout', timeout] if wait else ['--no-start']
+        overrides = dict(dev, DI_ADMIN_DEV_IMAGE=image) if development else {'ADMIN_IMAGE': image}
+        context.command(['up', '--no-deps', '--no-build', '--pull', 'never', *flags, 'admin'],
+                        admin_dev=development, overrides=overrides)
 
     postgres_running = any(
         row['Config']['Labels'].get('com.docker.compose.service') == 'postgres' and row['State']['Running']
         for row in containers
     )
-    dev = development_overrides(context, require_sources=(action == 'on')) if active or action == 'on' else {}
-    if not image_available(original):
-        raise RuntimeError('Previous Admin image is missing. Restore it locally before switching.')
-    if action == 'on' and not image_available(dev['DI_ADMIN_DEV_IMAGE']):
-        context.command(['build', 'admin'], admin_dev=True, overrides=dev)
-
-    def replace(development, wait, rollback=False):
-        # Prefer the original reference when it still identifies the exact image.
-        normal_image = original
-        if not development:
-            probe = subprocess.run(
-                ['docker', 'image', 'inspect', '--format', '{{.Id}}', original_reference],
-                env=docker_env(), capture_output=True, text=True,
-            )
-            if probe.returncode == 0 and probe.stdout.strip() == original:
-                normal_image = original_reference
-        development_env = dev if not rollback else {**dev, 'DI_ADMIN_DEV_IMAGE': before['Image']}
-        flags = ['--wait', '--wait-timeout', '420'] if wait else ['--no-start']
-        context.command(
-            ['up', '--no-deps', '--no-build', '--pull', 'never', *flags, 'admin'],
-            admin_dev=development, overrides=development_env if development else {'ADMIN_IMAGE': normal_image},
-        )
-
-    if not marker.exists():
-        with tempfile.TemporaryDirectory(dir=context.runtime) as directory:
-            pending = Path(directory) / marker.name
-            write_private(pending, json.dumps({
-                'instance': context.values['INSTANCE_ID'], 'image': original, 'reference': original_reference,
-            }) + '\n')
-            pending.replace(marker)
     try:
-        replace(action == 'on', running or postgres_running)
+        replace(candidate, enable, running or postgres_running)
     except RuntimeError as error:
-        logs = context.command(['logs', '--tail', '40', 'admin'], check=False)
-        details = context.redact(logs.stdout[-6000:])
         try:
-            replace(active, running, rollback=True)
+            replace(before['Image'], active, running)
         except RuntimeError as rollback_error:
             raise RuntimeError(
-                f'Admin switch failed: {error}\n{details}\nRestoring the previous Admin failed: {rollback_error}\n'
+                f'Admin switch failed: {error}\nRestoring the previous Admin failed: {rollback_error}\n'
                 'Development state retained. Retry admin_development.py off with the same --env.'
             ) from rollback_error
-        if not active:
+        if not saved:
             marker.unlink()
-        raise RuntimeError(f'Admin switch failed. Previous Admin restored.\n{error}\n{details}') from error
+        raise RuntimeError(f'Admin switch failed. Previous Admin restored.\n{error}') from error
 
-    if action == 'off':
+    if not enable:
         marker.unlink()
-    print('Admin development enabled.' if action == 'on' else 'Regular Admin image restored.')
+    print('Admin development enabled.' if enable else 'Regular Admin image restored.')
 
 
 def main():

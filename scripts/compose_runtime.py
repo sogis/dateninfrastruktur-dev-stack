@@ -50,20 +50,31 @@ def encode_env(value):
     # backslashes and line breaks. No shell evaluation is involved.
     return json.dumps(str(value),ensure_ascii=False).replace('$','$$')
 def read_env(path):
-    path=pathlib.Path(path).resolve();source=path.read_text()
-    keys=list(dict.fromkeys(re.findall(r'^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=',source,re.M)))
-    if not keys:raise RuntimeError('Empty private configuration')
-    model={'services':{'env-reader':{'image':'scratch','environment':{k:'${'+k+'}' for k in keys}}}}
-    env={k:os.environ[k] for k in ['PATH','HOME','DOCKER_CONFIG'] if k in os.environ}
-    result=subprocess.run(['docker','compose','--env-file',str(path),'--file','-','config','--format','json'],input=json.dumps(model),env=env,cwd=ROOT,capture_output=True,text=True)
-    if result.returncode:raise RuntimeError('Invalid private dotenv configuration; details withheld')
-    # Compose's config serializer escapes dollars again for a reusable model.
-    return {k:v.replace('$$','$') for k,v in json.loads(result.stdout)['services']['env-reader']['environment'].items()}
+    # config --environment loses field boundaries for multiline values.
+    # Service env_file also resolves COMPOSE_PROJECT_NAME differently.
+    path = pathlib.Path(path).resolve()
+    keys = set(re.findall(r'^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=', path.read_text(), re.M))
+    if not keys:
+        raise RuntimeError('Empty private configuration')
+    model = {'services': {'env-reader': {'image': 'scratch', 'environment': {key: '${' + key + '}' for key in keys}}}}
+    result = subprocess.run(
+        ['docker', 'compose', '--env-file', str(path), '--file', '-', 'config', '--format', 'json'],
+        input=json.dumps(model), env=docker_env(), cwd=ROOT, capture_output=True, text=True,
+    )
+    if result.returncode:
+        raise RuntimeError('Invalid private dotenv configuration; details withheld')
+    # Compose's JSON config serializer escapes dollars for reuse as input.
+    return {key: value.replace('$$', '$') for key, value in
+            json.loads(result.stdout)['services']['env-reader']['environment'].items()}
+
+
 def write_private(path,text):
     path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.parent.chmod(0o700)
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
     with os.fdopen(fd,'w') as f:f.write(text)
     path.chmod(0o600)
+
+
 class ComposeContext:
     def __init__(self,env_file):
         path = pathlib.Path(env_file).absolute()
@@ -129,34 +140,31 @@ class ComposeContext:
             raise RuntimeError('Explicit setup is required before normal start')
         if self.values.get('DI_STORAGE_BUCKET') != 'ch.so.daten':
             raise RuntimeError('Explicit reviewed storage cutover required')
-        network = self.project + '_default'
-        for identifier in docker_output('network', 'ls', '-q', '--filter', f'name=^{network}$').split():
-            labels = json.loads(docker_output('network', 'inspect', identifier))[0].get('Labels') or {}
-            if (labels.get('com.docker.compose.project') != self.project
-                    or labels.get('com.docker.compose.network') != 'default'):
-                raise RuntimeError('OWNERSHIP_MISMATCH: default Compose network')
-        present = set(docker_output('volume', 'ls', '-q').splitlines())
+        network_format = ('{{printf "[%s,%s]" (json (.Label "com.docker.compose.project")) '
+                          '(json (.Label "com.docker.compose.network"))}}')
+        networks = docker_output('network', 'ls', '--filter', f'name=^{self.project}_default$',
+                                 '--format', network_format).splitlines()
+        if any(json.loads(row) != [self.project, 'default'] for row in networks):
+            raise RuntimeError('OWNERSHIP_MISMATCH: default Compose network')
+
         bindings = self.volume_bindings()
         if (len(set(bindings.values())) != len(bindings)
                 or not all(re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]+', name) for name in bindings.values())):
             raise RuntimeError('Persistent volumes must have valid, distinct names')
-        names = sorted(present.intersection(bindings.values()))
-        inspected = json.loads(docker_output('volume', 'inspect', *names)) if names else []
-        labels_by_name = {volume['Name']: volume.get('Labels') or {} for volume in inspected}
+        volume_format = ('{{printf "[%s,%s,%s]" (json .Name) (json (.Label "com.docker.compose.project")) '
+                         '(json (.Label "com.docker.compose.volume"))}}')
+        volumes = docker_output('volume', 'ls', '--format', volume_format).splitlines()
+        ownership = {name: (project, logical) for name, project, logical in map(json.loads, volumes)}
         for key, name in bindings.items():
             logical, external = VOLUMES[key]
             if external and self.values.get(external, '').lower() == 'true':
-                if not retained or name not in present:
+                if not retained or name not in ownership:
                     raise RuntimeError('External volume requires verified setup and an existing volume: ' + key)
-                continue
-            if name not in present:
-                if retained or require_volumes:
-                    raise RuntimeError('Configured persistent volume is missing: ' + key)
-                continue
-            labels = labels_by_name[name]
-            if (labels.get('com.docker.compose.project') != self.project
-                    or labels.get('com.docker.compose.volume') != logical):
-                raise RuntimeError('OWNERSHIP_MISMATCH: persistent volume ' + key)
+            elif name in ownership:
+                if ownership[name] != (self.project, logical):
+                    raise RuntimeError('OWNERSHIP_MISMATCH: persistent volume ' + key)
+            elif retained or require_volumes:
+                raise RuntimeError('Configured persistent volume is missing: ' + key)
         return containers
 
     def command(self,args,input=None,check=True,*,admin_dev=False,overrides=None):
@@ -199,48 +207,55 @@ def init_context(project,ports=None,test_fixture=False):
     write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     context=ComposeContext(env_file);render(context);return context
 def render(context):
-    v=context.values;r=context.runtime
-    garage=(ROOT/'services/garage/garage.toml.template').read_text()
-    for key in ['RPC_SECRET','ADMIN_TOKEN','METRICS_TOKEN']:garage=garage.replace('__'+key+'__',secrets.token_hex(32))
-    if not (r/'garage.toml').exists():write_private(r/'garage.toml',garage)
-    realm=json.loads((ROOT/'services/keycloak/realm-template.json').read_text())
-    if v['DI_TEST_FIXTURE']!='true':realm['users']=[]
-    for user in realm['users']:user['credentials'][0]['value']=v['KEYCLOAK_DEMO_PASSWORD']
-    audience={'name':'management-api audience','protocol':'openid-connect','protocolMapper':'oidc-audience-mapper','config':{'included.custom.audience':'management-api','access.token.claim':'true','id.token.claim':'false'}}
-    realm['clients']=[{'clientId':'management-gateway','enabled':True,'protocol':'openid-connect','publicClient':False,'secret':v['DI_OIDC_CLIENT_SECRET'],'standardFlowEnabled':True,'directAccessGrantsEnabled':False,'redirectUris':['http://localhost:'+v['GATEWAY_PORT']+'/oidc/callback'],'webOrigins':['http://localhost:'+v['GATEWAY_PORT']],'protocolMappers':[audience]}]
-    if v.get('DI_GRETL_DELIVERY_CLIENT_SECRET'):
-        realm['clients'].append({
-            'clientId': 'gretl-delivery', 'enabled': True, 'protocol': 'openid-connect',
-            'publicClient': False, 'secret': v['DI_GRETL_DELIVERY_CLIENT_SECRET'],
+    values, runtime = context.values, context.runtime
+    if not (runtime / 'garage.toml').exists():
+        garage = (ROOT / 'services/garage/garage.toml.template').read_text()
+        for key in ('RPC_SECRET', 'ADMIN_TOKEN', 'METRICS_TOKEN'):
+            garage = garage.replace('__' + key + '__', secrets.token_hex(32))
+        write_private(runtime / 'garage.toml', garage)
+
+    realm_file = runtime / 'realm-initial.json'
+    if not realm_file.exists():
+        realm = json.loads((ROOT / 'services/keycloak/realm-template.json').read_text())
+        fixture = values['DI_TEST_FIXTURE'] == 'true'
+        if not fixture:
+            realm['users'] = []
+        for user in realm['users']:
+            user['credentials'][0]['value'] = values['KEYCLOAK_DEMO_PASSWORD']
+        gateway = 'http://localhost:' + values['GATEWAY_PORT']
+        client = {
+            'enabled': True, 'protocol': 'openid-connect', 'publicClient': False,
             'standardFlowEnabled': False, 'directAccessGrantsEnabled': False,
-            'serviceAccountsEnabled': True, 'protocolMappers': [audience],
-        })
-    if v['DI_TEST_FIXTURE']=='true':realm['clients'].append({'clientId':'management-test','enabled':True,'protocol':'openid-connect','publicClient':True,'standardFlowEnabled':False,'directAccessGrantsEnabled':True,'protocolMappers':[audience]})
-    gateway = 'http://localhost:' + v['GATEWAY_PORT']
-    realm['clients'].append({
-        'clientId': 'jenkins-delivery', 'enabled': True, 'protocol': 'openid-connect',
-        'publicClient': False, 'secret': v['DI_JENKINS_OIDC_CLIENT_SECRET'],
-        'standardFlowEnabled': True, 'directAccessGrantsEnabled': False,
-        'redirectUris': [gateway + '/jenkins/securityRealm/finishLogin'],
-        'webOrigins': [gateway],
-        'attributes': {
-            'pkce.code.challenge.method': 'S256',
-            'post.logout.redirect.uris': gateway + '/jenkins/',
-        },
-        'protocolMappers': [audience],
-    })
-    if not (r/'realm-initial.json').exists():
-        write_private(r/'realm-initial.json',json.dumps(realm,indent=2))
-    # Non-root Keycloak reads the bind-mounted initial definition; parent remains0700.
-    (r/'realm-initial.json').chmod(0o644)
-    template=json.loads((ROOT/'services/apisix/routes.template.json').read_text())
-    def substitute(value):
-        if isinstance(value,dict):return {k:substitute(x) for k,x in value.items()}
-        if isinstance(value,list):return [substitute(x) for x in value]
-        if isinstance(value,str):
-            for k,x in v.items():value=value.replace('${'+k+'}',x)
-        return value
-    write_private(r/'apisix.yaml',json.dumps(substitute(template),indent=2)+'\n#END\n');(r/'apisix.yaml').chmod(0o644)
+            'protocolMappers': [{
+                'name': 'management-api audience', 'protocol': 'openid-connect',
+                'protocolMapper': 'oidc-audience-mapper', 'config': {
+                    'included.custom.audience': 'management-api',
+                    'access.token.claim': 'true', 'id.token.claim': 'false',
+                },
+            }],
+        }
+        realm['clients'] = [
+            dict(client, clientId='management-gateway', secret=values['DI_OIDC_CLIENT_SECRET'],
+                 standardFlowEnabled=True, redirectUris=[gateway + '/oidc/callback'], webOrigins=[gateway]),
+            dict(client, clientId='jenkins-delivery', secret=values['DI_JENKINS_OIDC_CLIENT_SECRET'],
+                 standardFlowEnabled=True, redirectUris=[gateway + '/jenkins/securityRealm/finishLogin'],
+                 webOrigins=[gateway], attributes={'pkce.code.challenge.method': 'S256',
+                                                 'post.logout.redirect.uris': gateway + '/jenkins/'}),
+        ]
+        if values.get('DI_GRETL_DELIVERY_CLIENT_SECRET'):
+            realm['clients'].append(dict(client, clientId='gretl-delivery', serviceAccountsEnabled=True,
+                                         secret=values['DI_GRETL_DELIVERY_CLIENT_SECRET']))
+        if fixture:
+            realm['clients'].append(dict(client, clientId='management-test', publicClient=True,
+                                         directAccessGrantsEnabled=True))
+        write_private(realm_file, json.dumps(realm, indent=2))
+    # Keycloak and APISIX run as non-root. The host directory remains private.
+    realm_file.chmod(0o644)
+    routes = (ROOT / 'services/apisix/routes.template.json').read_text()
+    routes = re.sub(r'\$\{([A-Z_]+)\}',
+                    lambda match: json.dumps(values[match[1]], ensure_ascii=False)[1:-1], routes)
+    write_private(runtime / 'apisix.yaml', routes + '\n#END\n')
+    (runtime / 'apisix.yaml').chmod(0o644)
 
 
 def main():

@@ -47,7 +47,7 @@ class AdminDevelopmentTest(unittest.TestCase):
     def test_failed_switch_restores_previous_image_and_removes_marker(self):
         with tempfile.TemporaryDirectory() as directory:
             image = 'sha256:' + 'a' * 64
-            context = SimpleNamespace(runtime=Path(directory), values={'INSTANCE_ID': 'fixture'}, redact=lambda value: value)
+            context = SimpleNamespace(runtime=Path(directory), values={'INSTANCE_ID': 'fixture'})
             context.verify_resources = Mock(return_value=[{
                 'Image': image,
                 'Config': {'Image': 'fixture:old', 'Labels': {
@@ -56,15 +56,15 @@ class AdminDevelopmentTest(unittest.TestCase):
                 }},
                 'State': {'Running': True, 'Health': {'Status': 'healthy'}},
             }])
-            context.command = Mock(side_effect=[RuntimeError('unhealthy'), SimpleNamespace(stdout='fixture failure'), None])
-            with patch.object(dev, 'development_overrides', return_value={'DI_ADMIN_DEV_IMAGE': 'fixture:dev'}), \
-                    patch.object(dev, 'image_available', return_value=True), \
-                    patch.object(dev.subprocess, 'run', return_value=SimpleNamespace(returncode=1)):
+            context.command = Mock(side_effect=[None, RuntimeError('unhealthy'), None])
+            source = context.runtime / 'dateninfrastruktur-admin/scripts'
+            source.mkdir(parents=True)
+            (source / 'dev_reload.py').touch()
+            with patch.object(dev, 'ROOT', context.runtime / 'stack'):
                 with self.assertRaisesRegex(RuntimeError, 'Previous Admin restored'):
                     dev.switch_admin(context, 'on')
             self.assertFalse((context.runtime / runtime.ADMIN_DEV_MARKER).exists())
-            first, logs, rollback = context.command.call_args_list
-            self.assertEqual(logs.args[0], ['logs', '--tail', '40', 'admin'])
+            _, first, rollback = context.command.call_args_list
             self.assertTrue(first.kwargs['admin_dev'])
             self.assertFalse(rollback.kwargs['admin_dev'])
             self.assertEqual(rollback.kwargs['overrides'], {'ADMIN_IMAGE': image})
