@@ -123,7 +123,7 @@ class ComposeContext:
         return True
 
     def verify_resources(self, *, require_setup=False, require_volumes=False):
-        self.verify_project()
+        containers = self.verify_project()
         retained = self.has_setup()
         if require_setup and not retained:
             raise RuntimeError('Explicit setup is required before normal start')
@@ -140,6 +140,9 @@ class ComposeContext:
         if (len(set(bindings.values())) != len(bindings)
                 or not all(re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]+', name) for name in bindings.values())):
             raise RuntimeError('Persistent volumes must have valid, distinct names')
+        names = sorted(present.intersection(bindings.values()))
+        inspected = json.loads(docker_output('volume', 'inspect', *names)) if names else []
+        labels_by_name = {volume['Name']: volume.get('Labels') or {} for volume in inspected}
         for key, name in bindings.items():
             logical, external = VOLUMES[key]
             if external and self.values.get(external, '').lower() == 'true':
@@ -150,10 +153,11 @@ class ComposeContext:
                 if retained or require_volumes:
                     raise RuntimeError('Configured persistent volume is missing: ' + key)
                 continue
-            labels = json.loads(docker_output('volume', 'inspect', name))[0].get('Labels') or {}
+            labels = labels_by_name[name]
             if (labels.get('com.docker.compose.project') != self.project
                     or labels.get('com.docker.compose.volume') != logical):
                 raise RuntimeError('OWNERSHIP_MISMATCH: persistent volume ' + key)
+        return containers
 
     def command(self,args,input=None,check=True,*,admin_dev=False,overrides=None):
         if any(arg in ['up','down','stop','restart','run','exec','rm'] for arg in args):
@@ -161,8 +165,7 @@ class ComposeContext:
         base = self.base + (['--file', str(ADMIN_DEV_OVERLAY)] if admin_dev else [])
         env = docker_env()
         env.update(self.command_overrides)
-        if self.values.get('DI_TEST_FIXTURE') == 'true':
-            env.update(DI_TEST_HOST_UID=str(os.getuid()), DI_TEST_HOST_GID=str(os.getgid()))
+        env.update(DI_TEST_HOST_UID=str(os.getuid()), DI_TEST_HOST_GID=str(os.getgid()))
         env.update(overrides or {})
         p=subprocess.run(base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
         if p.returncode and check:raise RuntimeError(self.redact((p.stdout+p.stderr)[-8000:]))
@@ -191,8 +194,7 @@ def init_context(project,ports=None,test_fixture=False):
     values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
     for kind in ['WRITER','READER']:
         values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
-    if test_fixture:
-        values.update({key: f'dateninfrastruktur-{tag}:{project}' for key, tag in LOCAL_IMAGES.items()})
+    values.update({key: f'dateninfrastruktur-{tag}:{project}' for key, tag in LOCAL_IMAGES.items()})
     runtime.mkdir(mode=0o700, parents=True)
     write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     context=ComposeContext(env_file);render(context);return context

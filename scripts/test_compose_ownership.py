@@ -29,10 +29,10 @@ class ComposeOwnershipTest(unittest.TestCase):
         if (resource, action) == ('volume', 'ls'):
             return '\n'.join(self.names)
         if (resource, action) == ('volume', 'inspect'):
-            return json.dumps([{'Labels': {
+            return json.dumps([{'Name': name, 'Labels': {
                 'com.docker.compose.project': self.label_project,
-                'com.docker.compose.volume': args[0].removeprefix('fixture_'),
-            }}])
+                'com.docker.compose.volume': name.removeprefix('fixture_'),
+            }} for name in args])
         self.fail((resource, action, args))
 
     def record_setup(self):

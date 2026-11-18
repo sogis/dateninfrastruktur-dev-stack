@@ -34,18 +34,9 @@ im Array `docker_env`.
 
 ### Images bereitstellen
 
-Eine neue Instanz nutzt die Registry-Referenzen aus `compose.yaml`. Hole die
-Images ausdrücklich vor dem Setup. Das Profil aktiviert die Setup-Images
-für diesen Pull.
-
-```bash
-"${docker_env[@]}" "${compose[@]}" --profile setup pull --policy missing
-```
-
-Für lokale Builds trage stattdessen die gewünschten lokalen Tags für
+Eine neue Instanz erhält projektspezifische lokale Tags für
 `POSTGRES_IMAGE`, `ADMIN_IMAGE`, `SODATA_IMAGE`, `SUPERSET_IMAGE`,
-`TOOL_IMAGE` und `JENKINS_IMAGE` in der privaten Datei ein. Verwende eigene
-Tags pro Instanz. Die regulären Images baut Compose. Der separate
+`TOOL_IMAGE` und `JENKINS_IMAGE`. Die regulären Images baut Compose. Der separate
 Jenkins-Build braucht den Jenkins- und Plugin-Checkout, Java 21 und Maven.
 Admin und Sodata werden im Container mit Java 25 gebaut.
 
@@ -58,6 +49,16 @@ IMAGE_NAME=dateninfrastruktur-jenkins:mein-projekt \
 ```
 
 Der Wert von `IMAGE_NAME` muss dem ausgewählten `JENKINS_IMAGE` entsprechen.
+Für einen Registry-Start trage die veröffentlichten, versionierten Referenzen
+in dieselben sechs Zeilen der privaten Datei ein. Ein auf amd64 und arm64
+verfügbarer Satz ist `ghcr.io/sogis/dateninfrastruktur-{admin,jenkins,postgres,superset,tools}:0.2.22`
+mit `ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.8` für Sodata. Setze
+jeden Wert separat ein. Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen.
+
+```bash
+"${docker_env[@]}" "${compose[@]}" --profile setup pull --policy missing
+```
+
 Bei wiederholten Starts bleibt die Image-Auswahl in der privaten Datei.
 
 ### Setup und Start
@@ -163,7 +164,9 @@ beim ersten Start seine Abhängigkeiten. Der Admin-Checkout wird schreibgeschüt
 Status und Logs sind im Entwicklungsmodus weiterhin verfügbar. Beim
 Wechsel prüft Admin seine Bereitschaft. Bei einem Fehlstart stellt das
 Werkzeug die vorherige Variante wieder her. Wenn auch das fehlschlägt,
-bleibt der Zustand für einen erneuten Aufruf von `off` erhalten.
+bleibt der Zustand für einen erneuten Aufruf von `off` erhalten. Wurde das
+gesamte Projekt bereits per Compose-Down entfernt, räumt `off` den Marker
+der geprüften Instanz auf. Danach gilt der Startblock oben.
 
 ## Katalog und Lieferung
 

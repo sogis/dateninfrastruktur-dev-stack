@@ -1,5 +1,6 @@
 """Admin development must preserve Compose ownership and restore the running image."""
 import json
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -47,7 +48,7 @@ class AdminDevelopmentTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             image = 'sha256:' + 'a' * 64
             context = SimpleNamespace(runtime=Path(directory), values={'INSTANCE_ID': 'fixture'}, redact=lambda value: value)
-            context.verify_project = Mock(return_value=[{
+            context.verify_resources = Mock(return_value=[{
                 'Image': image,
                 'Config': {'Image': 'fixture:old', 'Labels': {
                     'com.docker.compose.service': 'admin',
@@ -72,7 +73,7 @@ class AdminDevelopmentTest(unittest.TestCase):
 
     def test_missing_setup_stops_before_compose_changes(self):
         context = Mock()
-        context.has_setup.return_value = False
+        context.verify_resources.side_effect = RuntimeError('Explicit setup required')
         with tempfile.TemporaryDirectory() as directory:
             context.runtime = Path(directory)
             with patch('sys.argv', ['admin_development.py', 'on', '--env', 'fixture.env']), \
@@ -80,7 +81,32 @@ class AdminDevelopmentTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'Explicit setup'):
                     dev.main()
         context.command.assert_not_called()
-        context.verify_resources.assert_not_called()
+        context.verify_resources.assert_called_once_with(require_setup=True)
+
+    def test_regular_admin_development_uses_the_host_user(self):
+        context = runtime.ComposeContext.__new__(runtime.ComposeContext)
+        context.values = {'DI_TEST_FIXTURE': 'false'}
+        context.base = ['docker', 'compose', '--file', str(runtime.ROOT / 'compose.yaml')]
+        context.command_overrides = {}
+        with patch.object(runtime.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
+            context.command(['config', '--quiet'], admin_dev=True)
+        env = run.call_args.kwargs['env']
+        self.assertEqual(env['DI_TEST_HOST_UID'], str(os.getuid()))
+        self.assertEqual(env['DI_TEST_HOST_GID'], str(os.getgid()))
+
+    def test_off_clears_the_bound_marker_after_the_project_was_removed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            context = SimpleNamespace(runtime=Path(directory), values={'INSTANCE_ID': 'fixture'},
+                                      verify_resources=Mock(return_value=[]), command=Mock())
+            marker = context.runtime / runtime.ADMIN_DEV_MARKER
+            marker.write_text(json.dumps({'instance': 'other', 'image': 'sha256:' + 'a' * 64}))
+            with self.assertRaisesRegex(RuntimeError, 'OWNERSHIP_MISMATCH'):
+                dev.switch_admin(context, 'off')
+            self.assertTrue(marker.exists())
+            marker.write_text(json.dumps({'instance': 'fixture', 'image': 'sha256:' + 'a' * 64}))
+            dev.switch_admin(context, 'off')
+            self.assertFalse(marker.exists())
+            context.command.assert_not_called()
 
 
 if __name__ == '__main__':

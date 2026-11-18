@@ -47,23 +47,25 @@ def current_admin(containers):
 
 def switch_admin(context, action):
     marker = context.runtime / ADMIN_DEV_MARKER
-    containers = context.verify_project()
+    containers = context.verify_resources(require_setup=True)
+    saved = json.loads(marker.read_text()) if marker.exists() else None
+    if saved is not None:
+        if saved['instance'] != context.values['INSTANCE_ID'] or not IMAGE_ID.fullmatch(saved['image']):
+            raise RuntimeError('OWNERSHIP_MISMATCH: Admin development state')
+    if action == 'off' and not containers and saved is not None:
+        marker.unlink()
+        print('Admin development cleared. Start the regular stack.')
+        return
+    if action == 'off' and saved is None:
+        print('Admin uses its regular image.')
+        return
+
     before = current_admin(containers)
     labels = before['Config']['Labels']
     active = labels['com.docker.compose.project.config_files'].endswith(',' + str(ADMIN_DEV_OVERLAY))
     running = before['State']['Running']
-    if action == 'off' and not marker.exists():
-        print('Admin uses its regular image.')
-        return
-    if marker.exists():
-        saved = json.loads(marker.read_text())
-        original = saved['image']
-        original_reference = saved['reference']
-        if saved['instance'] != context.values['INSTANCE_ID'] or not IMAGE_ID.fullmatch(original):
-            raise RuntimeError('OWNERSHIP_MISMATCH: Admin development state')
-    else:
-        original = before['Image']
-        original_reference = before['Config']['Image']
+    original = saved['image'] if saved else before['Image']
+    original_reference = saved['reference'] if saved else before['Config']['Image']
 
     if action == 'on' and not running:
         raise RuntimeError('Start the configured stack before enabling Admin development.')
@@ -133,9 +135,6 @@ def main():
     context = ComposeContext(args.env)
     with (context.runtime / 'lifecycle.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        if not context.has_setup():
-            raise RuntimeError('Explicit setup is required for Admin development')
-        context.verify_resources()
         switch_admin(context, args.action)
 
 
