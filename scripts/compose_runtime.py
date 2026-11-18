@@ -50,31 +50,20 @@ def encode_env(value):
     # backslashes and line breaks. No shell evaluation is involved.
     return json.dumps(str(value),ensure_ascii=False).replace('$','$$')
 def read_env(path):
-    # config --environment loses field boundaries for multiline values.
-    # Service env_file also resolves COMPOSE_PROJECT_NAME differently.
-    path = pathlib.Path(path).resolve()
-    keys = set(re.findall(r'^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=', path.read_text(), re.M))
-    if not keys:
-        raise RuntimeError('Empty private configuration')
-    model = {'services': {'env-reader': {'image': 'scratch', 'environment': {key: '${' + key + '}' for key in keys}}}}
-    result = subprocess.run(
-        ['docker', 'compose', '--env-file', str(path), '--file', '-', 'config', '--format', 'json'],
-        input=json.dumps(model), env=docker_env(), cwd=ROOT, capture_output=True, text=True,
-    )
-    if result.returncode:
-        raise RuntimeError('Invalid private dotenv configuration; details withheld')
-    # Compose's JSON config serializer escapes dollars for reuse as input.
-    return {key: value.replace('$$', '$') for key, value in
-            json.loads(result.stdout)['services']['env-reader']['environment'].items()}
-
-
+    path=pathlib.Path(path).resolve();source=path.read_text()
+    keys=list(dict.fromkeys(re.findall(r'^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=',source,re.M)))
+    if not keys:raise RuntimeError('Empty private configuration')
+    model={'services':{'env-reader':{'image':'scratch','environment':{k:'${'+k+'}' for k in keys}}}}
+    env=docker_env()
+    result=subprocess.run(['docker','compose','--env-file',str(path),'--file','-','config','--format','json'],input=json.dumps(model),env=env,cwd=ROOT,capture_output=True,text=True)
+    if result.returncode:raise RuntimeError('Invalid private dotenv configuration; details withheld')
+    # Compose's config serializer escapes dollars again for a reusable model.
+    return {k:v.replace('$$','$') for k,v in json.loads(result.stdout)['services']['env-reader']['environment'].items()}
 def write_private(path,text):
     path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.parent.chmod(0o700)
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
     with os.fdopen(fd,'w') as f:f.write(text)
     path.chmod(0o600)
-
-
 class ComposeContext:
     def __init__(self,env_file):
         path = pathlib.Path(env_file).absolute()
