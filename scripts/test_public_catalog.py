@@ -3,14 +3,13 @@
 import base64
 import hashlib
 import json
-import os
 import re
 import time
 from uuid import uuid4
 
 from compose_runtime import ComposeContext, init_context, write_private
-from ingestion_test_runtime import cleanup, http, reserve_ports, token
-from test_management_bootstrap import FIXTURE, operator, put, sql
+from ingestion_test_runtime import cleanup, http, reserve_ports, sql, token
+from test_management_bootstrap import FIXTURE, operator, put
 
 OPEN = '/downloads/7706c1f8-f0f4-5c8b-8981-2a925be1f730/synthetic.csv'
 RESTRICTED = '/downloads/a60f1c63-d07e-484f-aadf-7c4d88c00358/restricted.csv'
@@ -235,7 +234,6 @@ def gateway_checks(context):
 def main():
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
-    os.environ.setdefault('DOCKER_CONTEXT', 'rancher-desktop')
     context = init_context('mag-s1e-public-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:

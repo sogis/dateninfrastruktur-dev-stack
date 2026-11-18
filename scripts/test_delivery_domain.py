@@ -7,7 +7,6 @@ from http.cookiejar import CookieJar, DefaultCookiePolicy
 from html.parser import HTMLParser
 import hashlib
 import json
-import os
 import re
 import time
 import urllib.parse
@@ -469,7 +468,6 @@ def main():
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
-    os.environ.setdefault('DOCKER_CONTEXT', 'rancher-desktop')
     context = init_context('mag-s1d-delivery-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:

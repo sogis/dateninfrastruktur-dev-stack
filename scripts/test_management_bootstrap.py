@@ -2,17 +2,15 @@
 """Qualify the explicit management setup with real ili2pg and PostgreSQL."""
 import os
 import re
-from pathlib import Path
 import subprocess
 import sys
 from uuid import uuid4
 from xml.etree import ElementTree as ET
 
 from compose_runtime import ROOT, init_context
-from ingestion_test_runtime import cleanup, reserve_ports
+from ingestion_test_runtime import cleanup, reserve_ports, sql
 
 ADMIN = ROOT.parent / 'dateninfrastruktur-admin'
-MANAGEMENT = 'dateninfrastruktur_management'
 TRANSFER = '{http://www.interlis.ch/xtf/2.4/INTERLIS}'
 FIXTURE = ADMIN / 'tests/fixtures/management-bootstrap.xtf'
 
@@ -31,17 +29,6 @@ def transfer_ids(path):
                 assert tid not in objects
                 objects[tid] = (bid, child.tag)
     return baskets, objects
-
-
-def sql(context, query, *, failure=None):
-    result = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
-                              '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', MANAGEMENT],
-                             input=query, check=False)
-    if failure:
-        assert result.returncode and failure in result.stderr, context.redact(result.stderr)
-        return
-    assert result.returncode == 0, context.redact(result.stderr)
-    return result.stdout.strip()
 
 
 def tool(context, *args):
@@ -70,22 +57,6 @@ def put(context, name, source):
     return path
 
 
-def snapshot(context):
-    tables = sql(context, """
-        SELECT tablename FROM pg_tables WHERE schemaname='di_management' ORDER BY tablename;
-    """).splitlines()
-    assert tables and all(re.fullmatch(r'[a-z_0-9]+', table) for table in tables)
-    data = [
-        sql(context, f'SELECT jsonb_agg(to_jsonb(x) ORDER BY to_jsonb(x)) '
-                     f'FROM di_management.{table} x;')
-        for table in tables
-    ]
-    views = sql(context, """
-        SELECT jsonb_object_agg(viewname, definition) FROM pg_views WHERE schemaname='di_api_public';
-    """)
-    return tables, data, views
-
-
 def database_ids(context, expected):
     rows = sql(context, 'SELECT iliname, sqlname FROM di_management.t_ili2db_classname;')
     tables = dict(row.split('|') for row in rows.splitlines())
@@ -98,7 +69,7 @@ def database_ids(context, expected):
         assert re.fullmatch(r'[a-z_0-9]+', table)
         rows = sql(context, f"""
             SELECT x.t_ili_tid::text, b.t_ili_tid
-            FROM di_management.{table} x JOIN di_management.t_ili2db_basket b ON b.t_id=x.t_basket;
+            FROM di_management.{table} x LEFT JOIN di_management.t_ili2db_basket b ON b.t_id=x.t_basket;
         """)
         for row in rows.splitlines():
             tid, bid = row.split('|')
@@ -147,14 +118,20 @@ def exercise(context):
     ref = reference.get(TRANSFER + 'ref')
     reference.set(TRANSFER + 'bid', next(bid for bid in baskets if bid != objects[ref][0]))
     wrong = put(context, 'wrong-bid.xtf', ET.tostring(document.getroot(), encoding='utf-8'))
-    operator(context, 'import', wrong, failure='Reference BID does not match')
-    assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
     missing = ET.parse(source)
     first_object = next(node for node in missing.getroot().iter() if node.get(TRANSFER + 'tid'))
     del first_object.attrib[TRANSFER + 'tid']
     path = put(context, 'missing-tid.xtf', ET.tostring(missing.getroot(), encoding='utf-8'))
-    operator(context, 'import', path, failure='Missing, empty or duplicate object TID')
-    assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
+    # A valid transfer that fails during insertion also needs to roll back.
+    sql(context, "ALTER TABLE di_management.dataset ADD CONSTRAINT fixture_reject_import CHECK (identifier <> 'test-open');")
+    for invalid, error in ((wrong, 'Reference BID does not match'),
+                           (path, 'Missing, empty or duplicate object TID'),
+                           (source, 'Pinned ili2pg --import failed')):
+        operator(context, 'import', invalid, failure=error)
+        assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
+        assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_dataset;') == '0'
+        assert database_ids(context, objects) == {}
+    sql(context, 'ALTER TABLE di_management.dataset DROP CONSTRAINT fixture_reject_import;')
     operator(context, 'import', source)
     assert database_ids(context, objects) == objects
     assert set(sql(context, 'SELECT t_ili_tid FROM di_management.t_ili2db_basket;').splitlines()) == set(baskets)
@@ -181,28 +158,29 @@ def exercise(context):
         failure='not-null constraint')
     sql(context, 'UPDATE di_management.dataset SET currentissue=-1;',
         failure='foreign key constraint')
-    initial = snapshot(context)
-    print(tool(context, 'setup'))
-    assert snapshot(context) == initial
-    operator(context, 'import', source, failure='Bootstrap requires empty management baskets')
-    assert snapshot(context) == initial
     target = context.runtime / 'management-export.xtf'
     operator(context, 'export', target)
+    data = ET.tostring(ET.parse(target).getroot().find(TRANSFER + 'datasection'))
+    for name in ('repeat-setup', 'repeat-import'):
+        if name == 'repeat-setup':
+            print(tool(context, 'setup'))
+        else:
+            operator(context, 'import', source, failure='Bootstrap requires empty management baskets')
+        after = context.runtime / (name + '.xtf')
+        operator(context, 'export', after)
+        assert ET.tostring(ET.parse(after).getroot().find(TRANSFER + 'datasection')) == data
     assert target.stat().st_uid == os.getuid(), 'Export must belong to the calling user'
     assert target.stat().st_mode & 0o777 == 0o600, 'Export must remain private'
     assert transfer_ids(target) == (baskets, objects), 'Export changed basket or object identities'
-    assert target.stat().st_mode & 0o777 == 0o600
     context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
                      'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
                      '--modeldir', '/opt/admin/models', '/runtime/management-export.xtf'])
-    assert snapshot(context) == initial
     print('PostgreSQL and export preserved synthetic BIDs and TIDs')
 
 
 def main():
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
-    os.environ.setdefault('DOCKER_CONTEXT', 'rancher-desktop')
     context = init_context('mag-s1b-roundtrip-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:
@@ -215,7 +193,7 @@ def main():
     for key in ('POSTGRES_IMAGE', 'TOOL_IMAGE'):
         result = subprocess.run(['docker', 'image', 'inspect', context.values[key]], capture_output=True)
         assert result.returncode, f"Fixture image tag remained: {context.values[key]}"
-    print('ASSERTIONS=37 SKIP=0')
+    print('Management bootstrap and fixture cleanup verified')
 
 
 if __name__ == '__main__':

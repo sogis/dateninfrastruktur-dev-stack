@@ -14,7 +14,9 @@ keinen eigenen Hostport.
 
 Für den Betrieb werden Docker mit Compose/Buildx und Python 3.9 oder neuer
 benötigt. Für den GRETL-6-Lieferweg die eigenen Images aus den
-Schwestercheckouts bauen.
+Schwestercheckouts bauen. Die Befehle und Integrationstests verwenden
+den aktiven Docker-Kontext. Mit `DOCKER_CONTEXT=<name>` lässt sich der
+Kontext für einen einzelnen Aufruf wählen.
 
 ```sh
 ./scripts/init.sh
@@ -96,8 +98,8 @@ dieselbe interne API. Der Stack prüft die Bereitschaft des Jenkins-Diensts.
 Der öffentliche Einstieg für CSV-Lieferungen ist `/anlieferung`.
 
 Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt. Die
-Testbereinigung entfernt die projektspezifischen lokalen Image-Tags
-nach dem Compose-Down. Der Jenkins-Image-Build verwendet den Gradle-Resolver
+Testbereinigung entfernt nach dem Compose-Down die geprüften
+projektspezifischen Volumes und lokalen Image-Tags. Der Jenkins-Image-Build verwendet den Gradle-Resolver
 für `ch.so.agi.gretl:gretl-dist:6.0.0-SNAPSHOT:bin@zip` aus
 `https://jars.interlis.guru/snapshots`. Das Image enthält das lokale
 Jenkins-Plugin und den festen Job, den Jenkins mit der GRETL-CLI ausführt.

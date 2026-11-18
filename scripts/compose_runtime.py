@@ -88,15 +88,6 @@ def render(context):
     garage=(ROOT/'services/garage/garage.toml.template').read_text()
     for key in ['RPC_SECRET','ADMIN_TOKEN','METRICS_TOKEN']:garage=garage.replace('__'+key+'__',secrets.token_hex(32))
     if not (r/'garage.toml').exists():write_private(r/'garage.toml',garage)
-    def storage_conf(kind):
-        key=v.get('DI_STORAGE_'+kind+'_ACCESS_KEY');secret=v.get('DI_STORAGE_'+kind+'_SECRET_KEY')
-        if not key or not secret:raise RuntimeError('Explicit dedicated storage '+kind.lower()+' credential missing; run reviewed setup')
-        return '\n'.join(['[storage]','type = s3','provider = Other','env_auth = false','access_key_id = '+key,'secret_access_key = '+secret,'endpoint = http://garage:3900','region = garage','force_path_style = true','no_check_bucket = true',''])
-    # Fresh init precedes explicit Garage setup. Never render an empty or more privileged fallback.
-    if v.get('DI_STORAGE_READER_ACCESS_KEY') or v.get('DI_STORAGE_READER_SECRET_KEY'):
-        write_private(r/'origin.conf',storage_conf('READER'))
-    if v.get('DI_STORAGE_WRITER_ACCESS_KEY') or v.get('DI_STORAGE_WRITER_SECRET_KEY'):
-        write_private(r/'operator.conf',storage_conf('WRITER'))
     realm=json.loads((ROOT/'services/keycloak/realm-template.json').read_text())
     if v['DI_TEST_FIXTURE']!='true':realm['users']=[]
     for user in realm['users']:user['credentials'][0]['value']=v['KEYCLOAK_DEMO_PASSWORD']
@@ -140,12 +131,3 @@ def update_context(context,updates):
     values={**context.values,**updates}
     write_private(context.env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     return ComposeContext(context.env_file)
-
-def setup_context(context):
-    context.command(['up','--no-build','-d','--wait','--wait-timeout','240','postgres','garage','clickhouse'])
-    for service in ['postgres-init','management-setup','garage-setup','clickhouse-init']:
-        context.command(['--profile','setup','run','--rm','--no-deps',service])
-        if service=='garage-setup':
-            context.values=read_env(context.env_file)
-            render(context)
-    print('Explicit setup complete; no application demo seed')

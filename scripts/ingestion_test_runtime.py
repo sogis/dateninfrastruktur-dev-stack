@@ -12,8 +12,17 @@ def reserve_ports():
         return dict(zip(['GATEWAY_PORT','KEYCLOAK_PORT','SUPERSET_PORT','CLICKHOUSE_HTTP_PORT','CLICKHOUSE_NATIVE_PORT'],[s.getsockname()[1] for s in sockets]))
     finally:
         for s in sockets:s.close()
-def sql(c,query,db='dateninfrastruktur_management',service='postgres'):
-    return c.command(['exec','-T',service,'psql','-X','-q','-At','-U','postgres','-d',db,'-v','ON_ERROR_STOP=1'],query).stdout.strip()
+def sql(context, query, *, failure=None):
+    result = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
+                              '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'dateninfrastruktur_management'],
+                             input=query, check=False)
+    if failure:
+        assert result.returncode and failure in result.stderr, context.redact(result.stderr)
+        return
+    assert result.returncode == 0, context.redact(result.stderr)
+    return result.stdout.strip()
+
+
 def http(url,token=None,method='GET',headers=None,data=None):
     h=dict(headers or {})
     if token:h['Authorization']='Bearer '+token
@@ -33,14 +42,20 @@ def cleanup(c):
     c.verify_project()
     ids=subprocess.check_output(['docker','volume','ls','-q','--filter','label=com.docker.compose.project='+c.project],text=True).split()
     expected={c.values[k] for k in ['POSTGRES_VOLUME','GARAGE_META_VOLUME','GARAGE_DATA_VOLUME','JENKINS_VOLUME','CLICKHOUSE_DATA_VOLUME','CLICKHOUSE_LOG_VOLUME','SUPERSET_VOLUME']}
-    for name in ids:
-        v=json.loads(subprocess.check_output(['docker','volume','inspect',name],text=True))[0]
-        assert name in expected and v['Labels']['com.docker.compose.project']==c.project
-    expected_objects={name:json.loads(subprocess.check_output(['docker','volume','inspect',name],text=True))[0] for name in ids}
-    c.command(['--profile','*','down'])
-    for name in ids:
-        current=json.loads(subprocess.check_output(['docker','volume','inspect',name],text=True))[0]
-        assert current==expected_objects[name] and current['Labels']['com.docker.compose.project']==c.project
+    volumes = json.loads(subprocess.check_output(['docker', 'volume', 'inspect', *ids], text=True)) if ids else []
+    for volume in volumes:
+        name = volume['Name']
+        if (name not in expected
+                or (volume.get('Labels') or {}).get('com.docker.compose.project') != c.project):
+            raise RuntimeError('Refusing to remove an unowned fixture volume: ' + name)
+    # Some volumes are external, and Compose resolves named volumes even
+    # when they carry another project's labels. Remove only the inspected set.
+    c.command(['--profile', '*', 'down'])
+    for volume in volumes:
+        name = volume['Name']
+        current = json.loads(subprocess.check_output(['docker', 'volume', 'inspect', name], text=True))[0]
+        if current != volume:
+            raise RuntimeError('Fixture volume identity changed: ' + name)
         subprocess.run(['docker','volume','rm',name],check=True,capture_output=True)
     # A configured shared or release tag is outside the fixture's ownership.
     images = []

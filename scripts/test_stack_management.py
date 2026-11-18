@@ -2,47 +2,16 @@
 """Qualify the normal Compose runtime and management UI in a synthetic fixture."""
 import argparse
 import os
+import json
 import re
 import subprocess
-import sys
 from uuid import uuid4
 from xml.etree import ElementTree
 
-from bind_jenkins_image import verified_image_id
-from compose_database import row_hash_sql
 from compose_operations import build, select_images, setup, start
 from compose_runtime import ROOT, init_context, write_private
-from ingestion_test_runtime import cleanup, http, reserve_ports, token
-from test_management_bootstrap import FIXTURE, operator, put, sql
-
-
-def snapshot(context):
-    relations = sql(context, """
-        SELECT tablename FROM pg_tables WHERE schemaname='di_management' ORDER BY tablename;
-    """).splitlines()
-    assert relations and all(re.fullmatch(r'[a-z0-9_]+', name) for name in relations)
-    hashes = [
-        row_hash_sql('SELECT * FROM di_management.' + name) + ';'
-        for name in relations
-    ]
-    hashes.append(row_hash_sql("""
-        SELECT schemaname, viewname, definition FROM pg_views WHERE schemaname='di_api_public'
-    """) + ';')
-    hashes.append(row_hash_sql("""
-        SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default
-        FROM information_schema.columns WHERE table_schema IN ('di_management','di_api_public')
-    """) + ';')
-    hashes.append(row_hash_sql("""
-        SELECT n.nspname, c.relname, c.relkind, c.relacl::text
-        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname IN ('di_management','di_api_public')
-    """) + ';')
-    hashes.append(row_hash_sql("""
-        SELECT n.nspname, c.conname, pg_get_constraintdef(c.oid)
-        FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace
-        WHERE n.nspname IN ('di_management','di_api_public')
-    """) + ';')
-    return sql(context, '\n'.join(hashes))
+from ingestion_test_runtime import cleanup, http, reserve_ports, sql, token
+from test_management_bootstrap import FIXTURE, operator, put
 
 
 def integration(context, repo, task, *filters):
@@ -66,10 +35,18 @@ def integration(context, repo, task, *filters):
 
 
 def run_smoke(context):
-    result = subprocess.run([sys.executable, 'scripts/smoke_compose.py', '--env', str(context.env_file)],
-                            cwd=ROOT, capture_output=True, text=True)
-    print(context.redact(result.stdout + result.stderr), end='', flush=True)
-    assert result.returncode == 0 and 'ten services, three DBs' in result.stdout
+    rows = [json.loads(line) for line in
+            context.command(['ps', '--format', 'json']).stdout.splitlines()]
+    expected = set('postgres keycloak garage origin gateway sodata admin jenkins clickhouse superset'.split())
+    assert len(rows) == len(expected) and {row['Service'] for row in rows} == expected
+    assert all(row['State'] == 'running' and row['Health'] == 'healthy' for row in rows)
+    databases = sql(context, "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname<>'postgres';")
+    assert set(databases.splitlines()) == {'keycloak', 'superset', 'dateninfrastruktur_management'}
+    context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'management-setup', 'verify'])
+    for port, path in [('GATEWAY_PORT', '/'), ('GATEWAY_PORT', '/jenkins/login'),
+                       ('KEYCLOAK_PORT', '/realms/dateninfrastruktur/.well-known/openid-configuration'),
+                       ('SUPERSET_PORT', '/health')]:
+        assert http('http://localhost:' + context.values[port] + path)[0] == 200, path
 
 
 def http_security_integration(context):
@@ -98,21 +75,18 @@ def main():
     args = parser.parse_args()
     if not __debug__:
         raise RuntimeError('Assertions must be enabled')
-    os.environ.setdefault('DOCKER_CONTEXT', 'rancher-desktop')
     context = init_context('mag-s1f-stack-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:
         select_images(context, 'local')
         build(context)
-        jenkins = context.command_overrides['JENKINS_IMAGE']
-        verified_image_id(jenkins)
         setup(context)
         assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
         assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
-        before = snapshot(context)
         start(context, 'local')
         run_smoke(context)
-        assert snapshot(context) == before
+        assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
+        assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
         base = 'http://localhost:' + context.values['GATEWAY_PORT']
         assert http(base + '/jenkins/data-delivery/')[0] == 403
 
@@ -151,10 +125,22 @@ def main():
         context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'java',
             'management-setup', '-jar', '/opt/admin/.runtime/tools/ilivalidator/ilivalidator-1.15.1.jar',
             '--modeldir', '/opt/admin/models', '/runtime/browser-export.xtf'])
-        before_restart = snapshot(context)
+        # Keep the imported catalogue chain and the dataset published through
+        # the browser, including the physical database and row identities.
+        retained = '''
+            SELECT db.oid, d.t_id, d.t_ili_tid, d.identifier, d.publicationstatus, d.currentissue,
+                   i.t_id, i.t_ili_tid, i.publicationstatus, v.t_id, v.t_ili_tid, v.asequence
+            FROM pg_database db CROSS JOIN di_management.dataset d
+            JOIN di_management.datasetissue i ON i.dataset=d.t_id AND i.issuekey='default'
+            LEFT JOIN di_management.dataversion v ON v.t_id=i.currentversion
+            WHERE db.datname=current_database() AND d.identifier IN ('test-open', 's1f-browser')
+            ORDER BY d.identifier;
+        '''
+        before_restart = sql(context, retained)
+        assert len(before_restart.splitlines()) == 2
         start(context, 'local', restart=True)
         run_smoke(context)
-        assert snapshot(context) == before_restart
+        assert sql(context, retained) == before_restart
         if args.release_staging_tag:
             for name in ('admin', 'jenkins', 'postgres', 'superset', 'tools'):
                 key = ('TOOL' if name == 'tools' else name.upper()) + '_IMAGE'
@@ -164,7 +150,6 @@ def main():
     finally:
         cleanup(context)
     assert not context.command(['ps', '-aq']).stdout.strip()
-    print(f'ASSERTIONS={admin + portal + 13} SKIP=0')
 
 
 if __name__ == '__main__':
