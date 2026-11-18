@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Public lifecycle: one explicit Compose context, no legacy runtime or implicit seed."""
-import argparse,fcntl,json,pathlib,sys,os,subprocess,tempfile
+import argparse,fcntl,json,pathlib,sys,os,re,subprocess,tempfile
 from compose_runtime import ADMIN_DEV_MARKER,ROOT,ComposeContext,init_context,read_env,render,write_private
 ACTIVE=ROOT/'.runtime/active-compose.json'
 
@@ -54,7 +54,7 @@ def build(c):
     c.command(['build', *services])
     with tempfile.TemporaryDirectory(prefix='jenkins-build-', dir=c.runtime) as work:
         result = subprocess.run(
-            [str(ROOT/'scripts/build-jenkins-local.sh'), str(pathlib.Path(work)/'context')],
+            [str(ROOT.parent/'dateninfrastruktur-jenkins-dev/bin/build-image.sh'), str(pathlib.Path(work)/'context')],
             cwd=ROOT, env={**os.environ, 'IMAGE_NAME': c.command_overrides['JENKINS_IMAGE']},
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
@@ -76,6 +76,19 @@ def prepare_images(c, mode, profiles=()):
             raise RuntimeError(f'Image unavailable: {reference}\n' + c.redact(result.stderr[-2000:]))
     return services['jenkins']['image']
 
+def jenkins_image_id(reference):
+    result = subprocess.run(
+        ['docker', 'image', 'inspect', '--format',
+         '{{.Id}} {{index .Config.Labels "io.dateninfrastruktur.gretl.version"}}', '--', reference],
+        capture_output=True, text=True,
+    )
+    fields = result.stdout.split()
+    if (result.returncode or len(fields) != 2 or not re.fullmatch(r'sha256:[0-9a-f]{64}', fields[0])
+            or fields[1] != '6.0.0-SNAPSHOT'):
+        raise RuntimeError('Expected a local Jenkins image with GRETL 6.0.0-SNAPSHOT')
+    return fields[0]
+
+
 def saved_mode(c):
     marker = c.runtime/'startup-image-mode'
     mode = marker.read_text().strip() if marker.exists() else 'registry'
@@ -84,15 +97,11 @@ def saved_mode(c):
     return mode
 
 def start(c, mode, restart=False):
-    from bind_jenkins_image import verified_image_id
-    jenkins_id = verified_image_id(prepare_images(c, mode))
+    jenkins_id = jenkins_image_id(prepare_images(c, mode))
     if restart:
         c.command(['stop', '--timeout', '60'])
-    c.command(['up', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '300'])
-    container = c.command(['ps', '-q', 'jenkins']).stdout.strip()
-    actual_id = subprocess.check_output(['docker', 'inspect', '--format', '{{.Image}}', container], text=True).strip()
-    if actual_id != jenkins_id:
-        raise RuntimeError('Jenkins container image differs from the selected image ID')
+    c.command(['up', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '300'],
+              overrides={'JENKINS_IMAGE': jenkins_id})
     marker = c.runtime/'startup-image-mode'
     with tempfile.NamedTemporaryFile(mode='w', dir=c.runtime, delete=False) as pending:
         pending.write(mode + '\n')
@@ -100,6 +109,7 @@ def start(c, mode, restart=False):
         pathlib.Path(pending.name).replace(marker)
     finally:
         pathlib.Path(pending.name).unlink(missing_ok=True)
+    return jenkins_id
 
 def volume_bindings(c):
     return {k:c.values[k] for k in ['POSTGRES_VOLUME','GARAGE_META_VOLUME','GARAGE_DATA_VOLUME','JENKINS_VOLUME','CLICKHOUSE_DATA_VOLUME','CLICKHOUSE_LOG_VOLUME','SUPERSET_VOLUME']}
