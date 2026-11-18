@@ -259,6 +259,7 @@ def main():
         return
     context = ComposeContext(args.env)
     if args.action == 'redact':
+        context.verify_project()
         for line in sys.stdin:
             print(context.redact(line), end='', flush=True)
         return

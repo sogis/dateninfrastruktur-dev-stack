@@ -1,6 +1,8 @@
 """The direct-operation preflight must refuse unknown or incomplete instances."""
+import io
 import json
 from pathlib import Path
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -66,6 +68,17 @@ class ComposeOwnershipTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'Known management database is missing'):
                 setup(self.context)
         self.assertEqual(self.context.command.call_count, 2)
+
+    def test_log_filter_refuses_to_emit_logs_from_a_foreign_project(self):
+        context = Mock()
+        context.verify_project.side_effect = RuntimeError('OWNERSHIP_MISMATCH')
+        with patch.object(runtime, 'ComposeContext', return_value=context), \
+                patch.object(sys, 'argv', ['compose_runtime.py', 'redact', '--env', 'fixture.env']), \
+                patch.object(sys, 'stdin', io.StringIO('foreign log\n')), \
+                patch.object(sys, 'stdout', io.StringIO()) as output:
+            with self.assertRaisesRegex(RuntimeError, 'OWNERSHIP_MISMATCH'):
+                runtime.main()
+            self.assertEqual(output.getvalue(), '')
 
     def test_jenkins_candidate_requires_label_and_returns_immutable_id(self):
         identifier = 'sha256:' + 'a' * 64
