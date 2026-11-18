@@ -5,11 +5,12 @@ import os
 import json
 import re
 import subprocess
+import tempfile
 from uuid import uuid4
 from xml.etree import ElementTree
 
-from compose_operations import build, select_images, setup, start
-from compose_runtime import ROOT, init_context, write_private
+from compose_runtime import ROOT, init_context, jenkins_image_id, write_private
+from setup_instance import setup
 from ingestion_test_runtime import cleanup, http, reserve_ports, sql, token
 from test_management_bootstrap import FIXTURE, operator, put
 
@@ -78,12 +79,24 @@ def main():
     context = init_context('mag-s1f-stack-' + uuid4().hex[:12], reserve_ports(), True)
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:
-        select_images(context, 'local')
-        build(context)
+        context.command(['--profile', 'build-tools', 'build', 'postgres', 'admin', 'sodata',
+                         'management-tool-build', 'test-tool-build', 'superset'])
+        context.command(['pull', '--policy', 'missing', 'garage', 'clickhouse', 'keycloak', 'origin', 'gateway'])
+        with tempfile.TemporaryDirectory(dir=context.runtime) as directory:
+            result = subprocess.run(
+                [str(ROOT.parent / 'dateninfrastruktur-jenkins-dev/bin/build-image.sh'), directory + '/context'],
+                env={**os.environ, 'IMAGE_NAME': context.values['JENKINS_IMAGE']},
+                capture_output=True, text=True,
+            )
+            if result.returncode:
+                raise RuntimeError(context.redact((result.stdout + result.stderr)[-8000:]))
         setup(context)
+        context.verify_resources(require_setup=True)
         assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
         assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
-        jenkins_id = start(context, 'local')
+        jenkins_id = jenkins_image_id(context.values['JENKINS_IMAGE'])
+        context.command(['up', '-d', '--wait', '--wait-timeout', '300', '--no-build', '--pull', 'never'],
+                        overrides={'JENKINS_IMAGE': jenkins_id})
         run_smoke(context)
         assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
         assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
@@ -138,14 +151,18 @@ def main():
         '''
         before_restart = sql(context, retained)
         assert len(before_restart.splitlines()) == 2
-        restarted_jenkins_id = start(context, 'local', restart=True)
-        assert restarted_jenkins_id == jenkins_id
+        context.verify_resources(require_setup=True)
+        context.command(['stop', '--timeout', '60'])
+        context.command(['up', '-d', '--wait', '--wait-timeout', '300', '--no-build', '--pull', 'never'],
+                        overrides={'JENKINS_IMAGE': jenkins_id})
+        assert any(row['Image'] == jenkins_id for row in context.verify_project()
+                   if row['Config']['Labels']['com.docker.compose.service'] == 'jenkins')
         run_smoke(context)
         assert sql(context, retained) == before_restart
         if args.release_staging_tag:
             for name in ('admin', 'jenkins', 'postgres', 'superset', 'tools'):
                 key = ('TOOL' if name == 'tools' else name.upper()) + '_IMAGE'
-                source = jenkins_id if name == 'jenkins' else context.command_overrides[key]
+                source = jenkins_id if name == 'jenkins' else context.values[key]
                 subprocess.run(['docker', 'tag', source,
                                 f'dateninfrastruktur-{name}:{args.release_staging_tag}'], check=True)
         print(f'ADMIN_INTEGRATION={admin} SODATA_INTEGRATION={portal} SKIP=0', flush=True)

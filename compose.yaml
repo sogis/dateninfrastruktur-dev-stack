@@ -73,7 +73,7 @@
       "image": "${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:26.8}",
       "restart": "unless-stopped",
       "environment": {
-        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}"
+        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Generate and select the private runtime.env first}"
       },
       "ports": [
         "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-18123}:8123",
@@ -163,9 +163,9 @@
         "KC_DB": "postgres",
         "KC_DB_URL": "jdbc:postgresql://postgres:5432/keycloak",
         "KC_DB_USERNAME": "keycloak",
-        "KC_DB_PASSWORD": "${KEYCLOAK_DB_PASSWORD:?Run ./scripts/init.sh first}",
+        "KC_DB_PASSWORD": "${KEYCLOAK_DB_PASSWORD:?Generate and select the private runtime.env first}",
         "KC_BOOTSTRAP_ADMIN_USERNAME": "admin",
-        "KC_BOOTSTRAP_ADMIN_PASSWORD": "${KEYCLOAK_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
+        "KC_BOOTSTRAP_ADMIN_PASSWORD": "${KEYCLOAK_ADMIN_PASSWORD:?Generate and select the private runtime.env first}",
         "KC_HTTP_ENABLED": "true",
         "KC_HOSTNAME": "http://localhost:${KEYCLOAK_PORT:-18080}",
         "KC_HOSTNAME_STRICT": "false",
@@ -213,20 +213,21 @@
         }
       },
       "environment": {
-        "SUPERSET_SECRET_KEY": "${SUPERSET_SECRET_KEY:?Run ./scripts/init.sh first}",
+        "SUPERSET_SECRET_KEY": "${SUPERSET_SECRET_KEY:?Generate and select the private runtime.env first}",
         "SUPERSET_ADMIN_USERNAME": "admin",
-        "SUPERSET_ADMIN_PASSWORD": "${SUPERSET_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
+        "SUPERSET_ADMIN_PASSWORD": "${SUPERSET_ADMIN_PASSWORD:?Generate and select the private runtime.env first}",
         "SUPERSET_ADMIN_EMAIL": "admin@example.invalid",
         "SUPERSET_DB_HOST": "postgres",
         "SUPERSET_DB_PORT": "5432",
         "SUPERSET_DB_NAME": "superset",
         "SUPERSET_DB_USER": "superset",
-        "SUPERSET_DB_PASSWORD": "${SUPERSET_DB_PASSWORD:?Run ./scripts/init.sh first}",
+        "SUPERSET_DB_PASSWORD": "${SUPERSET_DB_PASSWORD:?Generate and select the private runtime.env first}",
         "CLICKHOUSE_HOST": "clickhouse",
+        "DI_TEST_FIXTURE": "${DI_TEST_FIXTURE}",
         "CLICKHOUSE_HTTP_PORT": "8123",
         "CLICKHOUSE_DB": "foundation",
         "CLICKHOUSE_SUPERSET_USER": "${CLICKHOUSE_SUPERSET_USER:-superset_reader}",
-        "CLICKHOUSE_SUPERSET_PASSWORD": "${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Run ./scripts/init.sh first}"
+        "CLICKHOUSE_SUPERSET_PASSWORD": "${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Generate and select the private runtime.env first}"
       },
       "ports": [
         "127.0.0.1:${SUPERSET_PORT:-18088}:8088"
@@ -526,12 +527,13 @@
       },
       "environment": {
         "CLICKHOUSE_HOST": "clickhouse",
-        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Run ./scripts/init.sh first}",
+        "DI_TEST_FIXTURE": "${DI_TEST_FIXTURE}",
+        "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Generate and select the private runtime.env first}",
         "DI_CH_LOADER_PASSWORD": "${DI_CH_LOADER_PASSWORD}",
         "CLICKHOUSE_ADMIN_USER": "${CLICKHOUSE_ADMIN_USER:-ch_admin}",
-        "CLICKHOUSE_ADMIN_PASSWORD": "${CLICKHOUSE_ADMIN_PASSWORD:?Run ./scripts/init.sh first}",
-        "CLICKHOUSE_TEST_READER_PASSWORD": "${CLICKHOUSE_TEST_READER_PASSWORD:?Run ./scripts/init.sh first}",
-        "CLICKHOUSE_SUPERSET_READER_PASSWORD": "${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Run ./scripts/init.sh first}"
+        "CLICKHOUSE_ADMIN_PASSWORD": "${CLICKHOUSE_ADMIN_PASSWORD:?Generate and select the private runtime.env first}",
+        "CLICKHOUSE_TEST_READER_PASSWORD": "${CLICKHOUSE_TEST_READER_PASSWORD:?Generate and select the private runtime.env first}",
+        "CLICKHOUSE_SUPERSET_READER_PASSWORD": "${CLICKHOUSE_SUPERSET_READER_PASSWORD:?Generate and select the private runtime.env first}"
       },
       "volumes": [
         "./services/clickhouse/init:/init:ro"

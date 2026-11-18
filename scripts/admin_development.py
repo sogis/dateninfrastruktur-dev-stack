@@ -1,18 +1,21 @@
 """Switch the Admin service in the existing Compose project."""
+import argparse
+import fcntl
 import hashlib
 import json
 from pathlib import Path
 import re
 import subprocess
 import tempfile
+import sys
 
-from compose_runtime import ADMIN_DEV_MARKER, ADMIN_DEV_OVERLAY, ROOT, write_private
+from compose_runtime import ADMIN_DEV_MARKER, ADMIN_DEV_OVERLAY, ROOT, ComposeContext, docker_env, write_private
 
 IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
 
 
 def image_available(reference):
-    return subprocess.run(['docker', 'image', 'inspect', reference], capture_output=True).returncode == 0
+    return subprocess.run(['docker', 'image', 'inspect', reference], env=docker_env(), capture_output=True).returncode == 0
 
 
 def development_overrides(context, *, require_sources):
@@ -44,23 +47,25 @@ def current_admin(containers):
 
 def switch_admin(context, action):
     marker = context.runtime / ADMIN_DEV_MARKER
-    containers = context.verify_project()
+    containers = context.verify_resources(require_setup=True)
+    saved = json.loads(marker.read_text()) if marker.exists() else None
+    if saved is not None:
+        if saved['instance'] != context.values['INSTANCE_ID'] or not IMAGE_ID.fullmatch(saved['image']):
+            raise RuntimeError('OWNERSHIP_MISMATCH: Admin development state')
+    if action == 'off' and not containers and saved is not None:
+        marker.unlink()
+        print('Admin development cleared. Start the regular stack.')
+        return
+    if action == 'off' and saved is None:
+        print('Admin uses its regular image.')
+        return
+
     before = current_admin(containers)
     labels = before['Config']['Labels']
     active = labels['com.docker.compose.project.config_files'].endswith(',' + str(ADMIN_DEV_OVERLAY))
     running = before['State']['Running']
-    if action == 'off' and not marker.exists():
-        print('Admin uses its regular image.')
-        return
-    if marker.exists():
-        saved = json.loads(marker.read_text())
-        original = saved['image']
-        original_reference = saved['reference']
-        if saved['instance'] != context.values['INSTANCE_ID'] or not IMAGE_ID.fullmatch(original):
-            raise RuntimeError('OWNERSHIP_MISMATCH: Admin development state')
-    else:
-        original = before['Image']
-        original_reference = before['Config']['Image']
+    original = saved['image'] if saved else before['Image']
+    original_reference = saved['reference'] if saved else before['Config']['Image']
 
     if action == 'on' and not running:
         raise RuntimeError('Start the configured stack before enabling Admin development.')
@@ -83,7 +88,7 @@ def switch_admin(context, action):
         if not development:
             probe = subprocess.run(
                 ['docker', 'image', 'inspect', '--format', '{{.Id}}', original_reference],
-                capture_output=True, text=True,
+                env=docker_env(), capture_output=True, text=True,
             )
             if probe.returncode == 0 and probe.stdout.strip() == original:
                 normal_image = original_reference
@@ -111,7 +116,7 @@ def switch_admin(context, action):
         except RuntimeError as rollback_error:
             raise RuntimeError(
                 f'Admin switch failed: {error}\n{details}\nRestoring the previous Admin failed: {rollback_error}\n'
-                'Development state retained. Retry dev.sh admin off.'
+                'Development state retained. Retry admin_development.py off with the same --env.'
             ) from rollback_error
         if not active:
             marker.unlink()
@@ -120,3 +125,23 @@ def switch_admin(context, action):
     if action == 'off':
         marker.unlink()
     print('Admin development enabled.' if action == 'on' else 'Regular Admin image restored.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=('on', 'off'))
+    parser.add_argument('--env', required=True)
+    args = parser.parse_args()
+    context = ComposeContext(args.env)
+    with (context.runtime / 'lifecycle.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        switch_admin(context, args.action)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, ValueError, KeyError):
+        sys.exit('Invalid or inaccessible private Compose configuration')
+    except RuntimeError as error:
+        sys.exit(str(error))

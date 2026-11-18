@@ -1,7 +1,7 @@
 """Shared isolated MA-G test transport and resource teardown."""
 import json,re,socket,subprocess,urllib.error,urllib.parse,urllib.request
 
-from compose_operations import LOCAL_IMAGES
+from compose_runtime import LOCAL_IMAGES
 
 
 def reserve_ports():
@@ -41,7 +41,7 @@ def cleanup(c):
         raise RuntimeError('Refusing to clean a non-fixture Compose project')
     c.verify_project()
     ids=subprocess.check_output(['docker','volume','ls','-q','--filter','label=com.docker.compose.project='+c.project],text=True).split()
-    expected={c.values[k] for k in ['POSTGRES_VOLUME','GARAGE_META_VOLUME','GARAGE_DATA_VOLUME','JENKINS_VOLUME','CLICKHOUSE_DATA_VOLUME','CLICKHOUSE_LOG_VOLUME','SUPERSET_VOLUME']}
+    expected = set(c.volume_bindings().values())
     volumes = json.loads(subprocess.check_output(['docker', 'volume', 'inspect', *ids], text=True)) if ids else []
     for volume in volumes:
         name = volume['Name']
