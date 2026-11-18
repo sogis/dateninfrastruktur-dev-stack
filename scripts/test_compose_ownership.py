@@ -91,6 +91,14 @@ class ComposeOwnershipTest(unittest.TestCase):
                 setup(self.context)
         self.assertEqual(self.context.command.call_count, 2)
 
+    def test_setup_refuses_to_replace_missing_garage_identity(self):
+        self.record_setup()
+        self.context.command = Mock(side_effect=[None, SimpleNamespace(stdout='1\n'), None])
+        with patch.object(runtime, 'docker_output', side_effect=self.docker):
+            with self.assertRaisesRegex(RuntimeError, 'Private Garage configuration is missing'):
+                setup(self.context)
+        self.assertFalse((self.context.runtime / 'garage.toml').exists())
+
     def test_log_filter_refuses_to_emit_logs_from_a_foreign_project(self):
         context = Mock()
         context.verify_project.side_effect = RuntimeError('OWNERSHIP_MISMATCH')

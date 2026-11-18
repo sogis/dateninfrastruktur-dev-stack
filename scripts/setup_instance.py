@@ -4,7 +4,7 @@ import fcntl
 import json
 import sys
 
-from compose_runtime import ADMIN_DEV_MARKER, VOLUMES, ComposeContext, docker_output, read_env, render, write_private
+from compose_runtime import ADMIN_DEV_MARKER, VOLUMES, ComposeContext, docker_output, render, write_private
 
 
 def setup(context):
@@ -27,10 +27,12 @@ def setup(context):
     else:
         raise RuntimeError('Known management database is missing; restore it before setup')
 
-    render(context)
+    if not (context.runtime / 'garage.toml').is_file():
+        raise RuntimeError('Private Garage configuration is missing; restore it before setup')
     context.command([*up, 'garage'])
     context.command([*run, 'garage-setup'])
-    context.values = read_env(context.env_file)
+    context.values = ComposeContext(context.env_file).values
+    render(context)
     if not retained:
         context.command([*up, 'clickhouse'])
         context.command([*run, 'clickhouse-init'])
