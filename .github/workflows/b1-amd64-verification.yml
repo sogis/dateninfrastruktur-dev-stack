@@ -1,0 +1,69 @@
+name: B1 native AMD64 verification
+
+on:
+  push:
+    branches: [codex/b1.x-amd64-verification]
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      DOCKER_CONTEXT: default
+      STAGING_TAG: local-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 20319bb6003e6f3cd942a669129d399a4b06c38c
+          path: dateninfrastruktur-dev-stack
+          persist-credentials: false
+      - name: Verify native runner and check out the reviewed sibling commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -m
+          test "$(uname -m)" = x86_64
+          test "$RUNNER_ARCH" = X64
+          docker info --format '{{.Architecture}}'
+          test "$(docker info --format '{{.Architecture}}')" = x86_64
+          test "$(git -C dateninfrastruktur-dev-stack rev-parse HEAD)" = 20319bb6003e6f3cd942a669129d399a4b06c38c
+          while read -r repo sha; do
+            dir="dateninfrastruktur-$repo"
+            git init --quiet "$dir"
+            git -C "$dir" remote add origin "https://github.com/sogis/$dir.git"
+            git -C "$dir" fetch --depth 1 origin "$sha"
+            git -C "$dir" checkout --detach FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$sha"
+          done <<'REVISIONS'
+          admin 25d303eb4d2f08cc92b91421a7e032eaa480d8ed
+          sodata 30178b8e965ed00a69b5e99c810861ff22e6c75c
+          jenkins-dev c4b2b9ee204e9a78ece5920e161bb0b977ddf49d
+          jenkins-gretl-plugin 7a857a1d0b761dc4062796e131b35c4bf4470674
+          REVISIONS
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        id: java21
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install Chromium and its Linux runtime dependencies
+        run: npx --yes playwright@1.60.0 install --with-deps chromium
+      - name: Build and qualify the release images locally
+        working-directory: dateninfrastruktur-dev-stack
+        env:
+          JAVA21_HOME: ${{ steps.java21.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/test_stack_management.py --release-staging-tag "$STAGING_TAG"
+          for name in admin jenkins postgres superset tools; do
+            image="dateninfrastruktur-$name:$STAGING_TAG"
+            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" = linux/amd64
+          done
+          python3 scripts/test_delivery_domain.py --jenkins-image "dateninfrastruktur-jenkins:$STAGING_TAG"
