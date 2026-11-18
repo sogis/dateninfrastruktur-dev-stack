@@ -4,7 +4,7 @@ import fcntl
 import json
 import sys
 
-from compose_runtime import ADMIN_DEV_MARKER, ComposeContext, read_env, render, write_private
+from compose_runtime import ADMIN_DEV_MARKER, VOLUMES, ComposeContext, docker_output, read_env, render, write_private
 
 
 def setup(context):
@@ -34,9 +34,10 @@ def setup(context):
     if not retained:
         context.command([*up, 'clickhouse'])
         context.command([*run, 'clickhouse-init'])
-        # Compose must allocate both volumes before the complete marker can bind them.
-        context.command(['up', '--no-start', '--no-deps', '--no-build', '--pull', 'never', 'jenkins', 'superset'],
-                        overrides={'JENKINS_IMAGE': context.configured_jenkins_id()})
+        # Bind the two application volumes before either application is installed.
+        for key in ('JENKINS_VOLUME', 'SUPERSET_VOLUME'):
+            docker_output('volume', 'create', '--label', f'com.docker.compose.project={context.project}',
+                          '--label', f'com.docker.compose.volume={VOLUMES[key][0]}', '--', context.values[key])
         context.verify_resources(require_volumes=True)
         write_private(context.runtime / 'setup-complete.json', json.dumps({
             'instance': context.values['INSTANCE_ID'],

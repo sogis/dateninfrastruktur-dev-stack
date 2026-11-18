@@ -70,11 +70,11 @@ Bei wiederholten Starts bleibt die Image-Auswahl in der privaten Datei.
 
 Das explizite Setup richtet PostgreSQL-Datenbanken, Management-Schema,
 Rollen, den privaten Garage-Bucket mit Reader/Writer und ClickHouse ein.
-Zum Abschluss bindet es auch die von Compose angelegten Jenkins- und
-Superset-Volumes. Dafür müssen die Images lokal bereitstehen. Das
-Setup prüft ein bereits vorhandenes Management-Schema und bricht ab,
-wenn eine bekannte Managementdatenbank fehlt. Demo-Daten sind dem
-Testmodus vorbehalten.
+Zum Abschluss bindet es die leeren Jenkins- und Superset-Volumes.
+Dadurch kann das Setup schon vor dem Build dieser beiden Images
+abgeschlossen werden. Ein vorhandenes Management-Schema wird geprüft.
+Fehlt eine bekannte Managementdatenbank, bricht das Setup ab. Demo-Daten
+sind dem Testmodus vorbehalten.
 
 ```bash
 python3 scripts/setup_instance.py --env "$runtime_env"

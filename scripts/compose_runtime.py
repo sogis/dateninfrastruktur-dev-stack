@@ -168,7 +168,7 @@ class ComposeContext:
         return containers
 
     def command(self,args,input=None,check=True,*,admin_dev=False,overrides=None):
-        if any(arg in ['up','down','stop','restart','run','exec','rm'] for arg in args):
+        if any(arg in ['up','down','stop','restart','run','exec','rm','logs'] for arg in args):
             self.verify_project()
         base = self.base + (['--file', str(ADMIN_DEV_OVERLAY)] if admin_dev else [])
         env = docker_env()
@@ -176,7 +176,7 @@ class ComposeContext:
         env.update(DI_TEST_HOST_UID=str(os.getuid()), DI_TEST_HOST_GID=str(os.getgid()))
         env.update(overrides or {})
         p=subprocess.run(base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
-        if p.returncode and check:raise RuntimeError(self.redact((p.stdout+p.stderr)[-8000:]))
+        if p.returncode and check:raise RuntimeError(self.redact(p.stdout+p.stderr)[-8000:])
         return p
 def init_context(project,ports=None,test_fixture=False):
     if not re.fullmatch('[a-z][a-z0-9-]{3,62}',project):raise RuntimeError('Invalid project')
