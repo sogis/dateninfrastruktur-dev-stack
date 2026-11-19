@@ -83,9 +83,8 @@ except urllib.error.HTTPError as error:
 
     def stage(state, contents):
         key = state['candidatePrefix'] + 'snapshot.csv'
-        source = put(context, 's3-a-candidate-' + str(uuid4()) + '.csv', contents)
-        context.command(['run', '--rm', 'storage-tool', 'copyto',
-                         '/runtime/' + source.name, 'storage:ch.so.daten/' + key])
+        context.command(['run', '--rm', '-T', 'storage-tool', 'rcat', 'storage:ch.so.daten/' + key],
+                        input=contents.decode())
         assert call('GET', '/' + key, None, 200, origin=True).encode() == contents
 
     def complete(submission, expected):

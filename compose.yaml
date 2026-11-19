@@ -557,12 +557,18 @@
       ],
       "restart": "no",
       "volumes": [
-        "${RUNTIME_DIR}:/runtime:ro"
+        {
+          "type": "bind",
+          "source": "${RUNTIME_DIR}/operator.conf",
+          "target": "/config/rclone/rclone.conf",
+          "read_only": true,
+          "bind": {
+            "create_host_path": false
+          }
+        }
       ],
       "entrypoint": [
-        "rclone",
-        "--config",
-        "/runtime/operator.conf"
+        "rclone"
       ],
       "labels": {
         "di.instance": "${INSTANCE_ID}"
