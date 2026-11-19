@@ -34,7 +34,7 @@ class StorageTarget:
     admin_token:str=dataclasses.field(default='',repr=False)
     def api(self,name,body=None,**query):
         suffix='?'+urllib.parse.urlencode(query) if query else ''
-        request=urllib.request.Request('http://garage:3903/v2/'+name+suffix,data=None if body is None else json.dumps(body).encode(),headers={'Authorization':'Bearer '+self.admin_token,'Content-Type':'application/json'},method='POST' if body is not None or name in ['DeleteBucket','DeleteKey'] else 'GET')
+        request=urllib.request.Request('http://garage:3903/v2/'+name+suffix,data=None if body is None else json.dumps(body).encode(),headers={'Authorization':'Bearer '+self.admin_token,'Content-Type':'application/json'},method='POST' if body is not None else 'GET')
         try:
             with urllib.request.urlopen(request,timeout=10) as response:
                 body=response.read()

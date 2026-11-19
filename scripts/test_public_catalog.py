@@ -103,8 +103,7 @@ def bind_identity(context, access_token):
 def stage_files(context):
     source = put(context, 'catalog-download.csv', DATA)
     for path in (OPEN, RESTRICTED):
-        context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'rclone',
-                         'management-setup', '--config', '/runtime/operator.conf', 'copyto',
+        context.command(['run', '--rm', 'storage-tool', 'copyto',
                          '/runtime/' + source.name, 'storage:ch.so.daten' + path])
 
 

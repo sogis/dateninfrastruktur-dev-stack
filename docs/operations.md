@@ -58,6 +58,8 @@ Bei wiederholten Starts bleibt die Image-Auswahl in der privaten Datei.
 
 Führe das explizite Setup für eine neue Instanz aus. Es richtet
 die Datenbanken, die Rollen und den privaten Garage-Bucket ein.
+Die Setup-Werkzeuge verwenden laufende Dienste im gewählten Projekt.
+Der Setup-Befehl startet diese gezielt und wartet auf ihre Bereitschaft.
 Jenkins- und Superset-Volumes werden dabei mit den Eigentumslabels
 des Projekts angelegt. Die beiden Images sind erst zum Start nötig.
 

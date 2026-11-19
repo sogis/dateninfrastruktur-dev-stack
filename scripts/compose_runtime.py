@@ -4,7 +4,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 ADMIN_DEV_OVERLAY = ROOT / 'compose.admin-dev.yaml'
 ADMIN_DEV_MARKER = 'admin-dev.json'
 FOUNDATION_UP = ('up', '--no-deps', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240')
-SETUP_RUN = ('run', '--rm', '--no-deps', '--pull', 'never')
+SETUP_RUN = ('run', '--rm', '--pull', 'never')
 VOLUMES = {
     'POSTGRES_VOLUME': ('postgres-data', None),
     'GARAGE_META_VOLUME': ('garage-meta', 'GARAGE_VOLUMES_EXTERNAL'),

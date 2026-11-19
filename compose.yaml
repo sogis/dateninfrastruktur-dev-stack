@@ -426,11 +426,6 @@
         "setup"
       ],
       "restart": "no",
-      "depends_on": {
-        "postgres": {
-          "condition": "service_healthy"
-        }
-      },
       "environment": {
         "DI_DATABASE_TARGET": "postgresql",
         "DI_TOOL_RUNTIME": "/runtime/tools",
@@ -458,18 +453,11 @@
         "setup"
       ],
       "restart": "no",
-      "depends_on": {
-        "postgres": {
-          "condition": "service_healthy"
-        }
-      },
       "entrypoint": [
         "python3",
         "/opt/stack-tools/initialize_postgres.py"
       ],
       "environment": {
-        "DI_DATABASE_TARGET": "postgresql",
-        "DI_TOOL_RUNTIME": "/runtime/tools",
         "PGHOST": "postgres",
         "PGPORT": "5432",
         "PGDATABASE": "postgres",
@@ -478,9 +466,6 @@
         "KEYCLOAK_DB_PASSWORD": "${KEYCLOAK_DB_PASSWORD}",
         "SUPERSET_DB_PASSWORD": "${SUPERSET_DB_PASSWORD}"
       },
-      "volumes": [
-        "${RUNTIME_DIR}:/runtime"
-      ],
       "labels": {
         "di.instance": "${INSTANCE_ID}"
       }
@@ -491,11 +476,6 @@
         "setup"
       ],
       "restart": "no",
-      "depends_on": {
-        "garage": {
-          "condition": "service_healthy"
-        }
-      },
       "entrypoint": [
         "python3",
         "/opt/stack-tools/setup_garage.py"
@@ -520,11 +500,6 @@
     "clickhouse-init": {
       "image": "clickhouse/clickhouse-server:26.8",
       "restart": "no",
-      "depends_on": {
-        "clickhouse": {
-          "condition": "service_healthy"
-        }
-      },
       "environment": {
         "CLICKHOUSE_HOST": "clickhouse",
         "DI_TEST_FIXTURE": "${DI_TEST_FIXTURE}",
@@ -627,32 +602,6 @@
       "restart": "no",
       "labels": {
         "di.instance": "${INSTANCE_ID}"
-      }
-    },
-    "storage-verify": {
-      "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.7}",
-      "profiles": [
-        "tools"
-      ],
-      "restart": "no",
-      "entrypoint": [
-        "python3",
-        "/opt/stack-tools/setup_garage.py"
-      ],
-      "volumes": [
-        "${RUNTIME_DIR}:/runtime:ro"
-      ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      },
-      "command": [
-        "verify"
-      ],
-      "environment": {
-        "INSTANCE_ID": "${INSTANCE_ID}",
-        "DI_STORAGE_BUCKET": "${DI_STORAGE_BUCKET}",
-        "DI_STORAGE_ENDPOINT": "${DI_STORAGE_ENDPOINT}",
-        "DI_STORAGE_REGION": "${DI_STORAGE_REGION}"
       }
     }
   },
