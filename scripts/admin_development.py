@@ -15,7 +15,7 @@ IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
 
 def switch_admin(context, action):
     marker = context.runtime / ADMIN_DEV_MARKER
-    containers = context.verify_resources(require_setup=True)
+    containers, _ = context.verify_resources(require_setup=True)
     saved = json.loads(marker.read_text()) if marker.exists() else None
     if saved is not None and (saved['instance'] != context.values['INSTANCE_ID'] or not IMAGE_ID.fullmatch(saved['image'])):
         raise RuntimeError('OWNERSHIP_MISMATCH: Admin development state')

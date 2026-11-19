@@ -68,67 +68,48 @@ Bei wiederholten Starts bleibt die Image-Auswahl in der privaten Datei.
 
 ### Setup und Start
 
-Das explizite Setup richtet PostgreSQL-Datenbanken, Management-Schema,
-Rollen, den privaten Garage-Bucket mit Reader/Writer und ClickHouse ein.
-Zum Abschluss legt das Setup die Jenkins- und Superset-Volumes mit den
-Compose-Eigentumslabels des Projekts an und bindet sie. Dadurch kann es
-schon vor dem Build dieser beiden Images abgeschlossen werden. Ein vorhandenes Management-Schema wird geprüft.
-Fehlt eine bekannte Managementdatenbank, bricht das Setup ab. Demo-Daten
-sind dem Testmodus vorbehalten.
+Führe das explizite Setup für eine neue Instanz aus. Es richtet
+die Datenbanken, die Rollen und den privaten Garage-Bucket ein.
+Jenkins- und Superset-Volumes werden dabei mit den Eigentumslabels
+des Projekts angelegt. Die beiden Images sind erst zum Start nötig.
 
 ```bash
 python3 scripts/setup_instance.py --env "$runtime_env"
 ```
 
-Führe den Startblock aus, sobald die Images bereitstehen. Nach der
-Eigentums- und Volumeprüfung startet Compose PostgreSQL. Das vorhandene
-Management-Werkzeug prüft die Datenbank und das Schema lesend, bevor
-Compose den übrigen Stack startet. Jenkins erhält die geprüfte lokale
-Image-ID.
+Für den Start einer eingerichteten Instanz prüft Python die gebundenen
+Ressourcen und gibt die lokale Jenkins-Image-ID aus. Compose startet
+die übrigen Dienste nach erfolgreicher lesender Management-Schemaprüfung.
+`management-setup` beendet sich nach der Prüfung. Bei expliziter
+Schemaeinrichtung erhält dasselbe Werkzeug die Aktion `setup`.
 
 ```bash
 jenkins_id=$(python3 scripts/compose_runtime.py check --start --env "$runtime_env") &&
-  docker compose --file compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 240 --no-build --pull never postgres &&
-  docker compose --file compose.yaml --env-file "$runtime_env" --profile setup run --rm --no-deps --pull never management-setup verify &&
-  JENKINS_IMAGE=$jenkins_id docker compose --file compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
+  JENKINS_IMAGE=$jenkins_id docker compose -f compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
 ```
 
-Compose führt die Eigentumsprüfung bei einem direkten Aufruf nicht aus.
-Verwende den vollständigen Startblock und vor Stop oder Down den
-Eigentumscheck unten. Führe Änderungen an einer Instanz nacheinander aus.
-Ändere zwischen Prüfung und Compose-Aufruf weder die private Datei noch
-Docker-Kontext oder Projektressourcen.
+Bei einer bestehenden Instanz verwende dieselbe Datei und denselben
+Checkout-Pfad. Erhalte die Volumes, Image-Referenzen, die Setup-Bindung
+und die private Garage- und Realm-Konfiguration. Bei fehlenden Ressourcen
+oder einer abgelehnten Schemaprüfung kläre den Zustand anhand der Sicherung.
+
+### Status, Logs und Stopp
 
 ```bash
-docker compose --file compose.yaml --env-file "$runtime_env" ps
+docker compose -f compose.yaml --env-file "$runtime_env" ps
 set -o pipefail
-docker compose --file compose.yaml --env-file "$runtime_env" logs --tail 100 -f admin 2>&1 |
+docker compose -f compose.yaml --env-file "$runtime_env" logs --tail 100 -f admin 2>&1 |
   python3 scripts/compose_runtime.py redact --env "$runtime_env"
 
 python3 scripts/compose_runtime.py check --env "$runtime_env" &&
-  docker compose --file compose.yaml --env-file "$runtime_env" stop --timeout 60
-
-python3 scripts/compose_runtime.py check --env "$runtime_env" &&
-  docker compose --file compose.yaml --env-file "$runtime_env" down --timeout 60
+  docker compose -f compose.yaml --env-file "$runtime_env" down --timeout 60
 ```
 
-`down` erhält die Volumes. Verzichte für normale Betriebsabläufe auf
-`--volumes`. Der Startblock übernimmt Konfigurationsänderungen mit
-`up`. `restart` startet vorhandene Container mit ihrer bisherigen
-Konfiguration. Führe den Startblock nach einem Stopp oder Down erneut aus.
-
-Verwende für Prüfungen des Compose-Modells `config --quiet`. Eine vollständige
-interpolierte Konfiguration enthält Zugangsdaten. Die Logpipeline filtert
-konfigurierte Secrets aus `runtime.env`. Behandle verbleibende Logs
-weiterhin als vertraulich.
-
-### Bestehende Instanz
-
-Verwende dieselbe `runtime.env` im ursprünglichen Checkout und führe den
-Startblock aus. Erhalte die vorhandenen Image-Referenzen, Volumes,
-`setup-complete.json` und die gerenderten privaten Dateien. Bei einem
-fehlenden Volume, einer fehlenden Setup-Bindung oder einem unbekannten
-Management-Schema halte an und kläre den Zustand anhand der Sicherung.
+Für einen Stopp ersetze `down` durch `stop`. Der Eigentumscheck gilt für
+beide Befehle. Führe Änderungen nacheinander aus und verwende zwischen
+Prüfung und Compose dieselbe Konfiguration und denselben Docker-Kontext.
+`down` erhält die Volumes. Verwende für Modellprüfungen `config --quiet`
+und behandle Logs auch nach der Redaktion vertraulich.
 
 ## Admin aus lokalen Quellen entwickeln
 
@@ -136,8 +117,6 @@ Im laufenden und eingerichteten Stack den Admin-Dienst umschalten:
 
 ```bash
 python3 scripts/admin_development.py on --env "$runtime_env"
-docker compose --file compose.yaml --env-file "$runtime_env" logs --tail 100 -f admin 2>&1 |
-  python3 scripts/compose_runtime.py redact --env "$runtime_env"
 python3 scripts/admin_development.py off --env "$runtime_env"
 ```
 

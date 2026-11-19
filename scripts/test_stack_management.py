@@ -43,7 +43,6 @@ def run_smoke(context):
     assert all(row['State'] == 'running' and row['Health'] == 'healthy' for row in rows)
     databases = sql(context, "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname<>'postgres';")
     assert set(databases.splitlines()) == {'keycloak', 'superset', 'dateninfrastruktur_management'}
-    context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'management-setup', 'verify'])
     for port, path in [('GATEWAY_PORT', '/'), ('GATEWAY_PORT', '/jenkins/login'),
                        ('KEYCLOAK_PORT', '/realms/dateninfrastruktur/.well-known/openid-configuration'),
                        ('SUPERSET_PORT', '/health')]:
@@ -159,6 +158,13 @@ def main():
                    if row['Config']['Labels']['com.docker.compose.service'] == 'jenkins')
         run_smoke(context)
         assert sql(context, retained) == before_restart
+        # Cached success must not authorize restarting services after schema drift.
+        services = ['admin', 'garage', 'clickhouse']
+        context.command(['stop', *services])
+        sql(context, 'CREATE SCHEMA incompatible;')
+        rejected = context.command(['up', '--no-build', '--pull', 'never', '-d', *services], check=False)
+        assert rejected.returncode and 'management-setup' in rejected.stderr
+        assert not context.command(['ps', '-q', *services]).stdout.strip()
         if args.release_staging_tag:
             for name in ('admin', 'jenkins', 'postgres', 'superset', 'tools'):
                 key = ('TOOL' if name == 'tools' else name.upper()) + '_IMAGE'

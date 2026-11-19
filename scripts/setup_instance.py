@@ -4,35 +4,35 @@ import fcntl
 import json
 import sys
 
-from compose_runtime import ADMIN_DEV_MARKER, VOLUMES, ComposeContext, docker_output, render, write_private
+from compose_runtime import ADMIN_DEV_MARKER, VOLUMES, ComposeContext, docker_output, render_gateway, write_private
 
 
 def setup(context):
-    context.verify_resources()
+    _, retained = context.verify_resources()
     if (context.runtime / ADMIN_DEV_MARKER).exists():
         raise RuntimeError('Switch Admin development off before setup')
-    retained = context.has_setup()
-    up = ['up', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240']
-    run = ['--profile', 'setup', 'run', '--rm', '--no-deps', '--pull', 'never']
+    up = ['up', '--no-deps', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240']
+    run = ['run', '--rm', '--no-deps', '--pull', 'never']
 
     context.command([*up, 'postgres'])
-    query = "SELECT count(*) FROM pg_database WHERE datname='dateninfrastruktur_management';"
-    count = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
-                             '-U', 'postgres', '-d', 'postgres', '-c', query]).stdout.strip()
-    if count not in {'0', '1'}:
-        raise RuntimeError('Could not determine whether the management database exists')
-    if count == '0':
-        if retained:
-            raise RuntimeError('Known management database is missing; restore it before setup')
-        context.command([*run, 'postgres-init'])
-    context.command([*run, 'management-setup', *(['verify'] if count == '1' else [])])
+    management = [*run, 'management-setup']
+    if not retained:
+        query = "SELECT EXISTS (SELECT FROM pg_database WHERE datname='dateninfrastruktur_management');"
+        exists = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
+                                  '-U', 'postgres', '-d', 'postgres', '-c', query]).stdout.strip()
+        if exists not in {'f', 't'}:
+            raise RuntimeError('Could not determine whether the management database exists')
+        if exists == 'f':
+            context.command([*run, 'postgres-init'])
+            management.append('setup')
+    context.command(management)
 
     if not (context.runtime / 'garage.toml').is_file():
         raise RuntimeError('Private Garage configuration is missing; restore it before setup')
     context.command([*up, 'garage'])
     context.command([*run, 'garage-setup'])
     context.values = ComposeContext(context.env_file).values
-    render(context)
+    render_gateway(context)
     if not retained:
         context.command([*up, 'clickhouse'])
         context.command([*run, 'clickhouse-init'])

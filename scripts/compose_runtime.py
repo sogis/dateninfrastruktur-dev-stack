@@ -81,7 +81,6 @@ class ComposeContext:
         if not self.values.get('INSTANCE_ID') or any(
                 k.startswith('COMPOSE_') and k != 'COMPOSE_PROJECT_NAME' for k in self.values):
             raise RuntimeError('Invalid instance identity or Compose control variable')
-        self.command_overrides={}
         self.base=['docker','compose','--project-name',self.project,'--env-file',str(self.env_file),'--file',str(ROOT/'compose.yaml')]
     def redact(self,value):
         for k,v in self.values.items():
@@ -106,26 +105,19 @@ class ComposeContext:
                 raise RuntimeError('OWNERSHIP_MISMATCH: existing project requires planned migration')
         return containers
 
-    def configured_jenkins_id(self):
-        model = json.loads(self.command(['config', '--format', 'json', 'jenkins']).stdout)
-        return jenkins_image_id(model['services']['jenkins']['image'])
-
     def volume_bindings(self):
         return {key: self.values[key] for key in VOLUMES}
 
-    def has_setup(self):
-        marker = self.runtime / 'setup-complete.json'
-        if not marker.exists():
-            return False
-        state = json.loads(marker.read_text())
-        if state.get('instance') != self.values['INSTANCE_ID'] or state.get('volumes') != self.volume_bindings():
-            raise RuntimeError('OWNERSHIP_MISMATCH: setup instance or persistent volume mapping changed')
-        return True
-
     def verify_resources(self, *, require_setup=False, require_volumes=False):
         containers = self.verify_project()
-        retained = self.has_setup()
-        if require_setup and not retained:
+        bindings = self.volume_bindings()
+        marker = self.runtime / 'setup-complete.json'
+        retained = marker.exists()
+        if retained:
+            state = json.loads(marker.read_text())
+            if state.get('instance') != self.values['INSTANCE_ID'] or state.get('volumes') != bindings:
+                raise RuntimeError('OWNERSHIP_MISMATCH: setup instance or persistent volume mapping changed')
+        elif require_setup:
             raise RuntimeError('Explicit setup is required before normal start')
         if self.values.get('DI_STORAGE_BUCKET') != 'ch.so.daten':
             raise RuntimeError('Explicit reviewed storage cutover required')
@@ -136,7 +128,6 @@ class ComposeContext:
         if any(json.loads(row) != [self.project, 'default'] for row in networks):
             raise RuntimeError('OWNERSHIP_MISMATCH: default Compose network')
 
-        bindings = self.volume_bindings()
         if (len(set(bindings.values())) != len(bindings)
                 or not all(re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]+', name) for name in bindings.values())):
             raise RuntimeError('Persistent volumes must have valid, distinct names')
@@ -154,14 +145,13 @@ class ComposeContext:
                     raise RuntimeError('OWNERSHIP_MISMATCH: persistent volume ' + key)
             elif retained or require_volumes:
                 raise RuntimeError('Configured persistent volume is missing: ' + key)
-        return containers
+        return containers, retained
 
     def command(self,args,input=None,check=True,*,admin_dev=False,overrides=None):
         if any(arg in ['up','down','stop','restart','run','exec','rm','logs'] for arg in args):
             self.verify_project()
         base = self.base + (['--file', str(ADMIN_DEV_OVERLAY)] if admin_dev else [])
         env = docker_env()
-        env.update(self.command_overrides)
         env.update(DI_TEST_HOST_UID=str(os.getuid()), DI_TEST_HOST_GID=str(os.getgid()))
         env.update(overrides or {})
         p=subprocess.run(base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
@@ -194,57 +184,60 @@ def init_context(project,ports=None,test_fixture=False):
     values.update({key: f'dateninfrastruktur-{tag}:{project}' for key, tag in LOCAL_IMAGES.items()})
     runtime.mkdir(mode=0o700, parents=True)
     write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
-    context=ComposeContext(env_file);render(context);return context
-def render(context):
-    values, runtime = context.values, context.runtime
-    if not (runtime / 'garage.toml').exists():
-        garage = (ROOT / 'services/garage/garage.toml.template').read_text()
-        for key in ('RPC_SECRET', 'ADMIN_TOKEN', 'METRICS_TOKEN'):
-            garage = garage.replace('__' + key + '__', secrets.token_hex(32))
-        write_private(runtime / 'garage.toml', garage)
+    context = ComposeContext(env_file)
+    garage = (ROOT / 'services/garage/garage.toml.template').read_text()
+    for key in ('RPC_SECRET', 'ADMIN_TOKEN', 'METRICS_TOKEN'):
+        garage = garage.replace('__' + key + '__', secrets.token_hex(32))
+    write_private(runtime / 'garage.toml', garage)
 
     realm_file = runtime / 'realm-initial.json'
-    if not realm_file.exists():
-        realm = json.loads((ROOT / 'services/keycloak/realm-template.json').read_text())
-        fixture = values['DI_TEST_FIXTURE'] == 'true'
-        if not fixture:
-            realm['users'] = []
-        for user in realm['users']:
-            user['credentials'][0]['value'] = values['KEYCLOAK_DEMO_PASSWORD']
-        gateway = 'http://localhost:' + values['GATEWAY_PORT']
-        client = {
-            'enabled': True, 'protocol': 'openid-connect', 'publicClient': False,
-            'standardFlowEnabled': False, 'directAccessGrantsEnabled': False,
-            'protocolMappers': [{
-                'name': 'management-api audience', 'protocol': 'openid-connect',
-                'protocolMapper': 'oidc-audience-mapper', 'config': {
-                    'included.custom.audience': 'management-api',
-                    'access.token.claim': 'true', 'id.token.claim': 'false',
-                },
-            }],
-        }
-        realm['clients'] = [
-            dict(client, clientId='management-gateway', secret=values['DI_OIDC_CLIENT_SECRET'],
-                 standardFlowEnabled=True, redirectUris=[gateway + '/oidc/callback'], webOrigins=[gateway]),
-            dict(client, clientId='jenkins-delivery', secret=values['DI_JENKINS_OIDC_CLIENT_SECRET'],
-                 standardFlowEnabled=True, redirectUris=[gateway + '/jenkins/securityRealm/finishLogin'],
-                 webOrigins=[gateway], attributes={'pkce.code.challenge.method': 'S256',
-                                                 'post.logout.redirect.uris': gateway + '/jenkins/'}),
-        ]
-        if values.get('DI_GRETL_DELIVERY_CLIENT_SECRET'):
-            realm['clients'].append(dict(client, clientId='gretl-delivery', serviceAccountsEnabled=True,
-                                         secret=values['DI_GRETL_DELIVERY_CLIENT_SECRET']))
-        if fixture:
-            realm['clients'].append(dict(client, clientId='management-test', publicClient=True,
-                                         directAccessGrantsEnabled=True))
-        write_private(realm_file, json.dumps(realm, indent=2))
-    # Keycloak and APISIX run as non-root. The host directory remains private.
+    realm = json.loads((ROOT / 'services/keycloak/realm-template.json').read_text())
+    fixture = values['DI_TEST_FIXTURE'] == 'true'
+    if not fixture:
+        realm['users'] = []
+    for user in realm['users']:
+        user['credentials'][0]['value'] = values['KEYCLOAK_DEMO_PASSWORD']
+    gateway = 'http://localhost:' + values['GATEWAY_PORT']
+    client = {
+        'enabled': True, 'protocol': 'openid-connect', 'publicClient': False,
+        'standardFlowEnabled': False, 'directAccessGrantsEnabled': False,
+        'protocolMappers': [{
+            'name': 'management-api audience', 'protocol': 'openid-connect',
+            'protocolMapper': 'oidc-audience-mapper', 'config': {
+                'included.custom.audience': 'management-api',
+                'access.token.claim': 'true', 'id.token.claim': 'false',
+            },
+        }],
+    }
+    realm['clients'] = [
+        dict(client, clientId='management-gateway', secret=values['DI_OIDC_CLIENT_SECRET'],
+             standardFlowEnabled=True, redirectUris=[gateway + '/oidc/callback'], webOrigins=[gateway]),
+        dict(client, clientId='jenkins-delivery', secret=values['DI_JENKINS_OIDC_CLIENT_SECRET'],
+             standardFlowEnabled=True, redirectUris=[gateway + '/jenkins/securityRealm/finishLogin'],
+             webOrigins=[gateway], attributes={'pkce.code.challenge.method': 'S256',
+                                             'post.logout.redirect.uris': gateway + '/jenkins/'}),
+    ]
+    if values.get('DI_GRETL_DELIVERY_CLIENT_SECRET'):
+        realm['clients'].append(dict(client, clientId='gretl-delivery', serviceAccountsEnabled=True,
+                                     secret=values['DI_GRETL_DELIVERY_CLIENT_SECRET']))
+    if fixture:
+        realm['clients'].append(dict(client, clientId='management-test', publicClient=True,
+                                     directAccessGrantsEnabled=True))
+    write_private(realm_file, json.dumps(realm, indent=2))
+    # Keycloak runs as non-root. The host directory remains private.
     realm_file.chmod(0o644)
+    render_gateway(context)
+    return context
+
+
+def render_gateway(context):
     routes = (ROOT / 'services/apisix/routes.template.json').read_text()
+    # Preserve literal dollar anchors in route regexes.
     routes = re.sub(r'\$\{([A-Z_]+)\}',
-                    lambda match: json.dumps(values[match[1]], ensure_ascii=False)[1:-1], routes)
-    write_private(runtime / 'apisix.yaml', routes + '\n#END\n')
-    (runtime / 'apisix.yaml').chmod(0o644)
+                    lambda match: json.dumps(context.values[match[1]], ensure_ascii=False)[1:-1], routes)
+    path = context.runtime / 'apisix.yaml'
+    write_private(path, routes + '\n#END\n')
+    path.chmod(0o644)
 
 
 def main():
@@ -271,7 +264,8 @@ def main():
         raise RuntimeError('Switch Admin development off before changing the regular stack')
     context.verify_resources(require_setup=args.start)
     if args.start:
-        print(context.configured_jenkins_id())
+        model = json.loads(context.command(['config', '--format', 'json', 'jenkins']).stdout)
+        print(jenkins_image_id(model['services']['jenkins']['image']))
 
 
 if __name__ == '__main__':

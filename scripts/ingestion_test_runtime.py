@@ -61,7 +61,7 @@ def cleanup(c):
     images = []
     for key, name in LOCAL_IMAGES.items():
         reference = f'dateninfrastruktur-{name}:{c.project}'
-        if reference not in (c.values.get(key), c.command_overrides.get(key)):
+        if reference != c.values.get(key):
             continue
         tags = subprocess.check_output(
             ['docker', 'image', 'ls', '--filter', f'reference={reference}',

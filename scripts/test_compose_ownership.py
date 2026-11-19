@@ -60,6 +60,12 @@ class ComposeOwnershipTest(unittest.TestCase):
                 self.assertEqual(current.values['EMPTY'], '')
                 self.assertEqual(current.values['PROJECT_REFERENCE'], context.project)
                 self.assertNotIn('COMPOSE_FILE', current.values)
+                current.values['DI_GATEWAY_SECRET'] = secret
+                runtime.render_gateway(current)
+                config = json.loads((current.runtime / 'apisix.yaml').read_text().removesuffix('#END\n'))
+                header, = [route['plugins']['forward-auth']['extra_headers']['X-DI-Gateway-Credential']
+                           for route in config['routes'] if 'forward-auth' in route.get('plugins', {})]
+                self.assertEqual(header, secret)
                 runtime.write_private(context.env_file, content + 'BROKEN="unterminated\n')
                 with self.assertRaisesRegex(RuntimeError, '^Invalid private dotenv configuration; details withheld$'):
                     runtime.read_env(context.env_file)
@@ -83,19 +89,18 @@ class ComposeOwnershipTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'OWNERSHIP_MISMATCH.*POSTGRES_VOLUME'):
                 self.context.verify_resources()
 
-    def test_retained_setup_does_not_initialize_a_missing_database(self):
+    def test_retained_setup_only_verifies_management_database(self):
         self.record_setup()
+        self.context.command = Mock(side_effect=[None, RuntimeError('Cannot verify known database')])
         with patch.object(runtime, 'docker_output', side_effect=self.docker):
-            for result, message in [('0\n', 'Known management database is missing'),
-                                    ('', 'Could not determine whether the management database exists')]:
-                self.context.command = Mock(side_effect=[None, SimpleNamespace(stdout=result)])
-                with self.subTest(result=result), self.assertRaisesRegex(RuntimeError, message):
-                    setup(self.context)
-                self.assertEqual(self.context.command.call_count, 2)
+            with self.assertRaisesRegex(RuntimeError, 'Cannot verify known database'):
+                setup(self.context)
+        self.assertEqual(self.context.command.call_count, 2)
+        self.assertEqual(self.context.command.call_args.args[0][-1], 'management-setup')
 
     def test_setup_refuses_to_replace_missing_garage_identity(self):
         self.record_setup()
-        self.context.command = Mock(side_effect=[None, SimpleNamespace(stdout='1\n'), None])
+        self.context.command = Mock(return_value=None)
         with patch.object(runtime, 'docker_output', side_effect=self.docker):
             with self.assertRaisesRegex(RuntimeError, 'Private Garage configuration is missing'):
                 setup(self.context)

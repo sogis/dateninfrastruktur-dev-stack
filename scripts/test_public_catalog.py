@@ -238,9 +238,9 @@ def main():
     print(f'Owned Compose fixture: {context.project}', flush=True)
     try:
         context.command(['build', 'postgres', 'management-tool-build', 'admin', 'sodata'])
-        context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '240', 'postgres', 'garage'])
-        for service in ('postgres-init', 'management-setup', 'garage-setup'):
-            context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', service])
+        context.command(['up', '--no-deps', '--no-build', '-d', '--wait', '--wait-timeout', '240', 'postgres', 'garage'])
+        for service in (['postgres-init'], ['management-setup', 'setup'], ['garage-setup']):
+            context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', *service])
         context = ComposeContext(context.env_file)
         source = put(context, 'management-bootstrap.xtf', FIXTURE.read_bytes())
         operator(context, 'import', source)

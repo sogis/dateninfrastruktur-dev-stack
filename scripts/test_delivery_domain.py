@@ -491,23 +491,23 @@ def main():
                     'sodata' if jenkins_id else 'test-tool-build']
         context.command(['--profile', 'build-tools', 'build', *services])
         context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '150', 'postgres'])
-        for service in ('postgres-init', 'management-setup'):
-            context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', service])
+        for service in (['postgres-init'], ['management-setup', 'setup']):
+            context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', *service])
         source = put(context, 'management-bootstrap.xtf', FIXTURE.read_bytes())
         operator(context, 'import', source)
         if not jenkins_id:
             verify_delivery_domain(context)
-        context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '240', 'garage'])
+        context.command(['up', '--no-deps', '--no-build', '-d', '--wait', '--wait-timeout', '240', 'garage'])
         context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'garage-setup'])
         context = ComposeContext(context.env_file)
         context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300',
                          'keycloak', 'origin', 'admin'])
         identities = delivery_identities(context)
         if jenkins_id:
-            context.command_overrides['JENKINS_IMAGE'] = jenkins_id
-            context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'clickhouse'])
+            context.command(['up', '--no-deps', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'clickhouse'])
             context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'clickhouse-init'])
-            context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'gateway'])
+            context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'gateway'],
+                            overrides={'JENKINS_IMAGE': jenkins_id})
             verify_jenkins_delivery(context)
         else:
             verify_garage_delivery(context, *identities)

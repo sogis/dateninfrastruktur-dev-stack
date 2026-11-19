@@ -13,7 +13,7 @@ def run():
         return p.stdout
     try:
         command(['build','postgres','management-tool-build'])
-        command(['up','--no-build','-d','--wait','--wait-timeout','120','garage'])
+        command(['up','--no-deps','--no-build','-d','--wait','--wait-timeout','120','garage'])
         command(['--profile','setup','run','--rm','--no-deps','garage-setup'])
         c=ComposeContext(c.env_file)
         # A trailing unrelated line used to make setup move all credential lines.
