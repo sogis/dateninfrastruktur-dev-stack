@@ -80,7 +80,7 @@ def reject_legacy_width(context, expected_ids):
         ALTER TABLE di_management.office ALTER COLUMN t_ili_tid TYPE varchar(1024);
         ALTER TABLE di_management.contactpoint ALTER COLUMN t_ili_tid TYPE varchar(1024);
     """ + views + "COMMIT;")
-    result = context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'management-setup', 'setup'], check=False)
+    result = context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'management-setup'], check=False)
     assert result.returncode and 'Management schema requires varchar(200) TIDs for Office and ContactPoint' in result.stderr
     probe(context, 'legacy-width')
     assert database_ids(context, expected_ids) == expected_ids
@@ -94,8 +94,8 @@ def reject_legacy_width(context, expected_ids):
 def exercise(context):
     context.command(['--profile', 'build-tools', 'build', 'postgres', 'management-tool-build', 'test-tool-build'])
     context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '150', 'postgres'])
-    for service in (['postgres-init'], ['management-setup', 'setup']):
-        context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', *service])
+    for service in ('postgres-init', 'management-setup'):
+        context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', service])
     regenerate(context)
     probe(context, 'missing-basket')
     source = put(context, 'management-bootstrap.xtf', FIXTURE.read_bytes())

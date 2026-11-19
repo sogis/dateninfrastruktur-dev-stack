@@ -1,14 +1,9 @@
 # Lokaler Betrieb der Dateninfrastruktur
 
-Admin, Sodata, Jenkins-Image und Jenkins-Plugin liegen in
-Schwestercheckouts. Der Compose-Stack führt PostgreSQL 16/PostGIS, Garage, ClickHouse, Keycloak,
-Superset, Admin, Sodata, Origin, APISIX und Jenkins je einmal aus. Die
-PostgreSQL-Datenbanken und der private Bucket `ch.so.daten` werden durch
-explizites Setup eingerichtet. Normalstart und Recreate verwenden die
-bestehenden Volumes. Die Konfiguration jeder Instanz und ihre Secrets liegen privat unter
-`.runtime/`. Ports für Gateway, Keycloak, Superset und ClickHouse sind nur
-an Loopback gebunden. Admin, PostgreSQL, Jenkins, Sodata und Origin haben
-keinen eigenen Hostport.
+Der Stack verbindet Admin, Sodata und Jenkins aus Schwestercheckouts mit
+PostgreSQL/PostGIS, Garage, ClickHouse, Keycloak, Superset und APISIX.
+Instanzdateien und Secrets liegen privat unter `.runtime/`.
+Hostports sind an die Loopback-Adresse gebunden.
 
 ## Frische Installation und Normalstart
 
@@ -20,16 +15,9 @@ Benötigt werden Docker mit Compose und Buildx sowie Python ab 3.9.
 env -i HOME="$HOME" PATH="$PATH" DOCKER_CONTEXT=desktop-linux bash --noprofile --norc
 ```
 
-Die leere Umgebung verhindert, dass exportierte Projekt-, Volume- oder
-Image-Variablen die Datei überschreiben. Falls der benannte Kontext SSH oder
-eine eigene Docker-Konfiguration braucht, übergib zusätzlich
-`SSH_AUTH_SOCK="$SSH_AUTH_SOCK"` bzw. `DOCKER_CONFIG="/pfad/zur/docker-config"`
-an `env`. Hinterlege den Docker-Endpunkt im benannten Kontext. Behalte
-die Shell für diese Instanz frei von exportierten Stack-Variablen.
-
-Wähle die private Datei der vorhandenen Instanz. Bei einer frischen
-Instanz lege sie zuerst mit `init` an. Die Datei enthält auch Ports,
-Volume-Namen, Image-Referenzen und Credentials.
+Die saubere Shell schützt vor versehentlichen Overrides. Falls nötig,
+übergib auch `SSH_AUTH_SOCK` oder `DOCKER_CONFIG` an `env`.
+Wähle die private Datei und führe `init` nur für eine neue Instanz aus.
 
 ```bash
 python3 scripts/compose_runtime.py init dateninfrastruktur-dev-stack  # nur frisch
@@ -77,11 +65,11 @@ des Projekts angelegt. Die beiden Images sind erst zum Start nötig.
 python3 scripts/setup_instance.py --env "$runtime_env"
 ```
 
-Für den Start einer eingerichteten Instanz prüft Python die gebundenen
-Ressourcen und gibt die lokale Jenkins-Image-ID aus. Compose startet
-die übrigen Dienste nach erfolgreicher lesender Management-Schemaprüfung.
-`management-setup` beendet sich nach der Prüfung. Bei expliziter
-Schemaeinrichtung erhält dasselbe Werkzeug die Aktion `setup`.
+Der Start-Preflight prüft die gebundenen Ressourcen und die lokale
+Jenkins-Image-ID. Er startet ausschliesslich PostgreSQL und prüft das
+Management-Schema lesend. Erst danach gleicht Compose den ganzen
+Stack ab. Bei abgelehnter Schemaprüfung bleiben die Anwendungen
+unangetastet.
 
 ```bash
 jenkins_id=$(python3 scripts/compose_runtime.py check --start --env "$runtime_env") &&
@@ -113,35 +101,24 @@ und behandle Logs auch nach der Redaktion vertraulich.
 
 ## Admin aus lokalen Quellen entwickeln
 
-Im laufenden und eingerichteten Stack den Admin-Dienst umschalten:
+Schalte Admin im laufenden Stack um und vor regulären Stack-Änderungen
+wieder zurück.
 
 ```bash
 python3 scripts/admin_development.py on --env "$runtime_env"
 python3 scripts/admin_development.py off --env "$runtime_env"
 ```
 
-Schalte den Entwicklungsoverlay vor regulären Änderungen am Stack aus.
-Admin bleibt über das Gateway unter
-`http://localhost:<Gateway-Port>/management` erreichbar. Für eine
-Farbänderung `src/main/resources/static/assets/management.css` im
-Admin-Checkout bearbeiten, speichern und die Seite neu laden. Dasselbe
-gilt für Templates unter `src/main/jte`. Java-Änderungen werden
-automatisch kompiliert. Nach erfolgreicher Kompilierung startet Spring
-den Anwendungskontext neu. Bei einem Kompilierfehler die Admin-Logs
-prüfen und die korrigierte Datei erneut speichern.
+Admin bleibt am Gateway unter `/management` erreichbar. CSS und JTE
+werden beim Neuladen sichtbar. Erfolgreich kompilierte Java-Änderungen
+starten den Spring-Kontext neu. Cache und Buildausgaben liegen unter
+`.runtime/<instanz>/admin-dev/`, die Quellen sind schreibgeschützt.
+Änderungen am Gradle-Build werden nach `off` und `on` geladen.
 
-Compose baut beim Wechsel das Werkzeugimage mit JDK und Python und verwendet
-dabei den Build-Cache. Der erste Gradle-Start lädt die Distribution und die
-Abhängigkeiten vor dem Bereitschaftscheck. Der Admin-Checkout wird
-schreibgeschützt eingebunden. Gradle-Cache und Buildausgaben liegen unter
-`.runtime/<instanz>/admin-dev/`. Änderungen am Gradle-Build werden nach erneutem `off` und `on` geladen.
-
-Status und Logs sind im Entwicklungsmodus verfügbar. Bei einem Fehlstart
-stellt das Werkzeug die vorherige Variante anhand ihrer tatsächlichen
-Image-ID wieder her. Wenn auch das fehlschlägt,
-bleibt der Zustand für einen erneuten Aufruf von `off` erhalten. Wurde das
-gesamte Projekt bereits per Compose-Down entfernt, räumt `off` den Marker
-der geprüften Instanz auf. Danach gilt der Startblock oben.
+Bei einem Fehlstart versucht das Werkzeug, die vorherige Image-ID
+wiederherzustellen. Bei fehlgeschlagenem Rollback kann `off` erneut
+aufgerufen werden. Nach einem vollständigen Compose-Down räumt `off`
+den Development-Zustand auf.
 
 ## Katalog und Lieferung
 

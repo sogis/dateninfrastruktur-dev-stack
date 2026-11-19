@@ -4,18 +4,18 @@ import fcntl
 import json
 import sys
 
-from compose_runtime import ADMIN_DEV_MARKER, VOLUMES, ComposeContext, docker_output, render_gateway, write_private
+from compose_runtime import (
+    ADMIN_DEV_MARKER, FOUNDATION_UP, SETUP_RUN, VOLUMES, ComposeContext, docker_output, render_gateway, write_private,
+)
 
 
 def setup(context):
     _, retained = context.verify_resources()
     if (context.runtime / ADMIN_DEV_MARKER).exists():
         raise RuntimeError('Switch Admin development off before setup')
-    up = ['up', '--no-deps', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240']
-    run = ['run', '--rm', '--no-deps', '--pull', 'never']
 
-    context.command([*up, 'postgres'])
-    management = [*run, 'management-setup']
+    context.command([*FOUNDATION_UP, 'postgres'])
+    action = 'verify'
     if not retained:
         query = "SELECT EXISTS (SELECT FROM pg_database WHERE datname='dateninfrastruktur_management');"
         exists = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
@@ -23,19 +23,20 @@ def setup(context):
         if exists not in {'f', 't'}:
             raise RuntimeError('Could not determine whether the management database exists')
         if exists == 'f':
-            context.command([*run, 'postgres-init'])
-            management.append('setup')
-    context.command(management)
+            context.command([*SETUP_RUN, 'postgres-init'])
+            action = 'setup'
+    context.command([*SETUP_RUN, 'management-setup', action])
 
-    if not (context.runtime / 'garage.toml').is_file():
-        raise RuntimeError('Private Garage configuration is missing; restore it before setup')
-    context.command([*up, 'garage'])
-    context.command([*run, 'garage-setup'])
+    for filename in ('garage.toml', 'realm-initial.json'):
+        if not (context.runtime / filename).is_file():
+            raise RuntimeError(f'Missing private {filename}; restore it before setup')
+    context.command([*FOUNDATION_UP, 'garage'])
+    context.command([*SETUP_RUN, 'garage-setup'])
     context.values = ComposeContext(context.env_file).values
     render_gateway(context)
     if not retained:
-        context.command([*up, 'clickhouse'])
-        context.command([*run, 'clickhouse-init'])
+        context.command([*FOUNDATION_UP, 'clickhouse'])
+        context.command([*SETUP_RUN, 'clickhouse-init'])
         # Bind the two application volumes before either application is installed.
         for key in ('JENKINS_VOLUME', 'SUPERSET_VOLUME'):
             docker_output('volume', 'create', '--label', f'com.docker.compose.project={context.project}',

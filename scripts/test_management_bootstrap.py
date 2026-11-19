@@ -85,7 +85,7 @@ def exercise(context):
 
     sql(context, 'CREATE SCHEMA incompatible;')
     result = context.command(['--profile', 'setup', 'run', '--rm', '--no-deps',
-                              'management-setup', 'setup'], check=False)
+                              'management-setup'], check=False)
     assert result.returncode and 'Unknown, incomplete or legacy' in result.stderr
     assert sql(context, "SELECT to_regnamespace('di_management') IS NULL;") == 't'
     sql(context, 'DROP SCHEMA incompatible;')

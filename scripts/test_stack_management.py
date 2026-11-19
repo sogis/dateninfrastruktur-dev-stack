@@ -5,11 +5,12 @@ import os
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from uuid import uuid4
 from xml.etree import ElementTree
 
-from compose_runtime import ROOT, init_context, jenkins_image_id, write_private
+from compose_runtime import ROOT, init_context, write_private
 from setup_instance import setup
 from ingestion_test_runtime import cleanup, http, reserve_ports, sql, token
 from test_management_bootstrap import FIXTURE, operator, put
@@ -93,7 +94,9 @@ def main():
         context.verify_resources(require_setup=True)
         assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
         assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
-        jenkins_id = jenkins_image_id(context.values['JENKINS_IMAGE'])
+        preflight = [sys.executable, str(ROOT / 'scripts/compose_runtime.py'), 'check', '--start',
+                     '--env', str(context.env_file)]
+        jenkins_id = subprocess.check_output(preflight, text=True).strip()
         context.command(['up', '-d', '--wait', '--wait-timeout', '300', '--no-build', '--pull', 'never'],
                         overrides={'JENKINS_IMAGE': jenkins_id})
         run_smoke(context)
@@ -152,19 +155,20 @@ def main():
         assert len(before_restart.splitlines()) == 2
         context.verify_resources(require_setup=True)
         context.command(['stop', '--timeout', '60'])
+        assert subprocess.check_output(preflight, text=True).strip() == jenkins_id
         context.command(['up', '-d', '--wait', '--wait-timeout', '300', '--no-build', '--pull', 'never'],
                         overrides={'JENKINS_IMAGE': jenkins_id})
         assert any(row['Image'] == jenkins_id for row in context.verify_project()
                    if row['Config']['Labels']['com.docker.compose.service'] == 'jenkins')
         run_smoke(context)
         assert sql(context, retained) == before_restart
-        # Cached success must not authorize restarting services after schema drift.
-        services = ['admin', 'garage', 'clickhouse']
-        context.command(['stop', *services])
+        # Verify failure must leave the already running application in place.
+        admin_id = context.command(['ps', '-q', 'admin']).stdout
         sql(context, 'CREATE SCHEMA incompatible;')
-        rejected = context.command(['up', '--no-build', '--pull', 'never', '-d', *services], check=False)
-        assert rejected.returncode and 'management-setup' in rejected.stderr
-        assert not context.command(['ps', '-q', *services]).stdout.strip()
+        rejected = subprocess.run(preflight, capture_output=True, text=True)
+        assert rejected.returncode and 'Unknown, incomplete or legacy management schema' in rejected.stderr
+        assert admin_id and context.command(['ps', '-q', 'admin']).stdout == admin_id
+        sql(context, 'DROP SCHEMA incompatible;')
         if args.release_staging_tag:
             for name in ('admin', 'jenkins', 'postgres', 'superset', 'tools'):
                 key = ('TOOL' if name == 'tools' else name.upper()) + '_IMAGE'

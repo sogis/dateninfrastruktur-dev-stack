@@ -96,13 +96,13 @@ class ComposeOwnershipTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'Cannot verify known database'):
                 setup(self.context)
         self.assertEqual(self.context.command.call_count, 2)
-        self.assertEqual(self.context.command.call_args.args[0][-1], 'management-setup')
+        self.assertEqual(self.context.command.call_args.args[0][-2:], ['management-setup', 'verify'])
 
     def test_setup_refuses_to_replace_missing_garage_identity(self):
         self.record_setup()
         self.context.command = Mock(return_value=None)
         with patch.object(runtime, 'docker_output', side_effect=self.docker):
-            with self.assertRaisesRegex(RuntimeError, 'Private Garage configuration is missing'):
+            with self.assertRaisesRegex(RuntimeError, 'Missing private garage.toml'):
                 setup(self.context)
         self.assertFalse((self.context.runtime / 'garage.toml').exists())
 

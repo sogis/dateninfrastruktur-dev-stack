@@ -42,11 +42,6 @@
         "--single-node"
       ],
       "restart": "unless-stopped",
-      "depends_on": {
-        "management-setup": {
-          "condition": "service_completed_successfully"
-        }
-      },
       "environment": {
         "RUST_LOG": "warn"
       },
@@ -77,11 +72,6 @@
     "clickhouse": {
       "image": "${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:26.8}",
       "restart": "unless-stopped",
-      "depends_on": {
-        "management-setup": {
-          "condition": "service_completed_successfully"
-        }
-      },
       "environment": {
         "CLICKHOUSE_DEFAULT_PASSWORD": "${CLICKHOUSE_DEFAULT_PASSWORD:?Generate and select the private runtime.env first}"
       },
@@ -165,8 +155,8 @@
         "--http-port=8080"
       ],
       "depends_on": {
-        "management-setup": {
-          "condition": "service_completed_successfully"
+        "postgres": {
+          "condition": "service_healthy"
         }
       },
       "environment": {
@@ -215,8 +205,8 @@
       },
       "restart": "unless-stopped",
       "depends_on": {
-        "management-setup": {
-          "condition": "service_completed_successfully"
+        "postgres": {
+          "condition": "service_healthy"
         },
         "clickhouse": {
           "condition": "service_healthy"
@@ -267,8 +257,8 @@
       },
       "restart": "unless-stopped",
       "depends_on": {
-        "management-setup": {
-          "condition": "service_completed_successfully"
+        "postgres": {
+          "condition": "service_healthy"
         }
       },
       "environment": {
@@ -308,8 +298,8 @@
       },
       "restart": "on-failure:3",
       "depends_on": {
-        "management-setup": {
-          "condition": "service_completed_successfully"
+        "postgres": {
+          "condition": "service_healthy"
         }
       },
       "expose": [
@@ -432,6 +422,9 @@
     },
     "management-setup": {
       "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.7}",
+      "profiles": [
+        "setup"
+      ],
       "restart": "no",
       "depends_on": {
         "postgres": {
@@ -453,7 +446,7 @@
         "${RUNTIME_DIR}:/runtime"
       ],
       "command": [
-        "verify"
+        "setup"
       ],
       "labels": {
         "di.instance": "${INSTANCE_ID}"

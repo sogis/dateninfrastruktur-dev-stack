@@ -3,6 +3,8 @@ import argparse,json,os,pathlib,re,secrets,subprocess,sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ADMIN_DEV_OVERLAY = ROOT / 'compose.admin-dev.yaml'
 ADMIN_DEV_MARKER = 'admin-dev.json'
+FOUNDATION_UP = ('up', '--no-deps', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240')
+SETUP_RUN = ('run', '--rm', '--no-deps', '--pull', 'never')
 VOLUMES = {
     'POSTGRES_VOLUME': ('postgres-data', None),
     'GARAGE_META_VOLUME': ('garage-meta', 'GARAGE_VOLUMES_EXTERNAL'),
@@ -247,7 +249,7 @@ def main():
     init.add_argument('project')
     check = commands.add_parser('check', help='Verify ownership before a direct Compose command')
     check.add_argument('--env', required=True)
-    check.add_argument('--start', action='store_true', help='Require completed setup and print the checked Jenkins image ID')
+    check.add_argument('--start', action='store_true', help='Start PostgreSQL, verify its management schema and print the checked Jenkins image ID')
     redact = commands.add_parser('redact', help='Filter configured secrets from a private log stream')
     redact.add_argument('--env', required=True)
     args = parser.parse_args()
@@ -265,7 +267,10 @@ def main():
     context.verify_resources(require_setup=args.start)
     if args.start:
         model = json.loads(context.command(['config', '--format', 'json', 'jenkins']).stdout)
-        print(jenkins_image_id(model['services']['jenkins']['image']))
+        image = jenkins_image_id(model['services']['jenkins']['image'])
+        context.command([*FOUNDATION_UP, 'postgres'])
+        context.command([*SETUP_RUN, 'management-setup', 'verify'])
+        print(image)
 
 
 if __name__ == '__main__':
