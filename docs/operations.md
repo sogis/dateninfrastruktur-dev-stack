@@ -1,11 +1,142 @@
 # Lokaler Betrieb der Dateninfrastruktur
 
+## Ersteinrichtung auf macOS
+
+Verwende Docker Desktop mit Compose ab 2.24.4, Python ab 3.9 und Java 25.
+Führe die Befehle im Stack-Checkout in Bash aus. Der Admin-Checkout liegt
+daneben. Die Standardports müssen frei sein, insbesondere Port 8080 für Admin.
+
+```bash
+export DOCKER_CONTEXT=desktop-linux
+runtime_env=$(python3 scripts/compose_runtime.py init meine-dev-instanz --host-admin)
+runtime_dir=$(dirname "$runtime_env")
+host_compose=(docker compose --env-file "$runtime_env" -f compose.yaml -f compose.host-admin.yaml)
+
+"${host_compose[@]}" config --quiet
+"${host_compose[@]}" --profile setup pull
+python3 scripts/setup_instance.py --env "$runtime_env"
+"${host_compose[@]}" up -d --wait --wait-timeout 180 --no-build --pull never keycloak
+
+install -m 600 ../dateninfrastruktur-admin/tests/fixtures/management-bootstrap.xtf "$runtime_dir/bootstrap.xtf"
+python3 scripts/compose_operator.py bootstrap-dev "$runtime_dir/bootstrap.xtf" --env "$runtime_env"
+admin_config=$(python3 scripts/compose_runtime.py admin-host-config --env "$runtime_env")
+"${host_compose[@]}" up -d --wait --wait-timeout 300 --no-build --pull never
+```
+
+Melde dich am Gateway als `anna` an. Das zufällige Passwort steht in
+`KEYCLOAK_DEMO_PASSWORD` in deiner privaten `runtime.env`. Unter macOS
+kannst du es für die Anmeldung direkt in die Zwischenablage kopieren.
+
+```bash
+sed -n 's/^KEYCLOAK_DEMO_PASSWORD="\([0-9a-f]*\)"$/\1/p' "$runtime_env" | tr -d '\n' | pbcopy
+```
+
+Der explizite XTF-Import belegt die leeren Management-Baskets mit
+Beispieldaten, Lieferkonfiguration und Fachrechten. Er bindet Anna und das
+GRETL-Servicekonto an den lokalen Realm. Bewahre den ausgegebenen
+absoluten Pfad zur `runtime.env` für diese Instanz auf.
+
+## Täglicher Ablauf
+
+Setze `runtime_env` in einer neuen Shell auf die Datei der eingerichteten
+Instanz und definiere dort das Array `host_compose` wie oben. Starte im
+Stack-Checkout die Infrastruktur und in einem eigenen Terminal den Admin.
+
+```bash
+"${host_compose[@]}" up -d --wait --wait-timeout 300 --no-build --pull never
+admin_config="$(dirname "$runtime_env")/admin-host.properties"
+(
+  cd ../dateninfrastruktur-admin
+  SPRING_PROFILES_ACTIVE=host-dev SPRING_CONFIG_ADDITIONAL_LOCATION="file:$admin_config" ./gradlew bootRun
+)
+```
+
+In der IDE verwendest du Java 25, den Admin-Checkout als Arbeitsverzeichnis,
+die Spring-Boot-Hauptklasse und dieselben zwei Umgebungsvariablen.
+Starte mit dem Debugger, wenn du Breakpoints brauchst. Kompiliere
+geänderte Java-Dateien in der IDE, damit DevTools den Spring-Kontext
+neu startet. Bei Gradle kannst du in einem zweiten Terminal im Admin-Repo
+`./gradlew compileJava` ausführen. Speichere JTE unter `src/main/jte` und CSS
+unter `src/main/resources/static/assets` und lade die Seite im Browser neu.
+
+Öffne [Management im Gateway](http://localhost:18081/management).
+APISIX und Jenkins erreichen Admin auf Docker Desktop als `admin:8080`.
+Admin bindet sich am Mac an `127.0.0.1:8080` und verwendet
+PostgreSQL auf `127.0.0.1:15432`, Keycloak auf `localhost:18080` und
+Origin auf `127.0.0.1:18090`. Falls du diese Infrastrukturports in
+`runtime.env` änderst, erzeuge die private Admin-Konfiguration erneut.
+Die Keycloak- und Gateway-Ports gehören zur ursprünglichen Instanzkonfiguration.
+
+Beende Admin mit der IDE oder mit Ctrl-C und stoppe die Infrastruktur.
+
+```bash
+"${host_compose[@]}" stop
+# Container und Netzwerk entfernen, Named Volumes behalten
+"${host_compose[@]}" down --timeout 60
+```
+
+Beim Wechsel von Container-Admin auf Host-Admin entferne den Container
+einmal gezielt im bisherigen Projekt. Die `runtime.env` bleibt dieselbe.
+
+```bash
+docker compose --env-file "$runtime_env" -f compose.yaml rm -s -f admin
+```
+
+## GRETL-Job entwickeln
+
+Mit benachbartem Jenkins-Checkout im Stack-Verzeichnis ausführen.
+
+```bash
+export GRETL_JOB_DIR=$(cd ../dateninfrastruktur-jenkins-dev/jobs/csv-delivery && pwd)
+gretl_compose=("${host_compose[@]}" -f compose.gretl-dev.yaml)
+"${gretl_compose[@]}" up -d --wait --wait-timeout 300 --no-build --pull never
+```
+
+Compose übernimmt den schreibgeschützten Mount, wenn du das Overlay
+aktivierst. Bearbeite anschliessend `job.groovy` oder `append.sql` im
+Checkout. GRETL liest die Dateien bei der nächsten Ausführung erneut.
+Verwende beim Start weiterhin dasselbe Overlay, solange du lokale
+Jobquellen brauchst.
+
+Erzeuge eine Beispiel-CSV und lade sie unter
+[Anlieferung im Gateway](http://localhost:18081/anlieferung) als Anna für
+die angebotene Beispielausgabe im Modus **Ersetzen** hoch.
+
+```bash
+printf 'zone,code\nA,1\n' > "$runtime_dir/example.csv"
+"${gretl_compose[@]}" logs --tail 100 jenkins 2>&1 |
+  python3 scripts/compose_runtime.py redact --env "$runtime_env"
+```
+
+Die Lieferseite zeigt den Status und den Validierungsbericht. Nach der
+Annahme zeigt [die Management-Lieferübersicht](http://localhost:18081/management/delivery)
+die Submission. Der resultierende CSV-Snapshot liegt im privaten
+Garage-Bucket und die Tabelle `default.snapshot_<Submission-ID ohne Bindestriche>`
+in ClickHouse.
+
+## Images für den Host-Modus
+
+| Dienst | Image |
+| --- | --- |
+| PostgreSQL/PostGIS | `ghcr.io/sogis/dateninfrastruktur-postgres:0.2.22` |
+| Setup-Werkzeuge | `ghcr.io/sogis/dateninfrastruktur-tools:0.2.22` |
+| Sodata | `ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10` |
+| Jenkins mit GRETL 6 | `ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.22` |
+| Superset | `ghcr.io/sogis/dateninfrastruktur-superset:0.2.22` |
+| Keycloak | `quay.io/keycloak/keycloak:26.8.1` |
+| Garage | `dxflrs/garage:v2.4.1` |
+| ClickHouse | `clickhouse/clickhouse-server:26.8` |
+| Origin | `rclone/rclone:1.75.2` |
+| APISIX | `apache/apisix:3.19.0-debian` |
+
+## Container-Admin und Integrationstests
+
 Der Stack verbindet Admin, Sodata und Jenkins aus Schwestercheckouts mit
 PostgreSQL/PostGIS, Garage, ClickHouse, Keycloak, Superset und APISIX.
 Instanzdateien und Secrets liegen privat unter `.runtime/`.
 Hostports sind an die Loopback-Adresse gebunden.
 
-## Lokale Instanz anlegen
+### Lokale Integrationsinstanz anlegen
 
 Benötigt werden Docker mit Compose und Buildx sowie Python ab 3.9.
 Arbeite im Stack-Checkout mit dem gewünschten lokalen Docker-Kontext. Eine
@@ -19,13 +150,13 @@ project=$(basename "$runtime_dir")
 ```
 
 `init` ergänzt den Präfix um einen Zufallssuffix. Verwende für diese Instanz
-bei späteren Sitzungen dieselbe `runtime.env`. Führe Setup und
-Admin-Umschaltungen einzeln aus.
+bei späteren Sitzungen dieselbe `runtime.env`. Führe Setup getrennt vom
+regulären Start aus.
 
-Seit B2.3 leitet Compose die Volume-Namen vom Projektnamen ab. PostgreSQL
+Compose leitet die Volume-Namen vom Projektnamen ab. PostgreSQL
 verwendet beispielsweise `<projekt>_postgres-data` statt des bisherigen
 `<projekt>_postgres`. Öffne frühere Projekte mit ihrem bisherigen Checkout und
-ihrer bisherigen `runtime.env`. Lege für B2.3 ein frisches Projekt an.
+ihrer bisherigen `runtime.env`. Verwende für den aktuellen Stack ein Projekt mit projektbezogenen Volumes.
 Setup und Startprüfung weisen Konfigurationen mit den alten Volume-Variablen
 ab. Bestehende Volumes bleiben erhalten. Eine Datenübernahme erfordert einen
 eigenen Auftrag.
@@ -48,12 +179,11 @@ JAVA21_HOME=/pfad/zu/java-21 IMAGE_NAME="dateninfrastruktur-jenkins:$project" \
 Für Registry-Images setze `ADMIN_IMAGE`, `JENKINS_IMAGE`, `POSTGRES_IMAGE`,
 `SUPERSET_IMAGE` und `TOOL_IMAGE` auf die jeweilige Referenz
 `ghcr.io/sogis/dateninfrastruktur-<name>:0.2.22`.
-Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen. Baue Sodata aus
-dem benachbarten Checkout. Das veröffentlichte Sodata-Image `0.1.8`
-weist die aktuellen Katalogsichten beim Start ab.
+Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen. Setze für
+veröffentlichtes Sodata `SODATA_IMAGE=ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10`
+in der privaten `runtime.env`.
 
 ```bash
-docker compose -f compose.yaml --env-file "$runtime_env" build sodata
 docker compose -f compose.yaml --env-file "$runtime_env" --profile setup pull --policy missing
 ```
 
@@ -94,7 +224,7 @@ vertraulich. Prüfe das Compose-Modell mit `config --quiet`.
 ### Instanz bewusst zurücksetzen
 
 Der folgende Befehl löscht die Daten in allen Compose-Volumes der ausgewählten
-B2.3-Instanz. Vergewissere dich vorher, dass die private Datei zur gewünschten
+Instanz. Vergewissere dich vorher, dass die private Datei zur gewünschten
 Instanz gehört. Beginne danach mit einem neuen `init`, neuen Zugangsdaten und
 explizitem Setup. Die bisherige private Konfiguration enthält weiterhin ihre
 Garage-Bindung.
@@ -102,27 +232,6 @@ Garage-Bindung.
 ```bash
 docker compose -f compose.yaml --env-file "$runtime_env" --profile '*' down --volumes --remove-orphans
 ```
-
-## Admin aus lokalen Quellen entwickeln
-
-Schalte Admin im laufenden Stack um und vor regulären Stack-Änderungen
-wieder zurück.
-
-```bash
-python3 scripts/admin_development.py on --env "$runtime_env"
-python3 scripts/admin_development.py off --env "$runtime_env"
-```
-
-Admin bleibt am Gateway unter `/management` erreichbar. CSS und JTE
-werden beim Neuladen sichtbar. Erfolgreich kompilierte Java-Änderungen
-starten den Spring-Kontext neu. Cache und Buildausgaben liegen unter
-`.runtime/<instanz>/admin-dev/`, die Quellen sind schreibgeschützt.
-Änderungen am Gradle-Build werden nach `off` und `on` geladen.
-
-Bei einem Fehlstart versucht das Werkzeug, die vorherige Image-ID
-wiederherzustellen. Bei fehlgeschlagenem Rollback kann `off` erneut
-aufgerufen werden. Nach einem vollständigen Compose-Down räumt `off`
-den Development-Zustand auf.
 
 ## Katalog und Lieferung
 

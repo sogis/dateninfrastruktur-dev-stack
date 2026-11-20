@@ -10,9 +10,12 @@ Docker Compose übernimmt Build, Pull, Start, Status, Stopp und Down.
 erzeugt, eine frische Instanz eingerichtet und ein bestehender Stack
 nach der Management-Schemaprüfung gestartet wird. Für integrierte Prüfungen die
 jeweils benötigten Schwesterrepositories im selben Workspace bereitstellen.
-Der Admin-Image-Build benötigt nur den Admin-Checkout. Für CSS, JTE
-und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/operations.md#admin-aus-lokalen-quellen-entwickeln).
+Die [Ersteinrichtung auf macOS](docs/operations.md#ersteinrichtung-auf-macos)
+verwendet veröffentlichte Images für die Infrastruktur und startet Admin
+mit Java 25 auf dem Host. Für Änderungen am GRETL-Job gibt es ein
+[Compose-Overlay](docs/operations.md#gretl-job-entwickeln).
 
+- `python3 scripts/test_host_development.py` prüft Host- und GRETL-Overlays mit Docker Compose.
 - `python3 scripts/test_management_bootstrap.py` prüft Schema, Rollen und XTF-Import/-Export.
 - `python3 scripts/test_cayenne_mapping.py` prüft Mapping-Generierung und echte Cayenne-Schreibvorgänge.
 - `python3 scripts/test_delivery_domain.py` prüft Lieferrechte, Modellabruf,
