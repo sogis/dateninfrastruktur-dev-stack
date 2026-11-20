@@ -163,10 +163,13 @@ def verify_jenkins_delivery(context):
 
         return browser, page
 
-    browser, page = login_as('anna')
-    forms = [form for form in Forms(page).forms if 'di-upload' in form.get('class', '').split()]
-    assert len(forms) == 1, 'Expected one authorised CSV upload form'
-    form = forms[0]
+    def authorized_upload():
+        client, page = login_as('anna')
+        forms = [form for form in Forms(page).forms if 'di-upload' in form.get('class', '').split()]
+        assert len(forms) == 1, 'Expected one authorised CSV upload form'
+        return client, forms[0]
+
+    browser, form = authorized_upload()
 
     def upload(csv, mode='replace'):
         boundary = uuid4().hex
@@ -421,6 +424,8 @@ def verify_jenkins_delivery(context):
 
     # Hold the import path open and terminate only the GRETL process whose
     # working directory matches this fixture's processing submission.
+    # Start a fresh OIDC session before the failure cases on slower machines.
+    browser, form = authorized_upload()
     context.command(['pause', 'clickhouse'])
     try:
         interrupted = upload(valid)
