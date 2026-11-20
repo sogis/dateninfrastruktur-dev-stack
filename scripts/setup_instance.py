@@ -1,5 +1,7 @@
 """Explicitly provision the databases, storage and roles of one Compose instance."""
 import argparse
+import fcntl
+import os
 import sys
 
 from compose_runtime import ADMIN_DEV_IMAGE_FILE, FOUNDATION_UP, SETUP_RUN, ComposeContext, render_gateway
@@ -13,16 +15,8 @@ def setup(context):
             raise RuntimeError(f'Missing private {filename}; restore it before setup')
 
     context.command([*FOUNDATION_UP, 'postgres'])
-    query = "SELECT EXISTS (SELECT FROM pg_database WHERE datname='dateninfrastruktur_management');"
-    exists = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
-                              '-U', 'postgres', '-d', 'postgres', '-c', query]).stdout.strip()
-    if exists not in {'f', 't'}:
-        raise RuntimeError('Could not determine whether the management database exists')
-    if exists == 't':
-        context.command([*SETUP_RUN, 'management-setup', 'verify'])
     context.command([*SETUP_RUN, 'postgres-init'])
-    if exists == 'f':
-        context.command([*SETUP_RUN, 'management-setup', 'setup'])
+    context.command([*SETUP_RUN, 'management-setup', 'setup'])
 
     context.command([*FOUNDATION_UP, 'garage'])
     context.command([*SETUP_RUN, 'garage-setup'])
@@ -38,7 +32,13 @@ def main():
     parser.add_argument('--env', required=True)
     args = parser.parse_args()
     context = ComposeContext(args.env)
-    setup(context)
+    # Serialize deliberate changes to this instance without a runtime marker.
+    directory = os.open(context.runtime, os.O_RDONLY)
+    try:
+        fcntl.flock(directory, fcntl.LOCK_EX)
+        setup(context)
+    finally:
+        os.close(directory)
 
 
 if __name__ == '__main__':

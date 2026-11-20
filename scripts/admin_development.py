@@ -1,6 +1,8 @@
 """Switch the Admin service in the existing Compose project."""
 import argparse
 from contextlib import suppress
+import fcntl
+import os
 import re
 import sys
 import subprocess
@@ -95,7 +97,12 @@ def main():
     parser.add_argument('--env', required=True)
     args = parser.parse_args()
     context = ComposeContext(args.env)
-    switch_admin(context, args.action)
+    directory = os.open(context.runtime, os.O_RDONLY)
+    try:
+        fcntl.flock(directory, fcntl.LOCK_EX)
+        switch_admin(context, args.action)
+    finally:
+        os.close(directory)
 
 
 if __name__ == '__main__':

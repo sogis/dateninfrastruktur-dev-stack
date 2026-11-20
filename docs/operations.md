@@ -59,15 +59,21 @@ docker compose -f compose.yaml --env-file "$runtime_env" --profile setup pull --
 
 ```bash
 python3 scripts/setup_instance.py --env "$runtime_env"
-jenkins_id=$(python3 scripts/compose_runtime.py preflight --env "$runtime_env") &&
-  JENKINS_IMAGE="$jenkins_id" docker compose -f compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
 ```
 
 Setup richtet PostgreSQL, Garage und ClickHouse ein. Mit derselben privaten
-Konfiguration kann es zur Prüfung und Initialisierung erneut ausgeführt werden.
-Die Startprüfung startet bei Bedarf PostgreSQL, liest den Schemazustand und
+Konfiguration kann es erneut ausgeführt werden. Vorhandene Garage- und
+ClickHouse-Zugangsdaten bleiben erhalten.
+
+Nach erfolgreichem Setup startet der Stack mit derselben Datei. Die
+Startprüfung startet bei Bedarf PostgreSQL, liest den Schemazustand und
 bindet Jenkins an die geprüfte Image-ID. Bei einem inkompatiblen Schema bleibt
 der Zustand der laufenden Anwendungen erhalten.
+
+```bash
+jenkins_id=$(python3 scripts/compose_runtime.py preflight --env "$runtime_env") &&
+  JENKINS_IMAGE="$jenkins_id" docker compose -f compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
+```
 
 ### Status, Logs und Stopp
 

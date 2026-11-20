@@ -45,8 +45,8 @@ def encode_env(value):
 
 
 def read_env(path):
-    # --environment prints line-oriented output. Use JSON to preserve values
-    # containing newlines while letting Compose parse its own dotenv syntax.
+    # Ask Compose to project dotenv values into JSON via a throwaway service.
+    # config --environment cannot delimit values that contain newlines.
     keys = re.findall(r'^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=', path.read_text(), re.M)
     if not keys:
         raise RuntimeError('Empty private configuration')
@@ -78,7 +78,8 @@ class ComposeContext:
         path = Path(env_file).absolute()
         self.env_file = path.resolve()
         if ((ROOT / '.runtime').is_symlink() or path.is_symlink() or path.parent.is_symlink()
-                or not self.env_file.is_file()
+                or self.env_file.parent.parent != ROOT / '.runtime'
+                or self.env_file.name != 'runtime.env' or not self.env_file.is_file()
                 or self.env_file.stat().st_mode & 0o077
                 or self.env_file.parent.stat().st_mode & 0o077):
             raise RuntimeError('Select a private runtime.env in a private runtime directory')
@@ -87,7 +88,7 @@ class ComposeContext:
         self.runtime = Path(self.values['RUNTIME_DIR']).resolve()
         if (not re.fullmatch('[a-z][a-z0-9-]{3,62}', self.project)
                 or self.runtime != ROOT / '.runtime' / self.project
-                or self.env_file != self.runtime / 'runtime.env'):
+                or self.env_file.parent != self.runtime):
             raise RuntimeError('Compose project/runtime binding mismatch')
         if any(key.endswith(('_VOLUME', '_VOLUMES_EXTERNAL', '_VOLUME_EXTERNAL')) for key in self.values):
             raise RuntimeError('Legacy runtime uses explicit volume names. Use a new project and private runtime.')
