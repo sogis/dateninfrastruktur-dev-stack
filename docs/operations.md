@@ -48,10 +48,12 @@ JAVA21_HOME=/pfad/zu/java-21 IMAGE_NAME="dateninfrastruktur-jenkins:$project" \
 Für Registry-Images setze `ADMIN_IMAGE`, `JENKINS_IMAGE`, `POSTGRES_IMAGE`,
 `SUPERSET_IMAGE` und `TOOL_IMAGE` auf die jeweilige Referenz
 `ghcr.io/sogis/dateninfrastruktur-<name>:0.2.22`.
-Setze `SODATA_IMAGE=ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.8`.
-Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen.
+Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen. Baue Sodata aus
+dem benachbarten Checkout. Das veröffentlichte Sodata-Image `0.1.8`
+weist die aktuellen Katalogsichten beim Start ab.
 
 ```bash
+docker compose -f compose.yaml --env-file "$runtime_env" build sodata
 docker compose -f compose.yaml --env-file "$runtime_env" --profile setup pull --policy missing
 ```
 
