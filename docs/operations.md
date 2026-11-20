@@ -5,83 +5,69 @@ PostgreSQL/PostGIS, Garage, ClickHouse, Keycloak, Superset und APISIX.
 Instanzdateien und Secrets liegen privat unter `.runtime/`.
 Hostports sind an die Loopback-Adresse gebunden.
 
-## Frische Installation und Normalstart
+## Lokale Instanz anlegen
 
 Benötigt werden Docker mit Compose und Buildx sowie Python ab 3.9.
-Öffne im Stack-Checkout eine saubere Bash mit dem gewünschten Kontext aus
-`docker context ls`. Verwende dieselbe Shell für alle Befehle der Instanz.
+Arbeite im Stack-Checkout mit dem gewünschten lokalen Docker-Kontext. Eine
+saubere Shell hält geerbte Compose-Overrides aus der Instanzkonfiguration fern.
 
 ```bash
 env -i HOME="$HOME" PATH="$PATH" DOCKER_CONTEXT=desktop-linux bash --noprofile --norc
+runtime_env=$(python3 scripts/compose_runtime.py init meine-dev-instanz)
+runtime_dir=$(dirname "$runtime_env")
+project=$(basename "$runtime_dir")
 ```
 
-Die saubere Shell schützt vor versehentlichen Overrides. Falls nötig,
-übergib auch `SSH_AUTH_SOCK` oder `DOCKER_CONFIG` an `env`.
-Wähle die private Datei und führe `init` nur für eine neue Instanz aus.
+`init` ergänzt den Präfix um einen Zufallssuffix. Verwende für diese Instanz
+bei späteren Sitzungen dieselbe `runtime.env`. Führe Setup und
+Admin-Umschaltungen einzeln aus.
 
-```bash
-python3 scripts/compose_runtime.py init dateninfrastruktur-dev-stack  # nur frisch
-runtime_env=.runtime/dateninfrastruktur-dev-stack/runtime.env
-```
+Seit B2.3 leitet Compose die Volume-Namen vom Projektnamen ab. PostgreSQL
+verwendet beispielsweise `<projekt>_postgres-data` statt des bisherigen
+`<projekt>_postgres`. Öffne frühere Projekte mit ihrem bisherigen Checkout und
+ihrer bisherigen `runtime.env`. Lege für B2.3 ein frisches Projekt an.
+Setup und Startprüfung weisen Konfigurationen mit den alten Volume-Variablen
+ab. Bestehende Volumes bleiben erhalten. Eine Datenübernahme erfordert einen
+eigenen Auftrag.
 
 ### Images bereitstellen
 
-Eine neue Instanz erhält projektspezifische lokale Tags für
-`POSTGRES_IMAGE`, `ADMIN_IMAGE`, `SODATA_IMAGE`, `SUPERSET_IMAGE`,
-`TOOL_IMAGE` und `JENKINS_IMAGE`. Die regulären Images baut Compose. Der separate
-Jenkins-Build braucht den Jenkins- und Plugin-Checkout, Java 21 und Maven.
-Admin und Sodata werden im Container mit Java 25 gebaut.
+Für lokale Builds müssen Admin und Sodata neben dem Stack ausgecheckt sein.
+Der separate Jenkins-Build benötigt zusätzlich die Jenkins- und
+Plugin-Checkouts, Java 21 und Maven. Admin und Sodata werden im Container
+mit Java 25 gebaut.
 
 ```bash
-docker compose --file compose.yaml --env-file "$runtime_env" --profile build-tools build postgres admin sodata superset management-tool-build
-docker compose --file compose.yaml --env-file "$runtime_env" pull --policy missing garage clickhouse keycloak origin gateway
-build_dir=$(mktemp -d "$(dirname "$runtime_env")/jenkins-build.XXXXXXXX")
-JAVA21_HOME=/pfad/zu/java-21 \
-  IMAGE_NAME=dateninfrastruktur-jenkins:dateninfrastruktur-dev-stack \
+docker compose -f compose.yaml --env-file "$runtime_env" --profile build-tools build postgres admin sodata superset management-tool-build
+docker compose -f compose.yaml --env-file "$runtime_env" pull --policy missing garage clickhouse keycloak origin gateway
+build_dir=$(mktemp -d "$runtime_dir/jenkins-build.XXXXXXXX")
+JAVA21_HOME=/pfad/zu/java-21 IMAGE_NAME="dateninfrastruktur-jenkins:$project" \
   ../dateninfrastruktur-jenkins-dev/bin/build-image.sh "$build_dir/context"
 ```
 
-Der Wert von `IMAGE_NAME` muss dem ausgewählten `JENKINS_IMAGE` entsprechen.
-Für einen Registry-Start trage die veröffentlichten, versionierten Referenzen
-in dieselben sechs Zeilen der privaten Datei ein. Ein auf amd64 und arm64
-verfügbarer Satz ist `ghcr.io/sogis/dateninfrastruktur-{admin,jenkins,postgres,superset,tools}:0.2.22`
-mit `ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.8` für Sodata. Setze
-jeden Wert separat ein. Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen.
+Für Registry-Images setze `ADMIN_IMAGE`, `JENKINS_IMAGE`, `POSTGRES_IMAGE`,
+`SUPERSET_IMAGE` und `TOOL_IMAGE` auf die jeweilige Referenz
+`ghcr.io/sogis/dateninfrastruktur-<name>:0.2.22`.
+Setze `SODATA_IMAGE=ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.8`.
+Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen.
 
 ```bash
-docker compose --file compose.yaml --env-file "$runtime_env" --profile setup pull --policy missing
+docker compose -f compose.yaml --env-file "$runtime_env" --profile setup pull --policy missing
 ```
-
-Bei wiederholten Starts bleibt die Image-Auswahl in der privaten Datei.
 
 ### Setup und Start
 
-Führe das explizite Setup für eine neue Instanz aus. Es richtet
-die Datenbanken, die Rollen und den privaten Garage-Bucket ein.
-Die Setup-Werkzeuge verwenden laufende Dienste im gewählten Projekt.
-Der Setup-Befehl startet diese gezielt und wartet auf ihre Bereitschaft.
-Jenkins- und Superset-Volumes werden dabei mit den Eigentumslabels
-des Projekts angelegt. Die beiden Images sind erst zum Start nötig.
-
 ```bash
 python3 scripts/setup_instance.py --env "$runtime_env"
+jenkins_id=$(python3 scripts/compose_runtime.py preflight --env "$runtime_env") &&
+  JENKINS_IMAGE="$jenkins_id" docker compose -f compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
 ```
 
-Der Start-Preflight prüft die gebundenen Ressourcen und die lokale
-Jenkins-Image-ID. Er startet ausschliesslich PostgreSQL und prüft das
-Management-Schema lesend. Erst danach gleicht Compose den ganzen
-Stack ab. Bei abgelehnter Schemaprüfung bleiben die Anwendungen
-unangetastet.
-
-```bash
-jenkins_id=$(python3 scripts/compose_runtime.py check --start --env "$runtime_env") &&
-  JENKINS_IMAGE=$jenkins_id docker compose -f compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
-```
-
-Bei einer bestehenden Instanz verwende dieselbe Datei und denselben
-Checkout-Pfad. Erhalte die Volumes, Image-Referenzen, die Setup-Bindung
-und die private Garage- und Realm-Konfiguration. Bei fehlenden Ressourcen
-oder einer abgelehnten Schemaprüfung kläre den Zustand anhand der Sicherung.
+Setup richtet PostgreSQL, Garage und ClickHouse ein. Mit derselben privaten
+Konfiguration kann es zur Prüfung und Initialisierung erneut ausgeführt werden.
+Die Startprüfung startet bei Bedarf PostgreSQL, liest den Schemazustand und
+bindet Jenkins an die geprüfte Image-ID. Bei einem inkompatiblen Schema bleibt
+der Zustand der laufenden Anwendungen erhalten.
 
 ### Status, Logs und Stopp
 
@@ -90,16 +76,24 @@ docker compose -f compose.yaml --env-file "$runtime_env" ps
 set -o pipefail
 docker compose -f compose.yaml --env-file "$runtime_env" logs --tail 100 -f admin 2>&1 |
   python3 scripts/compose_runtime.py redact --env "$runtime_env"
-
-python3 scripts/compose_runtime.py check --env "$runtime_env" &&
-  docker compose -f compose.yaml --env-file "$runtime_env" down --timeout 60
+docker compose -f compose.yaml --env-file "$runtime_env" down --timeout 60
 ```
 
-Für einen Stopp ersetze `down` durch `stop`. Der Eigentumscheck gilt für
-beide Befehle. Führe Änderungen nacheinander aus und verwende zwischen
-Prüfung und Compose dieselbe Konfiguration und denselben Docker-Kontext.
-`down` erhält die Volumes. Verwende für Modellprüfungen `config --quiet`
-und behandle Logs auch nach der Redaktion vertraulich.
+Mit `stop` bleiben auch die Container erhalten. `down` behält die
+Compose-Volumes für den nächsten Start. Behandle auch redigierte Logs
+vertraulich. Prüfe das Compose-Modell mit `config --quiet`.
+
+### Instanz bewusst zurücksetzen
+
+Der folgende Befehl löscht die Daten in allen Compose-Volumes der ausgewählten
+B2.3-Instanz. Vergewissere dich vorher, dass die private Datei zur gewünschten
+Instanz gehört. Beginne danach mit einem neuen `init`, neuen Zugangsdaten und
+explizitem Setup. Die bisherige private Konfiguration enthält weiterhin ihre
+Garage-Bindung.
+
+```bash
+docker compose -f compose.yaml --env-file "$runtime_env" --profile '*' down --volumes --remove-orphans
+```
 
 ## Admin aus lokalen Quellen entwickeln
 
@@ -144,9 +138,9 @@ Das Jenkins-Plugin registriert Submissions bei Admin unter
 dieselbe interne API. Der Stack prüft die Bereitschaft des Jenkins-Diensts.
 Der öffentliche Einstieg für CSV-Lieferungen ist `/anlieferung`.
 
-Der Stack-Browsercheck nutzt ein eigenes Compose-Projekt. Die
-Testbereinigung entfernt nach dem Compose-Down die geprüften
-projektspezifischen Volumes und lokalen Image-Tags. Der Jenkins-Image-Build verwendet den Gradle-Resolver
+Die [Integrationstests](../README.md) erzeugen eigene Compose-Projekte und
+räumen deren Container, Netzwerke und Volumes per Compose auf. Der
+Jenkins-Image-Build verwendet den Gradle-Resolver
 für `ch.so.agi.gretl:gretl-dist:6.0.0-SNAPSHOT:bin@zip` aus
 `https://jars.interlis.guru/snapshots`. Das Image enthält das lokale
 Jenkins-Plugin und den festen Job, den Jenkins mit der GRETL-CLI ausführt.

@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import re
+import subprocess
 import time
 from uuid import uuid4
 
@@ -118,10 +119,11 @@ def trace_downloads(context):
 
 
 def verify_download_traces(context, expected):
-    origin = next(container for container in context.verify_project()
-                  if container['Config']['Labels']['com.docker.compose.service'] == 'origin')
-    network, = origin['NetworkSettings']['Networks'].values()
-    address = network['IPAddress'] + ':8080'
+    origin = context.command(['ps', '-q', 'origin']).stdout.strip()
+    assert origin
+    address = subprocess.check_output([
+        'docker', 'inspect', '--format', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', origin,
+    ], text=True).strip() + ':8080'
     for _ in range(20):
         result = context.command(['exec', '-T', 'gateway', 'cat', '/tmp/di-public-downloads.log'], check=False)
         rows = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]

@@ -2,8 +2,9 @@
 
 Bei repoübergreifender Arbeit auch die Workspace-AGENTS lesen und die
 Gitgrenzen prüfen. Bestehende Arbeit schützen. Build, Start, Status, Logs,
-Stopp und Down direkt mit Docker Compose ausführen. ComposeContext prüft
-die Instanz und ihre Ressourcen. Python-Skripte bleiben mit 3.9 kompatibel.
+Stopp und Down direkt mit Docker Compose ausführen. Compose verwaltet
+Netzwerke und projektbezogene Named Volumes. Python-Skripte bleiben mit
+3.9 kompatibel.
 Obsolete Pfade löschen. Explizites Setup und Admin-Development direkt
 halten und bestehende Werkzeuge nutzen. Keine allgemeine Betriebsengine,
 generischen Manager, Lifecycle-State-Machine oder neue Reviewinfrastruktur.
@@ -11,8 +12,9 @@ generischen Manager, Lifecycle-State-Machine oder neue Reviewinfrastruktur.
 Der Stack besitzt Betrieb, Gateway, Setup und produktübergreifende Tests.
 Setup explizit ausführen. Der Normalstart nutzt bestehende Daten und führt
 keine Migration aus. Tests brauchen eigene Projektnamen, Ports, Volumes,
-schreibbare Hostpfade und synthetische Zugangsdaten. Fremde Ressourcen
-dürfen weder verändert noch entfernt werden.
+schreibbare Hostpfade und synthetische Zugangsdaten. Volumes nur beim
+bewussten Reset oder bei der Bereinigung des eigens erzeugten Testprojekts
+löschen. Fremde Ressourcen schützen.
 
 Der gemeinsame PostgreSQL/PostGIS-Server bedient getrennte logische Datenbanken.
 APISIX ruft die Admin-Authorization-API über `forward-auth` auf. Aktive

@@ -1,7 +1,5 @@
 """Shared isolated MA-G test transport and resource teardown."""
-import json,re,socket,subprocess,urllib.error,urllib.parse,urllib.request
-
-from compose_runtime import LOCAL_IMAGES
+import json,re,socket,urllib.error,urllib.parse,urllib.request
 
 
 def reserve_ports():
@@ -36,39 +34,8 @@ def token(c,user):
     detail=json.loads(data) if code!=200 else {}
     assert code==200,'real Keycloak token issuance failed: '+user+' HTTP '+str(code)+' '+str(detail.get('error'))+' '+str(detail.get('error_description'))
     return json.loads(data)['access_token']
-def cleanup(c):
-    if c.values.get('DI_TEST_FIXTURE')!='true' or not re.fullmatch(r'mag-[a-z0-9-]+',c.project):
+def cleanup(context):
+    if (context.values.get('DI_TEST_FIXTURE') != 'true'
+            or not re.fullmatch(r'mag-[a-z0-9-]+-[0-9a-f]{10,12}', context.project)):
         raise RuntimeError('Refusing to clean a non-fixture Compose project')
-    c.verify_project()
-    ids=subprocess.check_output(['docker','volume','ls','-q','--filter','label=com.docker.compose.project='+c.project],text=True).split()
-    expected = set(c.volume_bindings().values())
-    volumes = json.loads(subprocess.check_output(['docker', 'volume', 'inspect', *ids], text=True)) if ids else []
-    for volume in volumes:
-        name = volume['Name']
-        if (name not in expected
-                or (volume.get('Labels') or {}).get('com.docker.compose.project') != c.project):
-            raise RuntimeError('Refusing to remove an unowned fixture volume: ' + name)
-    # Some volumes are external, and Compose resolves named volumes even
-    # when they carry another project's labels. Remove only the inspected set.
-    c.command(['--profile', '*', 'down'])
-    for volume in volumes:
-        name = volume['Name']
-        current = json.loads(subprocess.check_output(['docker', 'volume', 'inspect', name], text=True))[0]
-        if current != volume:
-            raise RuntimeError('Fixture volume identity changed: ' + name)
-        subprocess.run(['docker','volume','rm',name],check=True,capture_output=True)
-    # A configured shared or release tag is outside the fixture's ownership.
-    images = []
-    for key, name in LOCAL_IMAGES.items():
-        reference = f'dateninfrastruktur-{name}:{c.project}'
-        if reference != c.values.get(key):
-            continue
-        tags = subprocess.check_output(
-            ['docker', 'image', 'ls', '--filter', f'reference={reference}',
-             '--format', '{{.Repository}}:{{.Tag}}'],
-            text=True,
-        ).splitlines()
-        if reference in tags:
-            images.append(reference)
-    if images:
-        subprocess.run(['docker', 'image', 'rm', '--no-prune', *images], check=True, capture_output=True)
+    context.command(['--profile', '*', 'down', '--volumes', '--remove-orphans'])

@@ -1,19 +1,18 @@
-"""Generate private configuration and check an explicit Compose context."""
-import argparse,json,os,pathlib,re,secrets,subprocess,sys
-ROOT=pathlib.Path(__file__).resolve().parents[1]
+"""Generate private instance configuration and verify the management schema before startup."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
 ADMIN_DEV_OVERLAY = ROOT / 'compose.admin-dev.yaml'
-ADMIN_DEV_MARKER = 'admin-dev.json'
+ADMIN_DEV_IMAGE_FILE = 'admin-dev.image'
 FOUNDATION_UP = ('up', '--no-deps', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240')
 SETUP_RUN = ('run', '--rm', '--pull', 'never')
-VOLUMES = {
-    'POSTGRES_VOLUME': ('postgres-data', None),
-    'GARAGE_META_VOLUME': ('garage-meta', 'GARAGE_VOLUMES_EXTERNAL'),
-    'GARAGE_DATA_VOLUME': ('garage-data', 'GARAGE_VOLUMES_EXTERNAL'),
-    'JENKINS_VOLUME': ('jenkins-home', 'JENKINS_VOLUME_EXTERNAL'),
-    'CLICKHOUSE_DATA_VOLUME': ('clickhouse-data', 'CLICKHOUSE_VOLUMES_EXTERNAL'),
-    'CLICKHOUSE_LOG_VOLUME': ('clickhouse-logs', 'CLICKHOUSE_VOLUMES_EXTERNAL'),
-    'SUPERSET_VOLUME': ('superset-home', 'SUPERSET_VOLUME_EXTERNAL'),
-}
 LOCAL_IMAGES = {
     'ADMIN_IMAGE': 'admin', 'SODATA_IMAGE': 'sodata', 'JENKINS_IMAGE': 'jenkins',
     'POSTGRES_IMAGE': 'postgres', 'SUPERSET_IMAGE': 'superset', 'TOOL_IMAGE': 'tools',
@@ -40,144 +39,107 @@ def docker_env():
     ) if key in os.environ}
 
 
-def docker_output(*args):
-    result = subprocess.run(['docker', *args], env=docker_env(), capture_output=True, text=True)
-    if result.returncode:
-        raise RuntimeError('Docker resource check failed; check the selected Docker context')
-    return result.stdout
-
-
 def encode_env(value):
-    # Docker dotenv double quotes plus escaped dollars; JSON covers quotes,
-    # backslashes and line breaks. No shell evaluation is involved.
-    return json.dumps(str(value),ensure_ascii=False).replace('$','$$')
+    # Compose parses double quotes and escaped dollars without shell evaluation.
+    return json.dumps(str(value), ensure_ascii=False).replace('$', '$$')
+
+
 def read_env(path):
-    path=pathlib.Path(path).resolve();source=path.read_text()
-    keys=list(dict.fromkeys(re.findall(r'^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=',source,re.M)))
-    if not keys:raise RuntimeError('Empty private configuration')
-    model={'services':{'env-reader':{'image':'scratch','environment':{k:'${'+k+'}' for k in keys}}}}
-    env=docker_env()
-    result=subprocess.run(['docker','compose','--env-file',str(path),'--file','-','config','--format','json'],input=json.dumps(model),env=env,cwd=ROOT,capture_output=True,text=True)
-    if result.returncode:raise RuntimeError('Invalid private dotenv configuration; details withheld')
-    # Compose's config serializer escapes dollars again for a reusable model.
-    return {k:v.replace('$$','$') for k,v in json.loads(result.stdout)['services']['env-reader']['environment'].items()}
-def write_private(path,text):
-    path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.parent.chmod(0o700)
-    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
-    with os.fdopen(fd,'w') as f:f.write(text)
-    path.chmod(0o600)
+    # --environment prints line-oriented output. Use JSON to preserve values
+    # containing newlines while letting Compose parse its own dotenv syntax.
+    keys = re.findall(r'^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=', path.read_text(), re.M)
+    if not keys:
+        raise RuntimeError('Empty private configuration')
+    model = {'services': {'env-reader': {'image': 'scratch',
+                                       'environment': {key: '${' + key + '}' for key in keys}}}}
+    result = subprocess.run(
+        ['docker', 'compose', '--env-file', str(path), '--file', '-', 'config', '--format', 'json'],
+        input=json.dumps(model), env=docker_env(), cwd=ROOT, capture_output=True, text=True,
+    )
+    if result.returncode:
+        raise RuntimeError('Invalid private dotenv configuration; details withheld')
+    # Compose escapes dollars again in the serialized model.
+    return {key: value.replace('$$', '$')
+            for key, value in json.loads(result.stdout)['services']['env-reader']['environment'].items()}
+
+
+def write_private(path, text):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.chmod(0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w') as stream:
+        os.fchmod(stream.fileno(), 0o600)
+        stream.write(text)
+
+
 class ComposeContext:
     def __init__(self,env_file):
-        path = pathlib.Path(env_file).absolute()
+        path = Path(env_file).absolute()
         self.env_file = path.resolve()
         if ((ROOT / '.runtime').is_symlink() or path.is_symlink() or path.parent.is_symlink()
                 or not self.env_file.is_file()
                 or self.env_file.stat().st_mode & 0o077
                 or self.env_file.parent.stat().st_mode & 0o077):
             raise RuntimeError('Select a private runtime.env in a private runtime directory')
-        if not self.env_file.is_relative_to((ROOT/'.runtime').resolve()):raise RuntimeError('Compose environment must be inside this checkout runtime')
-        self.values=read_env(self.env_file);self.project=self.values['COMPOSE_PROJECT_NAME'];self.runtime=pathlib.Path(self.values['RUNTIME_DIR']).resolve()
+        self.values = read_env(self.env_file)
+        self.project = self.values['COMPOSE_PROJECT_NAME']
+        self.runtime = Path(self.values['RUNTIME_DIR']).resolve()
         if (not re.fullmatch('[a-z][a-z0-9-]{3,62}', self.project)
-                or not self.runtime.is_relative_to(ROOT / '.runtime') or self.env_file.parent != self.runtime):
+                or self.runtime != ROOT / '.runtime' / self.project
+                or self.env_file != self.runtime / 'runtime.env'):
             raise RuntimeError('Compose project/runtime binding mismatch')
-        if not self.values.get('INSTANCE_ID') or any(
+        if any(key.endswith(('_VOLUME', '_VOLUMES_EXTERNAL', '_VOLUME_EXTERNAL')) for key in self.values):
+            raise RuntimeError('Legacy runtime uses explicit volume names. Use a new project and private runtime.')
+        if any(
                 k.startswith('COMPOSE_') and k != 'COMPOSE_PROJECT_NAME' for k in self.values):
-            raise RuntimeError('Invalid instance identity or Compose control variable')
-        self.base=['docker','compose','--project-name',self.project,'--env-file',str(self.env_file),'--file',str(ROOT/'compose.yaml')]
-    def redact(self,value):
-        for k,v in self.values.items():
-            if v and re.search('PASSWORD|SECRET|TOKEN|ACCESS_KEY',k):value=value.replace(v,'[REDACTED]')
+            raise RuntimeError('Unexpected Compose control variable in runtime.env')
+        self.base = ['docker', 'compose', '--project-name', self.project,
+                     '--env-file', str(self.env_file), '--file', str(ROOT / 'compose.yaml')]
+
+    def redact(self, value):
+        for key, secret in self.values.items():
+            if secret and re.search('PASSWORD|SECRET|TOKEN|ACCESS_KEY', key):
+                value = value.replace(secret, '[REDACTED]')
+                if '\n' in secret or '\r' in secret:
+                    for line in filter(None, secret.splitlines()):
+                        value = value.replace(line, '[REDACTED]')
         return value
-    def verify_project(self):
-        ids = docker_output('ps', '-aq', '--filter', 'label=com.docker.compose.project=' + self.project).split()
-        containers = json.loads(docker_output('inspect', *ids)) if ids else []
-        compose_file = str(ROOT / 'compose.yaml')
-        for container in containers:
-            labels = container['Config'].get('Labels') or {}
-            files = labels.get('com.docker.compose.project.config_files')
-            development_admin = (
-                files == f'{compose_file},{ADMIN_DEV_OVERLAY}'
-                and labels.get('com.docker.compose.service') == 'admin'
-                and (self.runtime / ADMIN_DEV_MARKER).is_file()
-            )
-            if (labels.get('com.docker.compose.project') != self.project
-                    or labels.get('di.instance') != self.values['INSTANCE_ID']
-                    or labels.get('com.docker.compose.project.working_dir') != str(ROOT)
-                    or (files != compose_file and not development_admin)):
-                raise RuntimeError('OWNERSHIP_MISMATCH: existing project requires planned migration')
-        return containers
 
-    def volume_bindings(self):
-        return {key: self.values[key] for key in VOLUMES}
-
-    def verify_resources(self, *, require_setup=False, require_volumes=False):
-        containers = self.verify_project()
-        bindings = self.volume_bindings()
-        marker = self.runtime / 'setup-complete.json'
-        retained = marker.exists()
-        if retained:
-            state = json.loads(marker.read_text())
-            if state.get('instance') != self.values['INSTANCE_ID'] or state.get('volumes') != bindings:
-                raise RuntimeError('OWNERSHIP_MISMATCH: setup instance or persistent volume mapping changed')
-        elif require_setup:
-            raise RuntimeError('Explicit setup is required before normal start')
-        if self.values.get('DI_STORAGE_BUCKET') != 'ch.so.daten':
-            raise RuntimeError('Explicit reviewed storage cutover required')
-        network_format = ('{{printf "[%s,%s]" (json (.Label "com.docker.compose.project")) '
-                          '(json (.Label "com.docker.compose.network"))}}')
-        networks = docker_output('network', 'ls', '--filter', f'name=^{self.project}_default$',
-                                 '--format', network_format).splitlines()
-        if any(json.loads(row) != [self.project, 'default'] for row in networks):
-            raise RuntimeError('OWNERSHIP_MISMATCH: default Compose network')
-
-        if (len(set(bindings.values())) != len(bindings)
-                or not all(re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]+', name) for name in bindings.values())):
-            raise RuntimeError('Persistent volumes must have valid, distinct names')
-        volume_format = ('{{printf "[%s,%s,%s]" (json .Name) (json (.Label "com.docker.compose.project")) '
-                         '(json (.Label "com.docker.compose.volume"))}}')
-        volumes = docker_output('volume', 'ls', '--format', volume_format).splitlines()
-        ownership = {name: (project, logical) for name, project, logical in map(json.loads, volumes)}
-        for key, name in bindings.items():
-            logical, external = VOLUMES[key]
-            if external and self.values.get(external, '').lower() == 'true':
-                if not retained or name not in ownership:
-                    raise RuntimeError('External volume requires verified setup and an existing volume: ' + key)
-            elif name in ownership:
-                if ownership[name] != (self.project, logical):
-                    raise RuntimeError('OWNERSHIP_MISMATCH: persistent volume ' + key)
-            elif retained or require_volumes:
-                raise RuntimeError('Configured persistent volume is missing: ' + key)
-        return containers, retained
-
-    def command(self,args,input=None,check=True,*,admin_dev=False,overrides=None):
-        if any(arg in ['up','down','stop','restart','run','exec','rm','logs'] for arg in args):
-            self.verify_project()
+    def command(self, args, input=None, check=True, *, admin_dev=False, overrides=None):
         base = self.base + (['--file', str(ADMIN_DEV_OVERLAY)] if admin_dev else [])
         env = docker_env()
         env.update(DI_TEST_HOST_UID=str(os.getuid()), DI_TEST_HOST_GID=str(os.getgid()))
         env.update(overrides or {})
-        p=subprocess.run(base+list(args),cwd=ROOT,env=env,input=input,capture_output=True,text=True)
-        if p.returncode and check:raise RuntimeError(self.redact(p.stdout+p.stderr)[-8000:])
-        return p
-def init_context(project,ports=None,test_fixture=False):
-    if not re.fullmatch('[a-z][a-z0-9-]{3,62}',project):raise RuntimeError('Invalid project')
+        result = subprocess.run(base + list(args), cwd=ROOT, env=env, input=input,
+                                capture_output=True, text=True)
+        if result.returncode and check:
+            raise RuntimeError(self.redact(result.stdout + result.stderr)[-8000:])
+        return result
+
+
+def init_context(project, ports=None, test_fixture=False):
+    if not re.fullmatch('[a-z][a-z0-9-]{3,62}', project):
+        raise RuntimeError('Invalid project name')
     if (ROOT / '.runtime').is_symlink():
         raise RuntimeError('Checkout runtime may not be a symlink')
-    runtime=ROOT/'.runtime'/project;env_file=runtime/'runtime.env'
-    if env_file.exists():
-        context = ComposeContext(env_file)
-        if context.project != project:
-            raise RuntimeError('Compose project/runtime binding mismatch')
-        context.verify_project()
-        return context
+    runtime = ROOT / '.runtime' / project
+    env_file = runtime / 'runtime.env'
     if runtime.exists() or runtime.is_symlink():
-        raise RuntimeError('Runtime directory already exists without its private configuration')
-    # Fresh mode never adopts an existing running foundation under its default name.
-    existing = any(docker_output(resource, 'ls', '-q', '--filter', 'label=com.docker.compose.project=' + project).strip()
-                   for resource in ('volume', 'network'))
-    if existing or docker_output('ps', '-aq', '--filter', 'label=com.docker.compose.project=' + project).strip():
-        raise RuntimeError('Existing project requires explicit planned migration, never fresh init')
-    values={'COMPOSE_PROJECT_NAME':project,'INSTANCE_ID':secrets.token_hex(16),'RUNTIME_DIR':str(runtime),'GATEWAY_PORT':'18081','KEYCLOAK_PORT':'18080','SUPERSET_PORT':'18088','CLICKHOUSE_HTTP_PORT':'18123','CLICKHOUSE_NATIVE_PORT':'19000','POSTGRES_VOLUME':project+'_postgres','GARAGE_META_VOLUME':project+'_garage-meta','GARAGE_DATA_VOLUME':project+'_garage-data','JENKINS_VOLUME':project+'_jenkins-home','CLICKHOUSE_DATA_VOLUME':project+'_clickhouse-data','CLICKHOUSE_LOG_VOLUME':project+'_clickhouse-logs','SUPERSET_VOLUME':project+'_superset-home','DI_TEST_FIXTURE':'true' if test_fixture else 'false','CLICKHOUSE_ADMIN_USER':'ch_admin','CLICKHOUSE_SUPERSET_USER':'superset_reader'}
+        raise RuntimeError('Choose a new project name; its private runtime already exists')
+    values = {
+        'COMPOSE_PROJECT_NAME': project,
+        'INSTANCE_ID': secrets.token_hex(16),
+        'RUNTIME_DIR': str(runtime),
+        'GATEWAY_PORT': '18081',
+        'KEYCLOAK_PORT': '18080',
+        'SUPERSET_PORT': '18088',
+        'CLICKHOUSE_HTTP_PORT': '18123',
+        'CLICKHOUSE_NATIVE_PORT': '19000',
+        'DI_TEST_FIXTURE': 'true' if test_fixture else 'false',
+        'CLICKHOUSE_ADMIN_USER': 'ch_admin',
+        'CLICKHOUSE_SUPERSET_USER': 'superset_reader',
+    }
     if ports:values.update({k:str(v) for k,v in ports.items()})
     for key in ['POSTGRES_ADMIN_PASSWORD','KEYCLOAK_DB_PASSWORD','KEYCLOAK_ADMIN_PASSWORD','KEYCLOAK_DEMO_PASSWORD','SUPERSET_DB_PASSWORD','SUPERSET_ADMIN_PASSWORD','SUPERSET_SECRET_KEY','CLICKHOUSE_DEFAULT_PASSWORD','CLICKHOUSE_ADMIN_PASSWORD','CLICKHOUSE_TEST_READER_PASSWORD','CLICKHOUSE_SUPERSET_READER_PASSWORD','JENKINS_ADMIN_PASSWORD','DI_WRITER_PASSWORD','DI_PUBLIC_PASSWORD','DI_GATEWAY_SECRET','DI_OIDC_CLIENT_SECRET','DI_SESSION_SECRET','DI_JENKINS_OIDC_CLIENT_SECRET','DI_GRETL_DELIVERY_CLIENT_SECRET','DI_CH_LOADER_PASSWORD']:values[key]=secrets.token_hex(32)
     values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
@@ -246,31 +208,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='action', required=True)
     init = commands.add_parser('init', help='Generate a private environment for a new project')
-    init.add_argument('project')
-    check = commands.add_parser('check', help='Verify ownership before a direct Compose command')
+    init.add_argument('project_prefix', help='Prefix for a new, uniquely named Compose project')
+    check = commands.add_parser('preflight', help='Verify the management schema and print the checked Jenkins image ID')
     check.add_argument('--env', required=True)
-    check.add_argument('--start', action='store_true', help='Start PostgreSQL, verify its management schema and print the checked Jenkins image ID')
     redact = commands.add_parser('redact', help='Filter configured secrets from a private log stream')
     redact.add_argument('--env', required=True)
     args = parser.parse_args()
     if args.action == 'init':
-        print(init_context(args.project).env_file)
+        print(init_context(f'{args.project_prefix}-{secrets.token_hex(6)}').env_file)
         return
     context = ComposeContext(args.env)
     if args.action == 'redact':
-        context.verify_project()
         for line in sys.stdin:
             print(context.redact(line), end='', flush=True)
         return
-    if (context.runtime / ADMIN_DEV_MARKER).exists():
+    if (context.runtime / ADMIN_DEV_IMAGE_FILE).exists():
         raise RuntimeError('Switch Admin development off before changing the regular stack')
-    context.verify_resources(require_setup=args.start)
-    if args.start:
-        model = json.loads(context.command(['config', '--format', 'json', 'jenkins']).stdout)
-        image = jenkins_image_id(model['services']['jenkins']['image'])
-        context.command([*FOUNDATION_UP, 'postgres'])
-        context.command([*SETUP_RUN, 'management-setup', 'verify'])
-        print(image)
+    if not (context.runtime / 'origin.conf').is_file():
+        raise RuntimeError('Run explicit setup before starting the stack')
+    model = json.loads(context.command(['config', '--format', 'json', 'jenkins']).stdout)
+    image = jenkins_image_id(model['services']['jenkins']['image'])
+    context.command([*FOUNDATION_UP, '--no-recreate', 'postgres'])
+    context.command([*SETUP_RUN, 'management-setup', 'verify'])
+    print(image)
 
 
 if __name__ == '__main__':

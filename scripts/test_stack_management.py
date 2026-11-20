@@ -91,10 +91,9 @@ def main():
             if result.returncode:
                 raise RuntimeError(context.redact((result.stdout + result.stderr)[-8000:]))
         setup(context)
-        context.verify_resources(require_setup=True)
         assert sql(context, 'SELECT count(*) FROM di_management.dataset;') == '0'
         assert sql(context, 'SELECT count(*) FROM di_management.t_ili2db_basket;') == '0'
-        preflight = [sys.executable, str(ROOT / 'scripts/compose_runtime.py'), 'check', '--start',
+        preflight = [sys.executable, str(ROOT / 'scripts/compose_runtime.py'), 'preflight',
                      '--env', str(context.env_file)]
         jenkins_id = subprocess.check_output(preflight, text=True).strip()
         context.command(['up', '-d', '--wait', '--wait-timeout', '300', '--no-build', '--pull', 'never'],
@@ -153,13 +152,18 @@ def main():
         '''
         before_restart = sql(context, retained)
         assert len(before_restart.splitlines()) == 2
-        context.verify_resources(require_setup=True)
-        context.command(['stop', '--timeout', '60'])
+        garage_files = ('runtime.env', 'storage-target.json', 'operator.conf', 'origin.conf')
+        before_setup = {name: (context.runtime / name).read_bytes() for name in garage_files}
+        setup(context)
+        assert all((context.runtime / name).read_bytes() == data for name, data in before_setup.items())
+        assert sql(context, retained) == before_restart
+        context.command(['down', '--timeout', '60'])
         assert subprocess.check_output(preflight, text=True).strip() == jenkins_id
         context.command(['up', '-d', '--wait', '--wait-timeout', '300', '--no-build', '--pull', 'never'],
                         overrides={'JENKINS_IMAGE': jenkins_id})
-        assert any(row['Image'] == jenkins_id for row in context.verify_project()
-                   if row['Config']['Labels']['com.docker.compose.service'] == 'jenkins')
+        jenkins = context.command(['ps', '-q', 'jenkins']).stdout.strip()
+        assert jenkins and subprocess.check_output(
+            ['docker', 'inspect', '--format', '{{.Image}}', jenkins], text=True).strip() == jenkins_id
         run_smoke(context)
         assert sql(context, retained) == before_restart
         # Verify failure must leave the already running application in place.
