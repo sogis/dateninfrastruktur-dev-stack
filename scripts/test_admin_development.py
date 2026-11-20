@@ -47,23 +47,29 @@ class AdminDevelopmentTest(unittest.TestCase):
     def test_failed_switch_restores_previous_image_and_removes_marker(self):
         with tempfile.TemporaryDirectory() as directory:
             image = 'sha256:' + 'a' * 64
-            context = SimpleNamespace(runtime=Path(directory), values={'INSTANCE_ID': 'fixture'}, redact=lambda value: value)
-            context.verify_resources = Mock(return_value=[{
+            context = SimpleNamespace(runtime=Path(directory), values={'INSTANCE_ID': 'fixture'},
+                                      redact=lambda value: value.replace('synthetic-token', '[REDACTED]'))
+            context.verify_resources = Mock(return_value=([{
                 'Image': image,
                 'Config': {'Image': 'fixture:old', 'Labels': {
                     'com.docker.compose.service': 'admin',
                     'com.docker.compose.project.config_files': str(runtime.ROOT / 'compose.yaml'),
                 }},
                 'State': {'Running': True, 'Health': {'Status': 'healthy'}},
-            }])
-            context.command = Mock(side_effect=[RuntimeError('unhealthy'), SimpleNamespace(stdout='fixture failure'), None])
-            with patch.object(dev, 'development_overrides', return_value={'DI_ADMIN_DEV_IMAGE': 'fixture:dev'}), \
-                    patch.object(dev, 'image_available', return_value=True), \
-                    patch.object(dev.subprocess, 'run', return_value=SimpleNamespace(returncode=1)):
-                with self.assertRaisesRegex(RuntimeError, 'Previous Admin restored'):
+            }], True))
+            context.command = Mock(side_effect=[
+                None, RuntimeError('unhealthy'), SimpleNamespace(stdout='synthetic-token', stderr=''), None,
+            ])
+            source = context.runtime / 'dateninfrastruktur-admin/scripts'
+            source.mkdir(parents=True)
+            (source / 'dev_reload.py').touch()
+            with patch.object(dev, 'ROOT', context.runtime / 'stack'):
+                with self.assertRaisesRegex(RuntimeError, 'Previous Admin restored') as failure:
                     dev.switch_admin(context, 'on')
+            self.assertIn('[REDACTED]', str(failure.exception))
+            self.assertNotIn('synthetic-token', str(failure.exception))
             self.assertFalse((context.runtime / runtime.ADMIN_DEV_MARKER).exists())
-            first, logs, rollback = context.command.call_args_list
+            _, first, logs, rollback = context.command.call_args_list
             self.assertEqual(logs.args[0], ['logs', '--tail', '40', 'admin'])
             self.assertTrue(first.kwargs['admin_dev'])
             self.assertFalse(rollback.kwargs['admin_dev'])
@@ -87,7 +93,6 @@ class AdminDevelopmentTest(unittest.TestCase):
         context = runtime.ComposeContext.__new__(runtime.ComposeContext)
         context.values = {'DI_TEST_FIXTURE': 'false'}
         context.base = ['docker', 'compose', '--file', str(runtime.ROOT / 'compose.yaml')]
-        context.command_overrides = {}
         with patch.object(runtime.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
             context.command(['config', '--quiet'], admin_dev=True)
         env = run.call_args.kwargs['env']
@@ -97,7 +102,7 @@ class AdminDevelopmentTest(unittest.TestCase):
     def test_off_clears_the_bound_marker_after_the_project_was_removed(self):
         with tempfile.TemporaryDirectory() as directory:
             context = SimpleNamespace(runtime=Path(directory), values={'INSTANCE_ID': 'fixture'},
-                                      verify_resources=Mock(return_value=[]), command=Mock())
+                                      verify_resources=Mock(return_value=([], True)), command=Mock())
             marker = context.runtime / runtime.ADMIN_DEV_MARKER
             marker.write_text(json.dumps({'instance': 'other', 'image': 'sha256:' + 'a' * 64}))
             with self.assertRaisesRegex(RuntimeError, 'OWNERSHIP_MISMATCH'):

@@ -83,10 +83,8 @@ except urllib.error.HTTPError as error:
 
     def stage(state, contents):
         key = state['candidatePrefix'] + 'snapshot.csv'
-        source = put(context, 's3-a-candidate-' + str(uuid4()) + '.csv', contents)
-        context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'rclone',
-                         'management-setup', '--config', '/runtime/operator.conf', 'copyto',
-                         '/runtime/' + source.name, 'storage:ch.so.daten/' + key])
+        context.command(['run', '--rm', '-T', 'storage-tool', 'rcat', 'storage:ch.so.daten/' + key],
+                        input=contents.decode())
         assert call('GET', '/' + key, None, 200, origin=True).encode() == contents
 
     def complete(submission, expected):
@@ -504,10 +502,10 @@ def main():
                          'keycloak', 'origin', 'admin'])
         identities = delivery_identities(context)
         if jenkins_id:
-            context.command_overrides['JENKINS_IMAGE'] = jenkins_id
             context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'clickhouse'])
             context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'clickhouse-init'])
-            context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'gateway'])
+            context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '300', 'gateway'],
+                            overrides={'JENKINS_IMAGE': jenkins_id})
             verify_jenkins_delivery(context)
         else:
             verify_garage_delivery(context, *identities)

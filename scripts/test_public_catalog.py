@@ -101,12 +101,9 @@ def bind_identity(context, access_token):
 
 
 def stage_files(context):
-    source = put(context, 'catalog-download.csv', DATA)
     for path in (OPEN, RESTRICTED):
-        context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--entrypoint', 'rclone',
-                         'management-setup', '--config', '/runtime/operator.conf', 'copyto',
-                         '/runtime/' + source.name, 'storage:ch.so.daten' + path])
-
+        context.command(['run', '--rm', '-T', 'storage-tool', 'rcat', 'storage:ch.so.daten' + path],
+                        input=DATA.decode())
 
 def trace_downloads(context):
     path = context.runtime / 'apisix.yaml'

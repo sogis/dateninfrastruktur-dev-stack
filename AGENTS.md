@@ -1,10 +1,12 @@
 # dateninfrastruktur-dev-stack
 
 Bei repoübergreifender Arbeit auch die Workspace-AGENTS lesen und die
-Gitgrenzen prüfen. Bestehende Arbeit schützen. Docker Compose, den vorhandenen
-ComposeContext und Python 3.9 verwenden. Obsolete Pfade löschen und auf
-spekulative Abstraktionen, Kompatibilitätsschichten und eigene Orchestrierung
-oder Reviewinfrastruktur verzichten.
+Gitgrenzen prüfen. Bestehende Arbeit schützen. Build, Start, Status, Logs,
+Stopp und Down direkt mit Docker Compose ausführen. ComposeContext prüft
+die Instanz und ihre Ressourcen. Python-Skripte bleiben mit 3.9 kompatibel.
+Obsolete Pfade löschen. Explizites Setup und Admin-Development direkt
+halten und bestehende Werkzeuge nutzen. Keine allgemeine Betriebsengine,
+generischen Manager, Lifecycle-State-Machine oder neue Reviewinfrastruktur.
 
 Der Stack besitzt Betrieb, Gateway, Setup und produktübergreifende Tests.
 Setup explizit ausführen. Der Normalstart nutzt bestehende Daten und führt

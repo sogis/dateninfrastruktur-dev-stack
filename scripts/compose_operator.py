@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 
-from compose_runtime import ComposeContext
+from compose_runtime import SETUP_RUN, ComposeContext
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
         raise RuntimeError('Import requires a private regular XTF file')
     context.verify_resources()
     inside = '/runtime/' + path.relative_to(context.runtime).as_posix()
-    result = context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', '--pull', 'never',
+    result = context.command([*SETUP_RUN,
                               '--user', f'{os.getuid()}:{os.getgid()}',
                               '-e', 'DI_TOOL_RUNTIME=/tmp/di-management-transfer',
                               'management-setup', args.action, inside])

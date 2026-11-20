@@ -29,18 +29,46 @@ class ComposeOwnershipTest(unittest.TestCase):
         if (resource, action) == ('network', 'ls'):
             return ''
         if (resource, action) == ('volume', 'ls'):
-            return '\n'.join(self.names)
-        if (resource, action) == ('volume', 'inspect'):
-            return json.dumps([{'Name': name, 'Labels': {
-                'com.docker.compose.project': self.label_project,
-                'com.docker.compose.volume': name.removeprefix('fixture_'),
-            }} for name in args])
+            return '\n'.join(json.dumps([name, self.label_project, name.removeprefix('fixture_')])
+                             for name in self.names)
         self.fail((resource, action, args))
 
     def record_setup(self):
         (self.context.runtime / 'setup-complete.json').write_text(json.dumps({
             'instance': self.context.values['INSTANCE_ID'], 'volumes': self.context.volume_bindings(),
         }))
+
+    def test_private_init_keeps_configuration_and_round_trips_multiline_credentials(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(runtime, 'docker_output', return_value=''):
+            root = Path(directory).resolve()
+            (root / 'services').symlink_to(runtime.ROOT / 'services')
+            with patch.object(runtime, 'ROOT', root):
+                context = runtime.init_context('fixture-private', test_fixture=True)
+                self.assertEqual(context.env_file.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(context.runtime.stat().st_mode & 0o777, 0o700)
+                secret = 'a=b# "quote" \\ $ $$ ${literal}\nCOMPOSE_FILE=inside-the-value'
+                content = context.env_file.read_text() + 'EXTRA_SECRET=' + runtime.encode_env(secret) + '\nEMPTY=\nPROJECT_REFERENCE="${COMPOSE_PROJECT_NAME}"\n'
+                runtime.write_private(context.env_file, content)
+                with patch.dict('os.environ', {'COMPOSE_PROJECT_NAME': 'foreign-project', 'INSTANCE_ID': 'foreign',
+                                               'POSTGRES_VOLUME': 'foreign', 'ADMIN_IMAGE': 'foreign'}):
+                    current = runtime.init_context('fixture-private', test_fixture=True)
+                self.assertEqual(current.env_file.read_text(), content)
+                self.assertEqual(current.values['INSTANCE_ID'], context.values['INSTANCE_ID'])
+                self.assertEqual(current.values['POSTGRES_VOLUME'], context.values['POSTGRES_VOLUME'])
+                self.assertEqual(current.values['ADMIN_IMAGE'], context.values['ADMIN_IMAGE'])
+                self.assertEqual(current.values['EXTRA_SECRET'], secret)
+                self.assertEqual(current.values['EMPTY'], '')
+                self.assertEqual(current.values['PROJECT_REFERENCE'], context.project)
+                self.assertNotIn('COMPOSE_FILE', current.values)
+                current.values['DI_GATEWAY_SECRET'] = secret
+                runtime.render_gateway(current)
+                config = json.loads((current.runtime / 'apisix.yaml').read_text().removesuffix('#END\n'))
+                header, = [route['plugins']['forward-auth']['extra_headers']['X-DI-Gateway-Credential']
+                           for route in config['routes'] if 'forward-auth' in route.get('plugins', {})]
+                self.assertEqual(header, secret)
+                runtime.write_private(context.env_file, content + 'BROKEN="unterminated\n')
+                with self.assertRaisesRegex(RuntimeError, '^Invalid private dotenv configuration; details withheld$'):
+                    runtime.read_env(context.env_file)
 
     def test_start_requires_setup_and_unchanged_volume_bindings(self):
         with self.assertRaisesRegex(RuntimeError, 'Explicit setup'):
@@ -61,13 +89,22 @@ class ComposeOwnershipTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'OWNERSHIP_MISMATCH.*POSTGRES_VOLUME'):
                 self.context.verify_resources()
 
-    def test_retained_setup_does_not_initialize_a_missing_database(self):
+    def test_retained_setup_only_verifies_management_database(self):
         self.record_setup()
-        self.context.command = Mock(side_effect=[None, SimpleNamespace(stdout='0\n')])
+        self.context.command = Mock(side_effect=[None, RuntimeError('Cannot verify known database')])
         with patch.object(runtime, 'docker_output', side_effect=self.docker):
-            with self.assertRaisesRegex(RuntimeError, 'Known management database is missing'):
+            with self.assertRaisesRegex(RuntimeError, 'Cannot verify known database'):
                 setup(self.context)
         self.assertEqual(self.context.command.call_count, 2)
+        self.assertEqual(self.context.command.call_args.args[0][-2:], ['management-setup', 'verify'])
+
+    def test_setup_refuses_to_replace_missing_garage_identity(self):
+        self.record_setup()
+        self.context.command = Mock(return_value=None)
+        with patch.object(runtime, 'docker_output', side_effect=self.docker):
+            with self.assertRaisesRegex(RuntimeError, 'Missing private garage.toml'):
+                setup(self.context)
+        self.assertFalse((self.context.runtime / 'garage.toml').exists())
 
     def test_log_filter_refuses_to_emit_logs_from_a_foreign_project(self):
         context = Mock()

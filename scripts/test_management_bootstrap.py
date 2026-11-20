@@ -7,7 +7,7 @@ import sys
 from uuid import uuid4
 from xml.etree import ElementTree as ET
 
-from compose_runtime import ROOT, init_context
+from compose_runtime import ROOT, SETUP_RUN, init_context
 from ingestion_test_runtime import cleanup, reserve_ports, sql
 
 ADMIN = ROOT.parent / 'dateninfrastruktur-admin'
@@ -80,6 +80,9 @@ def database_ids(context, expected):
 
 def exercise(context):
     context.command(['--profile', 'build-tools', 'build', 'postgres', 'management-tool-build'])
+    rejected = context.command([*SETUP_RUN, 'management-setup', 'verify'], check=False)
+    assert rejected.returncode and 'PostgreSQL' in rejected.stderr
+    assert not context.verify_project(), 'The verifier must not start PostgreSQL'
     context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '150', 'postgres'])
     context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'postgres-init'])
 

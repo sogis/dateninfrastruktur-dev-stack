@@ -4,43 +4,46 @@ import fcntl
 import json
 import sys
 
-from compose_runtime import ADMIN_DEV_MARKER, ComposeContext, render, write_private
+from compose_runtime import (
+    ADMIN_DEV_MARKER, FOUNDATION_UP, SETUP_RUN, VOLUMES, ComposeContext, docker_output, render_gateway, write_private,
+)
 
 
 def setup(context):
-    context.verify_resources()
+    _, retained = context.verify_resources()
     if (context.runtime / ADMIN_DEV_MARKER).exists():
         raise RuntimeError('Switch Admin development off before setup')
-    retained = context.has_setup()
+
+    context.command([*FOUNDATION_UP, 'postgres'])
+    action = 'verify'
     if not retained:
-        jenkins_id = context.configured_jenkins_id()
-    up = ['up', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240']
-    run = ['--profile', 'setup', 'run', '--rm', '--no-deps', '--pull', 'never']
+        query = "SELECT EXISTS (SELECT FROM pg_database WHERE datname='dateninfrastruktur_management');"
+        exists = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
+                                  '-U', 'postgres', '-d', 'postgres', '-c', query]).stdout.strip()
+        if exists not in {'f', 't'}:
+            raise RuntimeError('Could not determine whether the management database exists')
+        if exists == 'f':
+            context.command([*SETUP_RUN, 'postgres-init'])
+            action = 'setup'
+    context.command([*SETUP_RUN, 'management-setup', action])
 
-    context.command([*up, 'postgres'])
-    query = "SELECT count(*) FROM pg_database WHERE datname='dateninfrastruktur_management';"
-    count = context.command(['exec', '-T', 'postgres', 'psql', '-X', '-q', '-At',
-                             '-U', 'postgres', '-d', 'postgres', '-c', query]).stdout.strip()
-    if retained and count != '1':
-        raise RuntimeError('Known management database is missing; restore it before setup')
-    if count not in {'0', '1'}:
-        raise RuntimeError('Could not determine whether the management database exists')
-
-    if count == '0':
-        context.command([*run, 'postgres-init'])
-    context.command([*run, 'management-setup', *(['verify'] if count == '1' else [])])
-    context.command([*up, 'garage'])
-    context.command([*run, 'garage-setup'])
+    for filename in ('garage.toml', 'realm-initial.json'):
+        if not (context.runtime / filename).is_file():
+            raise RuntimeError(f'Missing private {filename}; restore it before setup')
+    context.command([*FOUNDATION_UP, 'garage'])
+    context.command([*SETUP_RUN, 'garage-setup'])
     context.values = ComposeContext(context.env_file).values
-    render(context)
+    render_gateway(context)
     if not retained:
-        context.command([*up, 'clickhouse'])
-        context.command([*run, 'clickhouse-init'])
-        context.command(['up', '--no-start', '--no-deps', '--no-build', '--pull', 'never', 'jenkins', 'superset'],
-                        overrides={'JENKINS_IMAGE': jenkins_id})
+        context.command([*FOUNDATION_UP, 'clickhouse'])
+        context.command([*SETUP_RUN, 'clickhouse-init'])
+        # Bind the two application volumes before either application is installed.
+        for key in ('JENKINS_VOLUME', 'SUPERSET_VOLUME'):
+            docker_output('volume', 'create', '--label', f'com.docker.compose.project={context.project}',
+                          '--label', f'com.docker.compose.volume={VOLUMES[key][0]}', '--', context.values[key])
         context.verify_resources(require_volumes=True)
         write_private(context.runtime / 'setup-complete.json', json.dumps({
-            'instance': context.values['INSTANCE_ID'], 'mode': 'explicit-setup',
+            'instance': context.values['INSTANCE_ID'],
             'volumes': context.volume_bindings(),
         }, indent=2) + '\n')
     print('Explicit setup complete')
