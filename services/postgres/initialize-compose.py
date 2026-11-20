@@ -15,7 +15,7 @@ for role in ['keycloak','superset']:
     if flags!='f':raise RuntimeError('Unexpected privileged application role')
     if sql('postgres','SELECT count(*) FROM pg_database WHERE datname='+literal(role)+';')=='0':
         sql('postgres','CREATE DATABASE '+role+' TEMPLATE template0;')
-        sql(role,'REVOKE ALL ON DATABASE '+role+' FROM PUBLIC; GRANT CONNECT,TEMPORARY ON DATABASE '+role+' TO '+role+'; REVOKE ALL ON SCHEMA public FROM PUBLIC; GRANT USAGE,CREATE ON SCHEMA public TO '+role+';')
+    sql(role,'REVOKE ALL ON DATABASE '+role+' FROM PUBLIC; GRANT CONNECT,TEMPORARY ON DATABASE '+role+' TO '+role+'; REVOKE ALL ON SCHEMA public FROM PUBLIC; GRANT USAGE,CREATE ON SCHEMA public TO '+role+';')
     sql(role,'SELECT 1;',role,password)
 if sql('postgres',"SELECT count(*) FROM pg_database WHERE datname='dateninfrastruktur_management';")=='0':
     sql('postgres','CREATE DATABASE dateninfrastruktur_management TEMPLATE template0; REVOKE ALL ON DATABASE dateninfrastruktur_management FROM PUBLIC;')

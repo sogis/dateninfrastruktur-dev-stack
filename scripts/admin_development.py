@@ -35,7 +35,7 @@ def switch_admin(context, action):
         raise RuntimeError('Expected one Admin container. Start the configured stack first.')
     result = subprocess.run(
         ['docker', 'inspect', '--format',
-         '{{.Image}} {{.State.Running}} {{.State.Health.Status}} '
+         '{{.Image}} {{.State.Running}} {{with .State.Health}}{{.Status}}{{else}}-{{end}} '
          '{{index .Config.Labels "com.docker.compose.project.config_files"}}', containers[0]],
         env=docker_env(), capture_output=True, text=True,
     )

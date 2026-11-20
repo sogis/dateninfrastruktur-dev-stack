@@ -86,6 +86,33 @@ def exercise(context):
     context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '150', 'postgres'])
     context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'postgres-init'])
 
+    for role in ('keycloak', 'superset'):
+        psql = ['exec', '-T', 'postgres', 'psql', '-XqAt', '-v', 'ON_ERROR_STOP=1',
+                '-U', 'postgres', '-d', role]
+        if role == 'keycloak':
+            context.command(psql, input="""
+                SET ROLE keycloak;
+                CREATE TABLE public.setup_probe (value text);
+                INSERT INTO public.setup_probe VALUES ('before restart');
+            """)
+        context.command(psql, input=f'REVOKE CREATE ON SCHEMA public FROM {role};')
+        assert context.command(psql, input=f"""
+            SELECT has_schema_privilege('{role}', 'public', 'CREATE');
+        """).stdout.strip() == 'f', role
+
+    context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'postgres-init'])
+    for role in ('keycloak', 'superset'):
+        query = "SELECT current_user, has_schema_privilege(current_user, 'public', 'CREATE');"
+        if role == 'keycloak':
+            query += ' SELECT value FROM public.setup_probe;'
+        result = context.command([
+            *SETUP_RUN, '--no-deps', '--entrypoint', 'sh', 'postgres-init', '-ec',
+            f'PGPASSWORD="${role.upper()}_DB_PASSWORD" psql -XqwAt -v ON_ERROR_STOP=1 -U "$1" -d "$1"',
+            'psql', role,
+        ], input=query)
+        expected = [f'{role}|t'] + (['before restart'] if role == 'keycloak' else [])
+        assert result.stdout.splitlines() == expected, role
+
     sql(context, 'CREATE SCHEMA incompatible;')
     result = context.command(['--profile', 'setup', 'run', '--rm', '--no-deps',
                               'management-setup'], check=False)
