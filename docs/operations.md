@@ -23,7 +23,19 @@ admin_config=$(python3 scripts/compose_runtime.py admin-host-config --env "$runt
 "${host_compose[@]}" up -d --wait --wait-timeout 300 --no-build --pull never
 ```
 
-Melde dich am Gateway als `anna` an. Das zufällige Passwort steht in
+Starte Admin im benachbarten Checkout mit Java 25. Der Befehl läuft im
+Vordergrund. In der IDE verwendest du dieselben zwei Umgebungsvariablen
+und den Admin-Checkout als Arbeitsverzeichnis.
+
+```bash
+(
+  cd ../dateninfrastruktur-admin
+  SPRING_PROFILES_ACTIVE=host-dev SPRING_CONFIG_ADDITIONAL_LOCATION="file:$admin_config" ./gradlew bootRun
+)
+```
+
+Sobald Admin gestartet ist, melde dich am [Gateway](http://localhost:18081/management)
+als `anna` an. Das zufällige Passwort steht in
 `KEYCLOAK_DEMO_PASSWORD` in deiner privaten `runtime.env`. Unter macOS
 kannst du es für die Anmeldung direkt in die Zwischenablage kopieren.
 
