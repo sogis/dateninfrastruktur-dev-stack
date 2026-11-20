@@ -345,7 +345,6 @@ def verify_jenkins_delivery(context):
         set_metadata_reader(anna)
 
     def move_report(source, target):
-        context.verify_project()
         context.command(['exec', '-T', 'jenkins', 'sh', '-c',
             'mv "$JENKINS_HOME/$1" "$JENKINS_HOME/$2"', 'sh', source, target])
 
@@ -422,7 +421,6 @@ def verify_jenkins_delivery(context):
 
     # Hold the import path open and terminate only the GRETL process whose
     # working directory matches this fixture's processing submission.
-    context.verify_project()
     context.command(['pause', 'clickhouse'])
     try:
         interrupted = upload(valid)
@@ -443,7 +441,6 @@ def verify_jenkins_delivery(context):
         ''', 'sh', str(interrupted[0])])
         await_result(interrupted, 'failed')
     finally:
-        context.verify_project()
         context.command(['unpause', 'clickhouse'])
 
     context.command(['stop', 'clickhouse'])

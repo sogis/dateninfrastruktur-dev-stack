@@ -20,7 +20,6 @@ def main():
         raise RuntimeError('Place the XTF file in the selected private runtime')
     if args.action == 'import' and (not path.is_file() or path.stat().st_mode & 0o077):
         raise RuntimeError('Import requires a private regular XTF file')
-    context.verify_resources()
     inside = '/runtime/' + path.relative_to(context.runtime).as_posix()
     result = context.command([*SETUP_RUN,
                               '--user', f'{os.getuid()}:{os.getgid()}',

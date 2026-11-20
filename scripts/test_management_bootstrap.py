@@ -82,7 +82,7 @@ def exercise(context):
     context.command(['--profile', 'build-tools', 'build', 'postgres', 'management-tool-build'])
     rejected = context.command([*SETUP_RUN, 'management-setup', 'verify'], check=False)
     assert rejected.returncode and 'PostgreSQL' in rejected.stderr
-    assert not context.verify_project(), 'The verifier must not start PostgreSQL'
+    assert not context.command(['ps', '-aq', 'postgres']).stdout.strip(), 'The verifier must not start PostgreSQL'
     context.command(['up', '--no-build', '-d', '--wait', '--wait-timeout', '150', 'postgres'])
     context.command(['--profile', 'setup', 'run', '--rm', '--no-deps', 'postgres-init'])
 
@@ -193,9 +193,6 @@ def main():
     assert not context.command(['ps', '-aq']).stdout.strip()
     assert not subprocess.check_output(['docker', 'volume', 'ls', '-q', '--filter',
         'label=com.docker.compose.project=' + context.project], text=True).strip()
-    for key in ('POSTGRES_IMAGE', 'TOOL_IMAGE'):
-        result = subprocess.run(['docker', 'image', 'inspect', context.values[key]], capture_output=True)
-        assert result.returncode, f"Fixture image tag remained: {context.values[key]}"
     print('Management bootstrap and fixture cleanup verified')
 
 

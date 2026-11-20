@@ -29,9 +29,6 @@
         "interval": "3s",
         "timeout": "3s",
         "retries": 40
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "garage": {
@@ -64,9 +61,6 @@
         "interval": "5s",
         "timeout": "5s",
         "retries": 30
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "clickhouse": {
@@ -94,9 +88,6 @@
         "timeout": "5s",
         "retries": 60,
         "start_period": "10s"
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "jenkins": {
@@ -141,9 +132,6 @@
         "timeout": "5s",
         "retries": 30,
         "start_period": "30s"
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "keycloak": {
@@ -188,9 +176,6 @@
         "timeout": "5s",
         "retries": 60,
         "start_period": "30s"
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "superset": {
@@ -244,9 +229,6 @@
         "timeout": "5s",
         "retries": 60,
         "start_period": "120s"
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "admin": {
@@ -281,9 +263,6 @@
         "timeout": "5s",
         "retries": 40,
         "start_period": "15s"
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "sodata": {
@@ -319,9 +298,6 @@
         "timeout": "5s",
         "retries": 30,
         "start_period": "30s"
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "origin": {
@@ -377,9 +353,6 @@
         "interval": "5s",
         "timeout": "3s",
         "retries": 30
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "gateway": {
@@ -415,9 +388,6 @@
         "interval": "3s",
         "timeout": "3s",
         "retries": 40
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "management-setup": {
@@ -442,10 +412,7 @@
       ],
       "command": [
         "setup"
-      ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
+      ]
     },
     "postgres-init": {
       "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.7}",
@@ -465,9 +432,6 @@
         "PGPASSWORD": "${POSTGRES_ADMIN_PASSWORD}",
         "KEYCLOAK_DB_PASSWORD": "${KEYCLOAK_DB_PASSWORD}",
         "SUPERSET_DB_PASSWORD": "${SUPERSET_DB_PASSWORD}"
-      },
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
       }
     },
     "garage-setup": {
@@ -483,9 +447,6 @@
       "volumes": [
         "${RUNTIME_DIR}:/runtime"
       ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      },
       "environment": {
         "INSTANCE_ID": "${INSTANCE_ID}",
         "DI_STORAGE_BUCKET": "${DI_STORAGE_BUCKET}",
@@ -519,10 +480,7 @@
       ],
       "profiles": [
         "setup"
-      ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
+      ]
     },
     "test-fixture": {
       "image": "${TEST_TOOL_IMAGE:-dateninfrastruktur-test-tools:local}",
@@ -545,10 +503,7 @@
       },
       "volumes": [
         "${RUNTIME_DIR}:/runtime"
-      ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
+      ]
     },
     "storage-tool": {
       "image": "rclone/rclone:1.75.2",
@@ -569,10 +524,7 @@
       ],
       "entrypoint": [
         "rclone"
-      ],
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
+      ]
     },
     "management-tool-build": {
       "image": "${TOOL_IMAGE:-ghcr.io/sogis/dateninfrastruktur-tools:0.2.7}",
@@ -587,10 +539,7 @@
       "profiles": [
         "build-tools"
       ],
-      "restart": "no",
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
+      "restart": "no"
     },
     "test-tool-build": {
       "image": "${TEST_TOOL_IMAGE:-dateninfrastruktur-test-tools:local}",
@@ -605,10 +554,7 @@
       "profiles": [
         "build-tools"
       ],
-      "restart": "no",
-      "labels": {
-        "di.instance": "${INSTANCE_ID}"
-      }
+      "restart": "no"
     }
   },
   "secrets": {
@@ -632,32 +578,12 @@
     }
   },
   "volumes": {
-    "postgres-data": {
-      "name": "${POSTGRES_VOLUME}"
-    },
-    "garage-meta": {
-      "name": "${GARAGE_META_VOLUME}",
-      "external": "${GARAGE_VOLUMES_EXTERNAL:-false}"
-    },
-    "garage-data": {
-      "name": "${GARAGE_DATA_VOLUME}",
-      "external": "${GARAGE_VOLUMES_EXTERNAL:-false}"
-    },
-    "jenkins-home": {
-      "name": "${JENKINS_VOLUME}",
-      "external": "${JENKINS_VOLUME_EXTERNAL:-false}"
-    },
-    "clickhouse-data": {
-      "name": "${CLICKHOUSE_DATA_VOLUME}",
-      "external": "${CLICKHOUSE_VOLUMES_EXTERNAL:-false}"
-    },
-    "clickhouse-logs": {
-      "name": "${CLICKHOUSE_LOG_VOLUME}",
-      "external": "${CLICKHOUSE_VOLUMES_EXTERNAL:-false}"
-    },
-    "superset-home": {
-      "name": "${SUPERSET_VOLUME}",
-      "external": "${SUPERSET_VOLUME_EXTERNAL:-false}"
-    }
+    "postgres-data": {},
+    "garage-meta": {},
+    "garage-data": {},
+    "jenkins-home": {},
+    "clickhouse-data": {},
+    "clickhouse-logs": {},
+    "superset-home": {}
   }
 }

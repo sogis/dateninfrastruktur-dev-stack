@@ -7,8 +7,8 @@ Managementkatalog und die Fachrechte liegen in PostgreSQL.
 
 Docker Compose übernimmt Build, Pull, Start, Status, Stopp und Down.
 [Lokaler Betrieb](docs/operations.md) zeigt, wie eine private `runtime.env`
-ausgewählt, eine frische Instanz eingerichtet und ein bestehender Stack
-nach der Eigentums- und Schemaprüfung gestartet wird. Für integrierte Prüfungen die
+erzeugt, eine frische Instanz eingerichtet und ein bestehender Stack
+nach der Management-Schemaprüfung gestartet wird. Für integrierte Prüfungen die
 jeweils benötigten Schwesterrepositories im selben Workspace bereitstellen.
 Der Admin-Image-Build benötigt nur den Admin-Checkout. Für CSS, JTE
 und Java im laufenden Stack siehe [Admin aus lokalen Quellen entwickeln](docs/operations.md#admin-aus-lokalen-quellen-entwickeln).
