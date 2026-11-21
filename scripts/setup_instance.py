@@ -4,12 +4,10 @@ import fcntl
 import os
 import sys
 
-from compose_runtime import ADMIN_DEV_IMAGE_FILE, FOUNDATION_UP, SETUP_RUN, ComposeContext, render_gateway
+from compose_runtime import FOUNDATION_UP, SETUP_RUN, ComposeContext, render_gateway
 
 
 def setup(context):
-    if (context.runtime / ADMIN_DEV_IMAGE_FILE).exists():
-        raise RuntimeError('Switch Admin development off before setup')
     for filename in ('garage.toml', 'realm-initial.json'):
         if not (context.runtime / filename).is_file():
             raise RuntimeError(f'Missing private {filename}; restore it before setup')

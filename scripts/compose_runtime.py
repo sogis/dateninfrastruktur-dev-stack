@@ -9,14 +9,20 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-ADMIN_DEV_OVERLAY = ROOT / 'compose.admin-dev.yaml'
-ADMIN_DEV_IMAGE_FILE = 'admin-dev.image'
 FOUNDATION_UP = ('up', '--no-deps', '--no-build', '--pull', 'never', '-d', '--wait', '--wait-timeout', '240')
 SETUP_RUN = ('run', '--rm', '--pull', 'never')
 LOCAL_IMAGES = {
     'ADMIN_IMAGE': 'admin', 'SODATA_IMAGE': 'sodata', 'JENKINS_IMAGE': 'jenkins',
     'POSTGRES_IMAGE': 'postgres', 'SUPERSET_IMAGE': 'superset', 'TOOL_IMAGE': 'tools',
     'TEST_TOOL_IMAGE': 'test-tools',
+}
+PUBLISHED_IMAGES = {
+    'ADMIN_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-admin:0.2.22',
+    'JENKINS_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.22',
+    'POSTGRES_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-postgres:0.2.22',
+    'SUPERSET_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-superset:0.2.22',
+    'TOOL_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-tools:0.2.22',
+    'SODATA_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10',
 }
 
 
@@ -107,19 +113,18 @@ class ComposeContext:
                         value = value.replace(line, '[REDACTED]')
         return value
 
-    def command(self, args, input=None, check=True, *, admin_dev=False, overrides=None):
-        base = self.base + (['--file', str(ADMIN_DEV_OVERLAY)] if admin_dev else [])
+    def command(self, args, input=None, check=True, *, overrides=None):
         env = docker_env()
         env.update(DI_TEST_HOST_UID=str(os.getuid()), DI_TEST_HOST_GID=str(os.getgid()))
         env.update(overrides or {})
-        result = subprocess.run(base + list(args), cwd=ROOT, env=env, input=input,
+        result = subprocess.run(self.base + list(args), cwd=ROOT, env=env, input=input,
                                 capture_output=True, text=True)
         if result.returncode and check:
             raise RuntimeError(self.redact(result.stdout + result.stderr)[-8000:])
         return result
 
 
-def init_context(project, ports=None, test_fixture=False):
+def init_context(project, ports=None, test_fixture=False, *, host_admin=False):
     if not re.fullmatch('[a-z][a-z0-9-]{3,62}', project):
         raise RuntimeError('Invalid project name')
     if (ROOT / '.runtime').is_symlink():
@@ -147,6 +152,11 @@ def init_context(project, ports=None, test_fixture=False):
     for kind in ['WRITER','READER']:
         values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
     values.update({key: f'dateninfrastruktur-{tag}:{project}' for key, tag in LOCAL_IMAGES.items()})
+    if host_admin:
+        values.update(PUBLISHED_IMAGES)
+        values['DI_LOCAL_DEVELOPMENT'] = 'true'
+        values.setdefault('POSTGRES_HOST_PORT', '15432')
+        values.setdefault('ORIGIN_HOST_PORT', '18090')
     runtime.mkdir(mode=0o700, parents=True)
     write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     context = ComposeContext(env_file)
@@ -158,7 +168,9 @@ def init_context(project, ports=None, test_fixture=False):
     realm_file = runtime / 'realm-initial.json'
     realm = json.loads((ROOT / 'services/keycloak/realm-template.json').read_text())
     fixture = values['DI_TEST_FIXTURE'] == 'true'
-    if not fixture:
+    if host_admin and not fixture:
+        realm['users'] = [user for user in realm['users'] if user['username'] == 'anna']
+    elif not fixture:
         realm['users'] = []
     for user in realm['users']:
         user['credentials'][0]['value'] = values['KEYCLOAK_DEMO_PASSWORD']
@@ -195,6 +207,39 @@ def init_context(project, ports=None, test_fixture=False):
     return context
 
 
+def admin_host_config(context):
+    values = context.values
+    issuer = 'http://localhost:' + values['KEYCLOAK_PORT'] + '/realms/dateninfrastruktur'
+    properties = {
+        'di.management.writer.jdbc-url': (
+            'jdbc:postgresql://127.0.0.1:' + values.get('POSTGRES_HOST_PORT', '15432')
+            + '/dateninfrastruktur_management'
+        ),
+        'di.management.writer.username': 'di_writer',
+        'di.management.writer.password': values['DI_WRITER_PASSWORD'],
+        'di.web.issuer': issuer,
+        'di.web.jwks-uri': issuer + '/protocol/openid-connect/certs',
+        'di.web.audience': 'management-api',
+        'di.web.public-origin': 'http://localhost:' + values['GATEWAY_PORT'],
+        'di.web.gateway-secret': values['DI_GATEWAY_SECRET'],
+        'di.delivery.origin.url': 'http://127.0.0.1:' + values.get('ORIGIN_HOST_PORT', '18090') + '/downloads/',
+    }
+    # The generated credentials are ASCII. Escape any edited value as a Java property.
+    def escape(value):
+        escaped = []
+        for character in value:
+            if character in ' \\':
+                character = '\\' + character
+            elif ord(character) < 32 or ord(character) > 126:
+                character = json.dumps(character, ensure_ascii=True)[1:-1].replace('\\b', '\\u0008')
+            escaped.append(character)
+        return ''.join(escaped)
+
+    path = context.runtime / 'admin-host.properties'
+    write_private(path, ''.join(f'{key}={escape(value)}\n' for key, value in properties.items()))
+    return path
+
+
 def render_gateway(context):
     routes = (ROOT / 'services/apisix/routes.template.json').read_text()
     # Preserve literal dollar anchors in route regexes.
@@ -210,21 +255,25 @@ def main():
     commands = parser.add_subparsers(dest='action', required=True)
     init = commands.add_parser('init', help='Generate a private environment for a new project')
     init.add_argument('project_prefix', help='Prefix for a new, uniquely named Compose project')
+    init.add_argument('--host-admin', action='store_true', help='Use published images and a local demo account')
+    host_config = commands.add_parser('admin-host-config', help='Write private Spring configuration for host Admin')
+    host_config.add_argument('--env', required=True)
     check = commands.add_parser('preflight', help='Verify the management schema and print the checked Jenkins image ID')
     check.add_argument('--env', required=True)
     redact = commands.add_parser('redact', help='Filter configured secrets from a private log stream')
     redact.add_argument('--env', required=True)
     args = parser.parse_args()
     if args.action == 'init':
-        print(init_context(f'{args.project_prefix}-{secrets.token_hex(6)}').env_file)
+        print(init_context(f'{args.project_prefix}-{secrets.token_hex(6)}', host_admin=args.host_admin).env_file)
         return
     context = ComposeContext(args.env)
+    if args.action == 'admin-host-config':
+        print(admin_host_config(context))
+        return
     if args.action == 'redact':
         for line in sys.stdin:
             print(context.redact(line), end='', flush=True)
         return
-    if (context.runtime / ADMIN_DEV_IMAGE_FILE).exists():
-        raise RuntimeError('Switch Admin development off before changing the regular stack')
     if not (context.runtime / 'origin.conf').is_file():
         raise RuntimeError('Run explicit setup before starting the stack')
     model = json.loads(context.command(['config', '--format', 'json', 'jenkins']).stdout)

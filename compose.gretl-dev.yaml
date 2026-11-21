@@ -1,0 +1,9 @@
+services:
+  jenkins:
+    volumes:
+      - type: bind
+        source: ${GRETL_JOB_DIR:?Select the local jobs/csv-delivery directory}
+        target: /opt/dateninfrastruktur/csv-delivery
+        read_only: true
+        bind:
+          create_host_path: false
