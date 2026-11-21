@@ -175,11 +175,12 @@ in ClickHouse.
 
 | Dienst | Image |
 | --- | --- |
-| PostgreSQL/PostGIS | `ghcr.io/sogis/dateninfrastruktur-postgres:0.2.22` |
-| Setup-Werkzeuge | `ghcr.io/sogis/dateninfrastruktur-tools:0.2.22` |
+| PostgreSQL/PostGIS | `ghcr.io/sogis/dateninfrastruktur-postgres:0.2.28` |
+| Setup-Werkzeuge | `ghcr.io/sogis/dateninfrastruktur-tools:0.2.28` |
 | Sodata | `ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10` |
-| Jenkins mit GRETL 6 | `ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.22` |
-| Superset | `ghcr.io/sogis/dateninfrastruktur-superset:0.2.22` |
+| Jenkins mit GRETL 6 | `ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.28` |
+| Superset | `ghcr.io/sogis/dateninfrastruktur-superset:0.2.28` |
+| Admin (Compose-Profil `container-admin`) | `ghcr.io/sogis/dateninfrastruktur-admin:0.2.28` |
 | Keycloak | `quay.io/keycloak/keycloak:26.8.1` |
 | Garage | `dxflrs/garage:v2.4.1` |
 | ClickHouse | `clickhouse/clickhouse-server:26.8` |
@@ -235,7 +236,7 @@ JAVA21_HOME=/pfad/zu/java-21 IMAGE_NAME="dateninfrastruktur-jenkins:$project" \
 
 Für Registry-Images setze `ADMIN_IMAGE`, `JENKINS_IMAGE`, `POSTGRES_IMAGE`,
 `SUPERSET_IMAGE` und `TOOL_IMAGE` auf die jeweilige Referenz
-`ghcr.io/sogis/dateninfrastruktur-<name>:0.2.22`.
+`ghcr.io/sogis/dateninfrastruktur-<name>:0.2.28`.
 Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen. Setze für
 veröffentlichtes Sodata `SODATA_IMAGE=ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10`
 in der privaten `runtime.env`.
