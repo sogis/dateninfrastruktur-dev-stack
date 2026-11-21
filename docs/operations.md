@@ -1,10 +1,25 @@
 # Lokaler Betrieb der Dateninfrastruktur
 
-## Ersteinrichtung auf macOS
+## Admin-Webentwicklung: vom Checkout zur ersten Änderung
 
-Verwende Docker Desktop mit Compose ab 2.24.4, Python ab 3.9 und Java 25.
-Führe die Befehle im Stack-Checkout in Bash aus. Der Admin-Checkout liegt
-daneben. Die Standardports müssen frei sein, insbesondere Port 8080 für Admin.
+### Ersteinrichtung auf macOS
+
+Klone den [Workspace](https://github.com/sogis/dateninfrastruktur-workspace)
+und führe dort `./workspace clone` aus. Wechsle dann in
+`dateninfrastruktur-dev-stack`. Der Admin-Checkout liegt daneben.
+
+Verwende Bash, Docker Desktop mit Compose ab 2.24.4, Python ab 3.9 und
+Java 25. Prüfe den lokalen Docker-Kontext mit `docker context ls` und
+`docker info`. Bei einer neuen Instanz müssen die Standardports
+`8080`, `15432`, `18080`, `18081`, `18088`, `18090`, `18123` und
+`19000` frei sein. Auf macOS kannst du etwa den Admin-Port mit
+`lsof -nP -iTCP:8080 -sTCP:LISTEN` prüfen.
+
+Die folgenden Befehle erzeugen eine eigene Instanz, laden die
+Infrastruktur-Images und importieren synthetische Beispieldaten in die
+leere Management-Datenbank. `bootstrap-dev` bindet den Principal für Anna
+und das GRETL-Servicekonto an den lokalen Keycloak-Realm. Behalte den Pfad
+zu dieser privaten `runtime.env` für spätere Sitzungen.
 
 ```bash
 export DOCKER_CONTEXT=desktop-linux
@@ -34,8 +49,10 @@ und den Admin-Checkout als Arbeitsverzeichnis.
 )
 ```
 
-Sobald Admin gestartet ist, melde dich am [Gateway](http://localhost:18081/management)
-als `anna` an. Das zufällige Passwort steht in
+Sobald Admin gestartet ist, öffne das [Management am Gateway](http://localhost:18081/management)
+und melde dich als `anna` an. Verwende `localhost` und den
+`GATEWAY_PORT` aus deiner Instanz, standardmässig `18081`. Das
+zufällige Passwort steht in
 `KEYCLOAK_DEMO_PASSWORD` in deiner privaten `runtime.env`. Unter macOS
 kannst du es für die Anmeldung direkt in die Zwischenablage kopieren.
 
@@ -43,12 +60,40 @@ kannst du es für die Anmeldung direkt in die Zwischenablage kopieren.
 sed -n 's/^KEYCLOAK_DEMO_PASSWORD="\([0-9a-f]*\)"$/\1/p' "$runtime_env" | tr -d '\n' | pbcopy
 ```
 
-Der explizite XTF-Import belegt die leeren Management-Baskets mit
-Beispieldaten, Lieferkonfiguration und Fachrechten. Er bindet Anna und das
-GRETL-Servicekonto an den lokalen Realm. Bewahre den ausgegebenen
-absoluten Pfad zur `runtime.env` für diese Instanz auf.
+### Erste Änderung und passender Test
 
-## Täglicher Ablauf
+Suche nach `test-open`, öffne **Synthetisch open** und wähle
+**Metadaten bearbeiten**. Ändere den Titel und trage im Pflichtfeld
+**E-Mail des Kontakts** eine synthetische Adresse wie
+`kontakt@example.invalid` ein. Die Vorlage lässt dieses Feld leer.
+Wähle **Metadaten speichern** und lade die Detailseite neu. Der neue
+Titel soll weiterhin sichtbar sein.
+
+Die Route `/management` führt im Admin-Checkout zu `DatasetController`
+im Java-Paket `ch.so.agi.dateninfrastruktur.admin.web`. Er lädt die
+Datensatzliste und gibt die JTE-Vorlage `dataset/list` zurück. Ändere
+vorübergehend den Einführungstext in `src/main/jte/dataset/list.jte`,
+lade `/management` neu und prüfe den geänderten Text. Nimm deine Änderung
+danach zurück. Die Styles liegen in
+`src/main/resources/static/assets/management.css`.
+
+Führe im Admin-Checkout mit Java 25 `./gradlew test` für die schnellen
+Tests aus. Für Änderungen an der Oberfläche läuft `ManagementBrowserIT`
+mit Playwright und Chromium. Beim ersten Lauf kann Playwright Chromium
+herunterladen. Die Klasse läuft mit einer eigenen Web-Fixture unabhängig
+vom Compose-Stack.
+
+```sh
+./gradlew integrationTest --tests '*ManagementBrowserIT'
+```
+
+Im Dev-Stack prüft `python3 scripts/test_host_development.py` das
+Compose-Modell für den Host-Modus. Für Änderungen am Zusammenspiel von
+Gateway, Keycloak-Login und Admin startet
+`python3 scripts/test_stack_management.py` eine eigene Instanz mit
+[lokal gebauten Images](#images-bereitstellen).
+
+### Täglicher Ablauf
 
 Setze `runtime_env` in einer neuen Shell auf die Datei der eingerichteten
 Instanz und definiere dort das Array `host_compose` wie oben. Starte im
@@ -252,7 +297,7 @@ INTERLIS-Modellen im Admin-Repo an. Das lokale Tooling-Image enthält
 ili2pg 5.5.2 und ilivalidator 1.15.1. Beim Tooling-Build liefert der
 Stack-Kontext die PostgreSQL- und Garage-Setup-Skripte.
 Die erste fachliche Belegung kommt aus einem geprüften
-[XTF-Transfer](../../dateninfrastruktur-admin/docs/schema-lifecycle.md).
+[XTF-Transfer](https://github.com/sogis/dateninfrastruktur-admin/blob/main/docs/schema-lifecycle.md).
 Dort werden auch die ersten Principals und deren Rechte angelegt.
 
 Unter `/management` werden Datensätze, Ausgaben und ihre Publikation
