@@ -17,11 +17,11 @@ LOCAL_IMAGES = {
     'TEST_TOOL_IMAGE': 'test-tools',
 }
 PUBLISHED_IMAGES = {
-    'ADMIN_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-admin:0.2.22',
-    'JENKINS_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.22',
-    'POSTGRES_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-postgres:0.2.22',
-    'SUPERSET_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-superset:0.2.22',
-    'TOOL_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-tools:0.2.22',
+    'ADMIN_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-admin:0.2.28',
+    'JENKINS_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.28',
+    'POSTGRES_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-postgres:0.2.28',
+    'SUPERSET_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-superset:0.2.28',
+    'TOOL_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-tools:0.2.28',
     'SODATA_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10',
 }
 
