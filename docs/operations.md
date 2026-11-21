@@ -25,7 +25,7 @@ zu dieser privaten `runtime.env` für spätere Sitzungen.
 export DOCKER_CONTEXT=desktop-linux
 runtime_env=$(python3 scripts/compose_runtime.py init meine-dev-instanz --host-admin)
 runtime_dir=$(dirname "$runtime_env")
-host_compose=(docker compose --env-file "$runtime_env" -f compose.yaml -f compose.host-admin.yaml)
+host_compose=(docker compose --env-file "$runtime_env" -f compose-test.yaml -f compose.yaml)
 
 "${host_compose[@]}" config --quiet
 "${host_compose[@]}" --profile setup pull
@@ -136,7 +136,7 @@ Beim Wechsel von Container-Admin auf Host-Admin entferne den Container
 einmal gezielt im bisherigen Projekt. Die `runtime.env` bleibt dieselbe.
 
 ```bash
-docker compose --env-file "$runtime_env" -f compose.yaml rm -s -f admin
+docker compose --env-file "$runtime_env" -f compose-test.yaml rm -s -f admin
 ```
 
 ## GRETL-Job entwickeln
@@ -173,19 +173,14 @@ in ClickHouse.
 
 ## Images für den Host-Modus
 
-| Dienst | Image |
-| --- | --- |
-| PostgreSQL/PostGIS | `ghcr.io/sogis/dateninfrastruktur-postgres:0.2.28` |
-| Setup-Werkzeuge | `ghcr.io/sogis/dateninfrastruktur-tools:0.2.28` |
-| Sodata | `ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10` |
-| Jenkins mit GRETL 6 | `ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.28` |
-| Superset | `ghcr.io/sogis/dateninfrastruktur-superset:0.2.28` |
-| Admin (Compose-Profil `container-admin`) | `ghcr.io/sogis/dateninfrastruktur-admin:0.2.28` |
-| Keycloak | `quay.io/keycloak/keycloak:26.8.1` |
-| Garage | `dxflrs/garage:v2.4.1` |
-| ClickHouse | `clickhouse/clickhouse-server:26.8` |
-| Origin | `rclone/rclone:1.75.2` |
-| APISIX | `apache/apisix:3.19.0-debian` |
+Die Image-Versionen für den Host-Modus stehen in `compose.yaml`.
+Explizite Image-Variablen in deiner privaten `runtime.env` haben Vorrang.
+Zeige die gewählten Images einschliesslich Setup-Werkzeugen und optionalem
+Container-Admin mit Compose an.
+
+```bash
+"${host_compose[@]}" --profile setup --profile container-admin config --images | sort -u
+```
 
 ## Container-Admin und Integrationstests
 
@@ -227,22 +222,21 @@ Plugin-Checkouts, Java 21 und Maven. Admin und Sodata werden im Container
 mit Java 25 gebaut.
 
 ```bash
-docker compose -f compose.yaml --env-file "$runtime_env" --profile build-tools build postgres admin sodata superset management-tool-build
-docker compose -f compose.yaml --env-file "$runtime_env" pull --policy missing garage clickhouse keycloak origin gateway
+docker compose -f compose-test.yaml --env-file "$runtime_env" --profile build-tools build postgres admin sodata superset management-tool-build
+docker compose -f compose-test.yaml --env-file "$runtime_env" pull --policy missing garage clickhouse keycloak origin gateway
 build_dir=$(mktemp -d "$runtime_dir/jenkins-build.XXXXXXXX")
 JAVA21_HOME=/pfad/zu/java-21 IMAGE_NAME="dateninfrastruktur-jenkins:$project" \
   ../dateninfrastruktur-jenkins-dev/bin/build-image.sh "$build_dir/context"
 ```
 
 Für Registry-Images setze `ADMIN_IMAGE`, `JENKINS_IMAGE`, `POSTGRES_IMAGE`,
-`SUPERSET_IMAGE` und `TOOL_IMAGE` auf die jeweilige Referenz
-`ghcr.io/sogis/dateninfrastruktur-<name>:0.2.28`.
-Das Jenkins-Image muss GRETL `6.0.0-SNAPSHOT` tragen. Setze für
-veröffentlichtes Sodata `SODATA_IMAGE=ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10`
-in der privaten `runtime.env`.
+`SUPERSET_IMAGE`, `TOOL_IMAGE` und `SODATA_IMAGE` in der privaten
+`runtime.env`. Die veröffentlichten Standardreferenzen findest du im
+[Entwickler-Overlay](../compose.yaml). Das Jenkins-Image muss
+GRETL `6.0.0-SNAPSHOT` tragen.
 
 ```bash
-docker compose -f compose.yaml --env-file "$runtime_env" --profile setup pull --policy missing
+docker compose -f compose-test.yaml --env-file "$runtime_env" --profile setup pull --policy missing
 ```
 
 ### Setup und Start
@@ -262,17 +256,17 @@ der Zustand der laufenden Anwendungen erhalten.
 
 ```bash
 jenkins_id=$(python3 scripts/compose_runtime.py preflight --env "$runtime_env") &&
-  JENKINS_IMAGE="$jenkins_id" docker compose -f compose.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
+  JENKINS_IMAGE="$jenkins_id" docker compose -f compose-test.yaml --env-file "$runtime_env" up -d --wait --wait-timeout 300 --no-build --pull never
 ```
 
 ### Status, Logs und Stopp
 
 ```bash
-docker compose -f compose.yaml --env-file "$runtime_env" ps
+docker compose -f compose-test.yaml --env-file "$runtime_env" ps
 set -o pipefail
-docker compose -f compose.yaml --env-file "$runtime_env" logs --tail 100 -f admin 2>&1 |
+docker compose -f compose-test.yaml --env-file "$runtime_env" logs --tail 100 -f admin 2>&1 |
   python3 scripts/compose_runtime.py redact --env "$runtime_env"
-docker compose -f compose.yaml --env-file "$runtime_env" down --timeout 60
+docker compose -f compose-test.yaml --env-file "$runtime_env" down --timeout 60
 ```
 
 Mit `stop` bleiben auch die Container erhalten. `down` behält die
@@ -288,7 +282,7 @@ explizitem Setup. Die bisherige private Konfiguration enthält weiterhin ihre
 Garage-Bindung.
 
 ```bash
-docker compose -f compose.yaml --env-file "$runtime_env" --profile '*' down --volumes --remove-orphans
+docker compose -f compose-test.yaml --env-file "$runtime_env" --profile '*' down --volumes --remove-orphans
 ```
 
 ## Katalog und Lieferung

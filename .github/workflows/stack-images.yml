@@ -3,6 +3,10 @@ name: Build and publish stack images
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - compose.yaml
+      - README.md
+      - 'docs/**/*.md'
 
 permissions:
   contents: read
@@ -15,21 +19,10 @@ jobs:
   sources:
     runs-on: ubuntu-24.04
     outputs:
-      release: ${{ steps.changes.outputs.release }}
       revisions: ${{ steps.freeze.outputs.revisions }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Check whether the push changes more than Stack image tags
-        id: changes
-        env:
-          PUSH_BEFORE: ${{ github.event.before }}
-        run: python3 scripts/check_stack_release_changes.py
       - name: Freeze sibling commits
         id: freeze
-        if: steps.changes.outputs.release == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -44,7 +37,6 @@ jobs:
 
   management:
     needs: sources
-    if: needs.sources.outputs.release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
@@ -79,7 +71,7 @@ jobs:
 
   build:
     needs: [sources, management]
-    if: needs.sources.outputs.release == 'true' && github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
+    if: github.ref_protected && vars.DI_STACK_PUBLISH_IMAGES == 'true'
     strategy:
       fail-fast: false
       matrix:

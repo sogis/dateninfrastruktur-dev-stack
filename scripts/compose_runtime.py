@@ -16,14 +16,6 @@ LOCAL_IMAGES = {
     'POSTGRES_IMAGE': 'postgres', 'SUPERSET_IMAGE': 'superset', 'TOOL_IMAGE': 'tools',
     'TEST_TOOL_IMAGE': 'test-tools',
 }
-PUBLISHED_IMAGES = {
-    'ADMIN_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-admin:0.2.28',
-    'JENKINS_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-jenkins:0.2.28',
-    'POSTGRES_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-postgres:0.2.28',
-    'SUPERSET_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-superset:0.2.28',
-    'TOOL_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-tools:0.2.28',
-    'SODATA_IMAGE': 'ghcr.io/sogis/dateninfrastruktur-sodata-jvm:0.1.10',
-}
 
 
 def jenkins_image_id(reference):
@@ -102,7 +94,7 @@ class ComposeContext:
                 k.startswith('COMPOSE_') and k != 'COMPOSE_PROJECT_NAME' for k in self.values):
             raise RuntimeError('Unexpected Compose control variable in runtime.env')
         self.base = ['docker', 'compose', '--project-name', self.project,
-                     '--env-file', str(self.env_file), '--file', str(ROOT / 'compose.yaml')]
+                     '--env-file', str(self.env_file), '--file', str(ROOT / 'compose-test.yaml')]
 
     def redact(self, value):
         for key, secret in self.values.items():
@@ -117,7 +109,8 @@ class ComposeContext:
         env = docker_env()
         env.update(DI_TEST_HOST_UID=str(os.getuid()), DI_TEST_HOST_GID=str(os.getgid()))
         env.update(overrides or {})
-        result = subprocess.run(self.base + list(args), cwd=ROOT, env=env, input=input,
+        files = ['--file', str(ROOT / 'compose.yaml')] if self.values.get('DI_LOCAL_DEVELOPMENT') == 'true' else []
+        result = subprocess.run(self.base + files + list(args), cwd=ROOT, env=env, input=input,
                                 capture_output=True, text=True)
         if result.returncode and check:
             raise RuntimeError(self.redact(result.stdout + result.stderr)[-8000:])
@@ -151,12 +144,12 @@ def init_context(project, ports=None, test_fixture=False, *, host_admin=False):
     values.update(DI_STORAGE_BUCKET='ch.so.daten',DI_STORAGE_ENDPOINT='http://garage:3900',DI_STORAGE_REGION='garage')
     for kind in ['WRITER','READER']:
         values['DI_STORAGE_'+kind+'_ACCESS_KEY']='';values['DI_STORAGE_'+kind+'_SECRET_KEY']=''
-    values.update({key: f'dateninfrastruktur-{tag}:{project}' for key, tag in LOCAL_IMAGES.items()})
     if host_admin:
-        values.update(PUBLISHED_IMAGES)
         values['DI_LOCAL_DEVELOPMENT'] = 'true'
         values.setdefault('POSTGRES_HOST_PORT', '15432')
         values.setdefault('ORIGIN_HOST_PORT', '18090')
+    else:
+        values.update({key: f'dateninfrastruktur-{tag}:{project}' for key, tag in LOCAL_IMAGES.items()})
     runtime.mkdir(mode=0o700, parents=True)
     write_private(env_file,''.join(k+'='+encode_env(v)+'\n' for k,v in values.items()))
     context = ComposeContext(env_file)

@@ -25,7 +25,7 @@ def main():
     context = init_context('mag-host-config-' + uuid4().hex[:12], host_admin=True)
     try:
         normal = model(context)
-        host = model(context, 'compose.host-admin.yaml')
+        host = json.loads(context.command(['config', '--format', 'json']).stdout)
         services = host['services']
         assert normal['name'] == host['name'] == context.project
         assert normal['volumes'] == host['volumes']
@@ -47,7 +47,7 @@ def main():
         assert not any(client['directAccessGrantsEnabled'] for client in realm['clients'])
         job_dir = context.runtime / 'job'
         job_dir.mkdir()
-        gretl = model(context, 'compose.host-admin.yaml', 'compose.gretl-dev.yaml',
+        gretl = model(context, 'compose.yaml', 'compose.gretl-dev.yaml',
                       env=dict(docker_env(), GRETL_JOB_DIR=str(job_dir)))
         jenkins = gretl['services'].pop('jenkins')
         plain = services.pop('jenkins')
